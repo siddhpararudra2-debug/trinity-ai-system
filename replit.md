@@ -85,6 +85,7 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - Fusion STEP/STL/F3D export still requires a connected Fusion desktop worker; set `TRINITY_FUSION_WORKER_SECRET` to a random secret of at least 32 characters to enable the signed claim/upload/complete protocol. The server safely returns a validated Fusion script instead of trying to execute `adsk` code on Linux.
 - Vision image uploads use `POST /api/vision/ocr`; pix2tex is optional for handwritten LaTeX and Tesseract is optional for printed-text OCR.
 - Collaboration is single-process by default; use a shared pub/sub adapter for multiple API workers.
+- `/api/healthz` now reports optional capability flags for Tesseract, KiCad CLI, firmware builds, and Fusion worker configuration.
 
 ## Gotchas
 

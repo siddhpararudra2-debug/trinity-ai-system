@@ -1,4 +1,7 @@
-"""Health check endpoint with DB and engine status."""
+"""Health and capability endpoints."""
+import os
+import shutil
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -27,7 +30,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             "maker_pcb": "ready",
             "literature": "ready",
             "vision": "ready",
+            "firmware": "ready",
             "collab": "ready",
             "orchestrator": "ready",
+        },
+        "capabilities": {
+            "tesseract": bool(shutil.which("tesseract")),
+            "kicad_cli": bool(shutil.which("kicad-cli")) and os.getenv("TRINITY_ENABLE_KICAD_CLI", "0") == "1",
+            "firmware_builds": os.getenv("TRINITY_ENABLE_FIRMWARE_BUILDS", "0") == "1",
+            "fusion_worker": len(os.getenv("TRINITY_FUSION_WORKER_SECRET", "")) >= 32,
         },
     }
