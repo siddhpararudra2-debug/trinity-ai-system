@@ -7,6 +7,8 @@ info:
 servers:
   - url: /api
     description: Base API path
+security:
+  - TrinityApiKey: []
 tags:
   - name: health
     description: Health operations
@@ -485,6 +487,12 @@ paths:
       responses:
         "200": {description: Updated CAD design job}
 components:
+  securitySchemes:
+    TrinityApiKey:
+      type: apiKey
+      in: header
+      name: X-Trinity-Api-Key
+      description: Optional in development; required for protected production API endpoints when TRINITY_API_KEY is configured.
   schemas:
     HealthStatus:
       type: object

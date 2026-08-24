@@ -86,6 +86,7 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - Vision image uploads use `POST /api/vision/ocr`; pix2tex is optional for handwritten LaTeX and Tesseract is optional for printed-text OCR.
 - Collaboration is single-process by default; use a shared pub/sub adapter for multiple API workers.
 - `/api/healthz` now reports optional capability flags for Tesseract, KiCad CLI, firmware builds, and Fusion worker configuration.
+- Set `TRINITY_API_KEY` to a random secret of at least 32 characters in production; protected API requests must send `X-Trinity-Api-Key` or `Authorization: Bearer ...`. Leave it unset only for local development.
 
 ## Gotchas
 

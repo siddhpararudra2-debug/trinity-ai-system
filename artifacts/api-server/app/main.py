@@ -3,8 +3,9 @@ Trinity AI Engineering OS — FastAPI Backend
 Built on top of the trinity-ai GitHub repo foundation.
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.database import init_db
 from app.routes.health import router as health_router
@@ -17,6 +18,7 @@ from app.routes.vision import router as vision_router
 from app.routes.collab import router as collab_router
 from app.routes.fusion import router as fusion_router
 from app.routes.workflows import router as workflows_router
+from app.security import require_api_key_for_request
 
 
 @asynccontextmanager
@@ -47,6 +49,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    try:
+        require_api_key_for_request(request)
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", 401)
+        detail = getattr(exc, "detail", "A valid Trinity API key is required")
+        return JSONResponse(status_code=status_code, content={"detail": detail})
+    return await call_next(request)
 
 # All routes are prefixed with /api because the reverse proxy routes
 # /api/* traffic to this service without stripping the prefix.
