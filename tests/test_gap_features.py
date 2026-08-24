@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from app.engines.vision_engine import VisionEngine
@@ -11,6 +13,7 @@ from app.security import require_api_key_for_request
 from fastapi import HTTPException
 from starlette.requests import Request
 from app.workflows import build_workflow_plan
+from workers.kicad.kicad_worker import KiCadWorker
 
 
 class GapFeatureTests(unittest.TestCase):
@@ -36,6 +39,18 @@ class GapFeatureTests(unittest.TestCase):
             self.assertEqual(verify_worker_token(token, "cad_123", "a" * 64), "worker_01")
             with self.assertRaises(FusionAuthError):
                 verify_worker_token(token, "cad_123", "b" * 64)
+
+    def test_kicad_worker_requires_real_cli_and_safe_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "board.kicad_sch").write_text("(kicad_sch)", encoding="utf-8")
+            (root / "board.kicad_pcb").write_text("(kicad_pcb)", encoding="utf-8")
+            result = KiCadWorker(executable="/missing/kicad-cli").run(root, "board.kicad_sch", "board.kicad_pcb", {"gerbers"})
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["checks"][0]["name"], "version")
+            self.assertTrue((root / "kicad-worker-result.json").exists())
+            unsafe = KiCadWorker(executable="/missing/kicad-cli").run(root, "../board.kicad_sch", "board.kicad_pcb", set())
+            self.assertEqual(unsafe["status"], "failed")
 
     def test_vision_rejects_invalid_image_bytes(self):
         result = asyncio.run(VisionEngine().process(image_data=b"not an image"))

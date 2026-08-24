@@ -12,7 +12,7 @@ class ApiContractTests(unittest.TestCase):
     def test_openapi_contains_design_paths(self):
         contract_path = Path(__file__).parents[1] / "lib" / "api-spec" / "openapi.yaml"
         contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
-        for path in ("/designs/cad", "/designs/pcb", "/design-jobs/{job_id}", "/artifacts/{artifact_id}", "/firmware/targets", "/firmware/jobs", "/firmware/jobs/{job_id}", "/vision/ocr", "/collab/sessions/{session_id}", "/ws", "/workflows/plan", "/fusion/jobs/{job_id}/claim", "/fusion/jobs/{job_id}/artifacts", "/fusion/jobs/{job_id}/complete"):
+        for path in ("/designs/cad", "/designs/pcb", "/design-jobs/{job_id}", "/artifacts/{artifact_id}", "/firmware/targets", "/firmware/jobs", "/firmware/jobs/{job_id}", "/vision/ocr", "/collab/sessions/{session_id}", "/ws", "/workflows/plan", "/fusion/jobs/{job_id}/claim", "/fusion/jobs/{job_id}/artifacts", "/fusion/jobs/{job_id}/complete", "/kicad/jobs/{job_id}/artifacts", "/kicad/jobs/{job_id}/complete"):
             self.assertIn(path, contract["paths"])
 
     def test_fastapi_contains_design_routes(self):
@@ -31,6 +31,8 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("/api/fusion/jobs/{job_id}/claim", paths)
         self.assertIn("/api/fusion/jobs/{job_id}/artifacts", paths)
         self.assertIn("/api/fusion/jobs/{job_id}/complete", paths)
+        self.assertIn("/api/kicad/jobs/{job_id}/artifacts", paths)
+        self.assertIn("/api/kicad/jobs/{job_id}/complete", paths)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -36,14 +37,17 @@ def _script_artifact(job):
     return next((artifact for artifact in job.artifacts if artifact.kind == "fusion_script"), None)
 
 
-def _auth_or_503():
-    if len(os.getenv("TRINITY_FUSION_WORKER_SECRET", "")) < 32:
+def _auth_or_503(provided_secret: str | None):
+    configured = os.getenv("TRINITY_FUSION_WORKER_SECRET", "")
+    if len(configured) < 32:
         raise HTTPException(status_code=503, detail="Fusion worker integration is not configured")
+    if not provided_secret or not hmac.compare_digest(provided_secret, configured):
+        raise HTTPException(status_code=401, detail="Invalid Fusion worker credentials")
 
 
 @router.post("/fusion/jobs/{job_id}/claim")
-async def claim_fusion_job(job_id: str, request: FusionClaimRequest):
-    _auth_or_503()
+async def claim_fusion_job(job_id: str, request: FusionClaimRequest, worker_secret: str | None = Header(default=None, alias="X-Trinity-Worker-Secret")):
+    _auth_or_503(worker_secret)
     job = _store.get(job_id)
     if job is None or job.engine != "maker_cad":
         raise HTTPException(status_code=404, detail="CAD job not found")
@@ -75,8 +79,9 @@ async def upload_fusion_artifact(
     file: UploadFile = File(...),
     token: str = Form(...),
     kind: str = Form("fusion_export"),
+    worker_secret: str | None = Header(default=None, alias="X-Trinity-Worker-Secret"),
 ):
-    _auth_or_503()
+    _auth_or_503(worker_secret)
     job = _store.get(job_id)
     if job is None or job.engine != "maker_cad":
         raise HTTPException(status_code=404, detail="CAD job not found")
@@ -98,8 +103,8 @@ async def upload_fusion_artifact(
 
 
 @router.post("/fusion/jobs/{job_id}/complete")
-async def complete_fusion_job(job_id: str, request: FusionCompleteRequest):
-    _auth_or_503()
+async def complete_fusion_job(job_id: str, request: FusionCompleteRequest, worker_secret: str | None = Header(default=None, alias="X-Trinity-Worker-Secret")):
+    _auth_or_503(worker_secret)
     job = _store.get(job_id)
     if job is None or job.engine != "maker_cad":
         raise HTTPException(status_code=404, detail="CAD job not found")
@@ -130,9 +135,11 @@ async def complete_fusion_job(job_id: str, request: FusionCompleteRequest):
     )
     for artifact_id in request.artifact_ids:
         stored = _store.artifacts.read(artifact_id)
-        if stored is None or not artifact_id.startswith(f"{job_id}_"):
+        if stored is None:
             raise HTTPException(status_code=400, detail=f"Artifact {artifact_id} is not owned by this job")
         path, digest = stored
+        if path.parent.name != job_id:
+            raise HTTPException(status_code=400, detail=f"Artifact {artifact_id} is not owned by this job")
         if not any(existing.id == artifact_id for existing in job.artifacts):
             job.artifacts.append(Artifact(
                 id=artifact_id,

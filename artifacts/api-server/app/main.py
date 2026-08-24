@@ -17,6 +17,7 @@ from app.routes.firmware import router as firmware_router
 from app.routes.vision import router as vision_router
 from app.routes.collab import router as collab_router
 from app.routes.fusion import router as fusion_router
+from app.routes.kicad import router as kicad_router
 from app.routes.workflows import router as workflows_router
 from app.security import require_api_key_for_request
 
@@ -72,6 +73,7 @@ app.include_router(firmware_router, prefix=API)
 app.include_router(vision_router, prefix=API)
 app.include_router(collab_router, prefix=API)
 app.include_router(fusion_router, prefix=API)
+app.include_router(kicad_router, prefix=API)
 app.include_router(workflows_router, prefix=API)
 
 

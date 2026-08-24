@@ -1,6 +1,6 @@
 # Trusted Fusion Worker Protocol
 
-This directory documents the external desktop worker required for real Fusion STEP/STL/F3D export. The Linux API server generates and validates the Fusion script; a controlled Fusion 360 desktop add-in performs the export.
+This directory contains the external desktop worker required for real Fusion STEP/STL/F3D export. `TrinityFusionWorker.py` is the Fusion 360 Python add-in; the Linux API server generates and validates the Fusion script, while the controlled desktop add-in performs the export.
 
 ## Server configuration
 
@@ -8,9 +8,11 @@ Set a secret of at least 32 characters only on the API server and the trusted wo
 
 ```bash
 export TRINITY_FUSION_WORKER_SECRET='replace-with-a-random-32-byte-secret'
+# Set only when the API server also has TRINITY_API_KEY enabled.
+export TRINITY_API_KEY='production-api-key'
 ```
 
-The worker uses these API calls:
+The worker uses these API calls. Every request must also include `X-Trinity-Worker-Secret` matching the server secret; the claim token is an additional short-lived job authorization.
 
 ```text
 POST /api/fusion/jobs/{job_id}/claim
@@ -37,6 +39,7 @@ After creating the model, the worker should assert that expected named features 
 Upload each export as multipart form data:
 
 ```text
+X-Trinity-Worker-Secret: <server secret>
 file=<binary>
 token=<claim token>
 kind=fusion_step|fusion_stl|fusion_archive

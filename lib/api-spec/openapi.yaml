@@ -30,6 +30,8 @@ tags:
     description: Deterministic multi-engine workflows
   - name: fusion-worker
     description: Trusted Fusion desktop worker protocol
+  - name: kicad-worker
+    description: Authenticated KiCad CLI manufacturing worker
 paths:
   /healthz:
     get:
@@ -413,6 +415,53 @@ paths:
           schema: {type: string, default: default}
       responses:
         "101": {description: Switching Protocols}
+  /kicad/jobs/{job_id}/artifacts:
+    post:
+      operationId: uploadKicadArtifact
+      tags: [kicad-worker]
+      summary: Upload a KiCad validation or manufacturing artifact
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: X-Trinity-KiCad-Secret
+          in: header
+          required: true
+          schema: {type: string, format: password}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, kind]
+              properties:
+                file: {type: string, format: binary}
+                kind: {type: string}
+      responses:
+        "200": {description: Uploaded KiCad artifact}
+  /kicad/jobs/{job_id}/complete:
+    post:
+      operationId: completeKicadJob
+      tags: [kicad-worker]
+      summary: Complete a PCB job with KiCad validation results
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: X-Trinity-KiCad-Secret
+          in: header
+          required: true
+          schema: {type: string, format: password}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/KicadCompleteRequest"}
+      responses:
+        "200": {description: Updated PCB design job}
   /workflows/plan:
     post:
       operationId: createWorkflowPlan
@@ -439,6 +488,10 @@ paths:
           in: path
           required: true
           schema: {type: string}
+        - name: X-Trinity-Worker-Secret
+          in: header
+          required: true
+          schema: {type: string, format: password}
       requestBody:
         required: true
         content:
@@ -456,6 +509,10 @@ paths:
           in: path
           required: true
           schema: {type: string}
+        - name: X-Trinity-Worker-Secret
+          in: header
+          required: true
+          schema: {type: string, format: password}
       requestBody:
         required: true
         content:
@@ -479,6 +536,10 @@ paths:
           in: path
           required: true
           schema: {type: string}
+        - name: X-Trinity-Worker-Secret
+          in: header
+          required: true
+          schema: {type: string, format: password}
       requestBody:
         required: true
         content:
@@ -991,6 +1052,20 @@ components:
       properties:
         worker_id: {type: string}
         expires_in_seconds: {type: integer, default: 300}
+    KicadCompleteRequest:
+      type: object
+      required: [status, validation_status]
+      properties:
+        status: {type: string}
+        validation_status: {type: string}
+        artifact_ids:
+          type: array
+          items: {type: string}
+        checks:
+          type: array
+          items: {type: object}
+        kicad_version: {type: [string, "null"]}
+        error: {type: [string, "null"]}
     FusionCompleteRequest:
       type: object
       required: [token, status]
