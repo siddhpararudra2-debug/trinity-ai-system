@@ -1,11 +1,9 @@
 """
-Trinity Autonomous Orchestrator — The Brain.
+Trinity Orchestrator — deterministic engine routing and workflow planning.
+Routes user queries to the correct Trinity engine using keyword/pattern matching
+that is always available and requires no API key. Multi-domain requests receive
+an explicit ordered workflow plan rather than opaque autonomous execution.
 
-Routes user queries to the correct Trinity engine using:
-  1. Keyword/pattern matching (always available, no API key required)
-  2. Optional LLM-based routing if OPENAI_API_KEY / ANTHROPIC_API_KEY is set
-
-For multi-step research, it chains engines in a ReAct (Reason + Act) loop.
 """
 import re
 from typing import Any
@@ -20,6 +18,7 @@ from app.designs.jobs import DesignJobService
 from app.designs.models import CadDesignRequest, PcbDesignRequest
 from app.firmware.jobs import FirmwareJobService
 from app.firmware.models import FirmwareRequest
+from app.workflows import build_workflow_plan, plan_to_dict
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +95,13 @@ class TrinityOrchestrator:
 
     async def route(self, query: str, history: list = None) -> dict[str, Any]:
         """Detect engine, call it, return {content, engine, data}."""
+        plan = build_workflow_plan(query)
+        if len(plan.steps) > 1:
+            return {
+                "content": self._fmt_workflow(plan),
+                "engine": "orchestrator",
+                "data": {"workflow": plan_to_dict(plan)},
+            }
         engine_id = self._detect(query)
 
         try:
@@ -211,6 +217,14 @@ class TrinityOrchestrator:
             for state, cnt in top:
                 pct = 100 * cnt / total
                 lines.append(f"  |{state}⟩  →  {cnt} shots  ({pct:.1f}%)")
+        return "\n".join(lines)
+
+    def _fmt_workflow(self, plan) -> str:
+        lines = ["**Trinity Workflow Plan**", "", f"**Objective:** {plan.objective}", "", "The request spans multiple specialist engines. Steps are ordered explicitly and are not silently executed as one engine:"]
+        for index, step in enumerate(plan.steps, start=1):
+            dependency = f" (after `{step.depends_on[0]}`)" if step.depends_on else ""
+            lines.append(f"{index}. `{step.id}` — **{step.engine}**: {step.objective}{dependency}")
+        lines.append("\nSubmit each step or connect a workflow worker to execute the plan and persist outputs.")
         return "\n".join(lines)
 
     def _fmt_firmware(self, job) -> str:

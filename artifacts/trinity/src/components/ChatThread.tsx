@@ -2,15 +2,15 @@ import React, { useEffect, useRef } from 'react';
 import { useGetMessages } from '@workspace/api-client-react';
 import { MessageBubble } from './MessageBubble';
 
-export function ChatThread({ conversationId }: { conversationId: number | null }) {
-  const { data: messages, isLoading } = useGetMessages(conversationId as number, { query: { enabled: !!conversationId } });
+export function ChatThread({ conversationId, extraMessages = [] }: { conversationId: number | null; extraMessages?: any[] }) {
+  const { data: messages, isLoading } = useGetMessages(conversationId as number, { query: { queryKey: ['/api/conversations', conversationId, 'messages'], enabled: !!conversationId } });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, extraMessages]);
 
   if (!conversationId) {
     return (
@@ -38,10 +38,10 @@ export function ChatThread({ conversationId }: { conversationId: number | null }
         </div>
       ) : (
         <div className="max-w-4xl mx-auto flex flex-col min-h-full justify-end">
-          {messages?.map((msg: any) => (
+          {[...(messages || []), ...extraMessages].map((msg: any) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
-          {messages?.length === 0 && (
+          {messages?.length === 0 && extraMessages.length === 0 && (
             <div className="text-center text-muted-foreground font-mono text-sm mt-auto mb-auto opacity-50 py-10">
               CONNECTION ESTABLISHED. AWAITING INPUT.
             </div>

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.designs.artifacts import ArtifactStore
+from app.firmware.builds import run_firmware_build
 from app.firmware.generator import FirmwareGenerator
 from app.firmware.models import FirmwareArtifact, FirmwareJob, FirmwareRequest, FirmwareSpec, FirmwareStatus, FirmwareValidation
 from app.firmware.registry import TARGETS, find_target
@@ -106,6 +108,21 @@ class FirmwareJobService:
             validation = validate_firmware(target, spec, generated.files)
             job.validation = validation
             job.assumptions.extend(generated.assumptions)
+            with tempfile.TemporaryDirectory(prefix=f"{job_id}_") as workspace:
+                workspace_path = Path(workspace)
+                for filename, content in generated.files.items():
+                    destination = workspace_path / filename
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_text(content, encoding="utf-8")
+                build_check, build_log = run_firmware_build(workspace_path, target)
+                job.validation.checks.append(build_check)
+                if build_check.status == "failed":
+                    job.validation.status = "failed"
+                elif build_check.status == "warning" and job.validation.status == "passed":
+                    job.validation.status = "warnings"
+                if build_log:
+                    build_artifact = self.store.artifacts.write(job_id, "build.log", build_log, "firmware_build_log", download_base="/api/artifacts")
+                    job.artifacts.append(_artifact_from_design_artifact(build_artifact))
             for filename, content in generated.files.items():
                 kind = "firmware_bundle_metadata" if filename.endswith(".json") else "firmware_documentation" if filename.endswith(".md") else "firmware_source"
                 stored = self.store.artifacts.write(job_id, filename, content, kind, download_base="/api/artifacts")

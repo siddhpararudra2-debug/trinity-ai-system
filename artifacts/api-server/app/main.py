@@ -13,6 +13,10 @@ from app.routes.conversations import router as conversations_router
 from app.routes.engines import router as engines_router
 from app.routes.designs import router as designs_router
 from app.routes.firmware import router as firmware_router
+from app.routes.vision import router as vision_router
+from app.routes.collab import router as collab_router
+from app.routes.fusion import router as fusion_router
+from app.routes.workflows import router as workflows_router
 
 
 @asynccontextmanager
@@ -53,6 +57,10 @@ app.include_router(conversations_router, prefix=API)
 app.include_router(engines_router, prefix=API)
 app.include_router(designs_router, prefix=API)
 app.include_router(firmware_router, prefix=API)
+app.include_router(vision_router, prefix=API)
+app.include_router(collab_router, prefix=API)
+app.include_router(fusion_router, prefix=API)
+app.include_router(workflows_router, prefix=API)
 
 
 @app.get("/")

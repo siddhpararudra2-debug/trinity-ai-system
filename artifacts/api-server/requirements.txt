@@ -9,3 +9,4 @@ python-dotenv==1.0.1
 python-multipart==0.0.12
 sympy==1.13.3
 numpy==2.2.1
+Pillow>=10.0.0,<12

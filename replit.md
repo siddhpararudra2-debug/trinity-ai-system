@@ -51,9 +51,12 @@ Trinity routes user messages to the correct specialist engine automatically:
 - **Maker CAD** — Generates Fusion 360 Python API scripts; UI provides download button
 - **Maker PCB** — Generates KiCad 7 S-expression schematics/layouts; UI provides download button
 - **Literature RAG** — Real arXiv Atom API search; UI renders paper cards with links
-- **Vision Engine** — Stub (pix2tex when installed)
+- **Vision Engine** — Image upload endpoint with optional pix2tex handwritten LaTeX OCR and free Tesseract printed-text fallback
 - **General AI** — Fallback for unrecognized queries
 - **Firmware Engine** — Free target-specific MCU and flight-controller project generation with validation and downloadable bundles
+- **Collab Engine** — Single-process WebSocket rooms at `/api/ws`; use Redis/pub-sub for multi-worker production deployments
+- **Workflow Planner** — Transparent deterministic multi-engine planning at `/api/workflows/plan`
+- **Fusion Worker** — Signed desktop worker protocol for real STEP/STL/F3D exports
 
 ## Firmware Engine
 
@@ -62,7 +65,12 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - `GET /api/firmware/targets` — list the registered boards and toolchains.
 - `POST /api/firmware/jobs` — generate a deterministic firmware project from an explicit target, feature list, pin map, and peripheral list.
 - `GET /api/firmware/jobs/{job_id}` — retrieve the persisted job, validation report, assumptions, and artifact URLs.
+- `POST /api/vision/ocr` — upload a PNG/JPEG/BMP/TIFF/WebP image for OCR or LaTeX extraction.
+- `GET /api/collab/sessions/{session_id}` and WebSocket `/api/ws?session_id=...` — join a bounded real-time collaboration room.
+- `POST /api/workflows/plan` — decompose a multi-engine objective into a transparent deterministic sequence.
+- `/api/fusion/jobs/{job_id}/claim|artifacts|complete` — signed trusted Fusion worker protocol for real exports.
 - Firmware generation uses free/open-source toolchains and does not guess unsupported boards or pins.
+- Set `TRINITY_ENABLE_FIRMWARE_BUILDS=1` only in a trusted worker with the required target toolchain installed; otherwise build validation is explicitly skipped and recorded.
 - Flight-controller output is an extension/module scaffold and must be tested in SITL and on a safe bench before hardware or flight use.
 
 
@@ -74,7 +82,9 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - `GET /api/artifacts/{artifact_id}` downloads an immutable generated artifact.
 - Generated files are stored below `TRINITY_ARTIFACT_DIR` (default `./trinity_artifacts`).
 - Set `TRINITY_ENABLE_KICAD_CLI=1` only in a trusted worker with a pinned `kicad-cli` installation to run ERC/DRC checks.
-- Fusion STEP/STL/F3D export still requires a connected Fusion desktop worker; the server safely returns a validated Fusion script instead of trying to execute `adsk` code on Linux.
+- Fusion STEP/STL/F3D export still requires a connected Fusion desktop worker; set `TRINITY_FUSION_WORKER_SECRET` to a random secret of at least 32 characters to enable the signed claim/upload/complete protocol. The server safely returns a validated Fusion script instead of trying to execute `adsk` code on Linux.
+- Vision image uploads use `POST /api/vision/ocr`; pix2tex is optional for handwritten LaTeX and Tesseract is optional for printed-text OCR.
+- Collaboration is single-process by default; use a shared pub/sub adapter for multiple API workers.
 
 ## Gotchas
 

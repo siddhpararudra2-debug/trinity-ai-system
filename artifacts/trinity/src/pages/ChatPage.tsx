@@ -6,6 +6,7 @@ import { useListConversations } from '@workspace/api-client-react';
 
 export function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
+  const [extraMessages, setExtraMessages] = useState<any[]>([]);
 
   const { data: conversations } = useListConversations();
   useEffect(() => {
@@ -21,10 +22,11 @@ export function ChatPage() {
         onSelect={setActiveConversationId} 
       />
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <ChatThread conversationId={activeConversationId} />
+        <ChatThread conversationId={activeConversationId} extraMessages={extraMessages} />
         <MessageInput 
           conversationId={activeConversationId} 
-          onConversationCreated={setActiveConversationId} 
+          onConversationCreated={setActiveConversationId}
+          onVisionResult={(message) => setExtraMessages((current) => [...current, message])}
         />
       </main>
     </div>

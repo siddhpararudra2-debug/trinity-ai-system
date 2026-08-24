@@ -20,6 +20,14 @@ tags:
     description: Typed CAD and PCB design jobs
   - name: firmware
     description: Free, target-specific firmware generation
+  - name: vision
+    description: Image OCR and LaTeX extraction
+  - name: collab
+    description: Collaboration sessions
+  - name: workflows
+    description: Deterministic multi-engine workflows
+  - name: fusion-worker
+    description: Trusted Fusion desktop worker protocol
 paths:
   /healthz:
     get:
@@ -354,6 +362,128 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FirmwareJobResponse"
+  /vision/ocr:
+    post:
+      operationId: runVisionOcr
+      tags: [vision]
+      summary: Extract text or LaTeX from an uploaded image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+                description: {type: string}
+      responses:
+        "200":
+          description: OCR result
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/VisionResult"}
+  /collab/sessions/{session_id}:
+    get:
+      operationId: getCollaborationSession
+      tags: [collab]
+      summary: Get collaboration session presence
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Session presence
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CollaborationSession"}
+  /ws:
+    get:
+      operationId: collaborationWebsocket
+      tags: [collab]
+      summary: WebSocket collaboration endpoint
+      parameters:
+        - name: session_id
+          in: query
+          required: false
+          schema: {type: string, default: default}
+      responses:
+        "101": {description: Switching Protocols}
+  /workflows/plan:
+    post:
+      operationId: createWorkflowPlan
+      tags: [workflows]
+      summary: Build an explicit multi-engine workflow plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkflowPlanRequest"}
+      responses:
+        "200":
+          description: Deterministic workflow plan
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WorkflowPlan"}
+  /fusion/jobs/{job_id}/claim:
+    post:
+      operationId: claimFusionJob
+      tags: [fusion-worker]
+      summary: Claim a CAD job from a trusted Fusion worker
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FusionClaimRequest"}
+      responses:
+        "200": {description: Signed Fusion job envelope}
+  /fusion/jobs/{job_id}/artifacts:
+    post:
+      operationId: uploadFusionArtifact
+      tags: [fusion-worker]
+      summary: Upload a Fusion export artifact
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, token]
+              properties:
+                file: {type: string, format: binary}
+                token: {type: string}
+                kind: {type: string}
+      responses:
+        "200": {description: Uploaded artifact}
+  /fusion/jobs/{job_id}/complete:
+    post:
+      operationId: completeFusionJob
+      tags: [fusion-worker]
+      summary: Complete a Fusion job with validation and artifact IDs
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FusionCompleteRequest"}
+      responses:
+        "200": {description: Updated CAD design job}
 components:
   schemas:
     HealthStatus:
@@ -804,3 +934,68 @@ components:
         targets:
           type: array
           items: {$ref: "#/components/schemas/FirmwareTarget"}
+    VisionResult:
+      type: object
+      properties:
+        description: {type: string}
+        recognized_text: {type: string}
+        latex: {type: string}
+        status: {type: string}
+        message: {type: [string, "null"]}
+        engine: {type: string}
+        filename: {type: [string, "null"]}
+        content_type: {type: [string, "null"]}
+        ocr_backend: {type: [string, "null"]}
+    CollaborationSession:
+      type: object
+      required: [session_id, members, status]
+      properties:
+        session_id: {type: string}
+        members: {type: integer}
+        status: {type: string}
+    WorkflowPlanRequest:
+      type: object
+      required: [objective]
+      properties:
+        objective: {type: string}
+    WorkflowStep:
+      type: object
+      required: [id, engine, objective, depends_on]
+      properties:
+        id: {type: string}
+        engine: {type: string}
+        objective: {type: string}
+        depends_on:
+          type: array
+          items: {type: string}
+    WorkflowPlan:
+      type: object
+      required: [objective, mode, steps]
+      properties:
+        objective: {type: string}
+        mode: {type: string}
+        steps:
+          type: array
+          items: {$ref: "#/components/schemas/WorkflowStep"}
+    FusionClaimRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id: {type: string}
+        expires_in_seconds: {type: integer, default: 300}
+    FusionCompleteRequest:
+      type: object
+      required: [token, status]
+      properties:
+        token: {type: string}
+        status: {type: string}
+        artifact_ids:
+          type: array
+          items: {type: string}
+        validation_status: {type: string}
+        checks:
+          type: array
+          items: {type: object}
+        fusion_version: {type: [string, "null"]}
+        addin_version: {type: [string, "null"]}
+        error: {type: [string, "null"]}
