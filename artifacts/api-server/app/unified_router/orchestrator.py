@@ -16,6 +16,8 @@ from app.engines.maker_cad import MakerCadEngine
 from app.engines.maker_pcb import MakerPcbEngine
 from app.engines.literature_engine import LiteratureEngine
 from app.engines.vision_engine import VisionEngine
+from app.designs.jobs import DesignJobService
+from app.designs.models import CadDesignRequest, PcbDesignRequest
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +80,7 @@ class TrinityOrchestrator:
         self._pcb = MakerPcbEngine()
         self._literature = LiteratureEngine()
         self._vision = VisionEngine()
+        self._designs = DesignJobService()
 
     # ------------------------------------------------------------------
     # Public API
@@ -129,12 +132,14 @@ class TrinityOrchestrator:
             return {"content": self._fmt_quantum(result), "engine": "quantum", "data": result}
 
         if engine_id == "maker_cad":
-            result = await self._cad.process(query, {})
-            return {"content": self._fmt_cad(result), "engine": "maker_cad", "data": result}
+            job = await self._designs.create_cad(CadDesignRequest(description=query))
+            result = job.model_dump(mode="json")
+            return {"content": self._fmt_design_job(job), "engine": "maker_cad", "data": result}
 
         if engine_id == "maker_pcb":
-            result = await self._pcb.process(query, [])
-            return {"content": self._fmt_pcb(result), "engine": "maker_pcb", "data": result}
+            job = await self._designs.create_pcb(PcbDesignRequest(description=query))
+            result = job.model_dump(mode="json")
+            return {"content": self._fmt_design_job(job), "engine": "maker_pcb", "data": result}
 
         if engine_id == "literature":
             result = await self._literature.process(query, 5)
@@ -193,6 +198,27 @@ class TrinityOrchestrator:
             for state, cnt in top:
                 pct = 100 * cnt / total
                 lines.append(f"  |{state}⟩  →  {cnt} shots  ({pct:.1f}%)")
+        return "\n".join(lines)
+
+    def _fmt_design_job(self, job) -> str:
+        lines = [
+            f"**{job.engine.replace('_', ' ').title()}** — job `{job.job_id}`",
+            f"\n**Status:** `{job.status.value}`",
+            f"\n**Validation:** `{job.validation.status.value}`",
+        ]
+        if job.questions:
+            lines.append("\n**Confirmation needed:**")
+            lines.extend(f"- {question}" for question in job.questions)
+        if job.assumptions:
+            lines.append("\n**Assumptions:**")
+            lines.extend(f"- {assumption}" for assumption in job.assumptions)
+        if job.artifacts:
+            lines.append("\n**Artifacts:**")
+            lines.extend(f"- `{artifact.filename}` — {artifact.download_url}" for artifact in job.artifacts)
+        failures = [check.message for check in job.validation.checks if check.status in {"failed", "warning"}]
+        if failures:
+            lines.append("\n**Validation notes:**")
+            lines.extend(f"- {message}" for message in failures)
         return "\n".join(lines)
 
     def _fmt_cad(self, r: dict) -> str:

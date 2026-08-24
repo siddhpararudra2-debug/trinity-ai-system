@@ -164,7 +164,7 @@ def run(context):
 
         ui.messageBox(
             f"✅ L-Bracket created\\n"
-            f"Arm1={ARM1}mm  Arm2={ARM2}mm  Thick={THICK}mm  Width={WIDTH}mm"
+            f"Arm1={{ARM1}}mm  Arm2={{ARM2}}mm  Thick={{THICK}}mm  Width={{WIDTH}}mm"
         )
 
     except Exception:

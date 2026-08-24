@@ -54,6 +54,16 @@ Trinity routes user messages to the correct specialist engine automatically:
 - **Vision Engine** — Stub (pix2tex when installed)
 - **General AI** — Fallback for unrecognized queries
 
+## Design jobs and artifact delivery
+
+- `POST /api/designs/cad` creates a typed CAD job, persists the Fusion script, and returns validation metadata and an artifact download URL.
+- `POST /api/designs/pcb` creates a typed PCB job, persists the KiCad schematic, PCB layout, design specification, and project ZIP bundle.
+- `GET /api/design-jobs/{job_id}` returns the persisted job status and validation report.
+- `GET /api/artifacts/{artifact_id}` downloads an immutable generated artifact.
+- Generated files are stored below `TRINITY_ARTIFACT_DIR` (default `./trinity_artifacts`).
+- Set `TRINITY_ENABLE_KICAD_CLI=1` only in a trusted worker with a pinned `kicad-cli` installation to run ERC/DRC checks.
+- Fusion STEP/STL/F3D export still requires a connected Fusion desktop worker; the server safely returns a validated Fusion script instead of trying to execute `adsk` code on Linux.
+
 ## Gotchas
 
 - After running `pnpm --filter @workspace/api-spec run codegen`, manually patch `lib/api-zod/src/generated/api.ts`: replace all `zod.looseObject({...})` with `zod.record(zod.string(), zod.unknown())` to keep Zod v3 compatibility.

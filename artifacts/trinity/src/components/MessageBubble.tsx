@@ -36,7 +36,7 @@ function MessageContent({ message }: { message: any }) {
   
   if (message.data.latex || message.data.expression) return <MathMessage data={message.data} />;
   if (message.data.circuit_diagram || message.data.counts) return <QuantumMessage data={message.data} />;
-  if (message.data.script || message.data.sch_content) return <MakerMessage data={message.data} />;
+  if (message.data.script || message.data.sch_content || message.data.pcb_content || message.data.job_id || message.data.artifacts) return <MakerMessage data={message.data} />;
   if (message.data.papers) return <LiteratureMessage data={message.data} />;
   
   return <TextMessage content={message.content} />;

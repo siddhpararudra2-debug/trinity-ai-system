@@ -52,6 +52,9 @@ Thumbs.db
 *.db
 *.sqlite
 
+# Generated Trinity design artifacts
+trinity_artifacts/
+
 # Python
 __pycache__/
 *.pyc

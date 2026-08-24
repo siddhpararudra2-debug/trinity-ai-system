@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
     google_api_key: str | None = None
+    artifact_dir: str = "./trinity_artifacts"
 
     model_config = {
         "env_prefix": "TRINITY_",

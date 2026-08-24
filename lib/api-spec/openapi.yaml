@@ -16,6 +16,8 @@ tags:
     description: Conversation management
   - name: engines
     description: Trinity engine endpoints
+  - name: designs
+    description: Typed CAD and PCB design jobs
 paths:
   /healthz:
     get:
@@ -218,6 +220,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LiteratureResponse"
+  /designs/cad:
+    post:
+      operationId: createCadDesign
+      tags: [designs]
+      summary: Create and validate a CAD design job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadDesignRequest"
+      responses:
+        "201":
+          description: CAD design job with persisted artifacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesignJobResponse"
+  /designs/pcb:
+    post:
+      operationId: createPcbDesign
+      tags: [designs]
+      summary: Create and validate a PCB design job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PcbDesignRequest"
+      responses:
+        "201":
+          description: PCB design job with persisted artifacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesignJobResponse"
+  /design-jobs/{job_id}:
+    get:
+      operationId: getDesignJob
+      tags: [designs]
+      summary: Get a persisted design job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Design job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesignJob"
+  /design-jobs/{job_id}/validation:
+    get:
+      operationId: getDesignJobValidation
+      tags: [designs]
+      summary: Get design validation details
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Validation report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationReport"
+  /artifacts/{artifact_id}:
+    get:
+      operationId: downloadArtifact
+      tags: [designs]
+      summary: Download a generated artifact
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Binary artifact content
+          content:
+            application/octet-stream: {}
 components:
   schemas:
     HealthStatus:
@@ -449,3 +536,82 @@ components:
           type: string
         engine:
           type: string
+    ValidationCheck:
+      type: object
+      required: [name, status, message]
+      properties:
+        name: {type: string}
+        status: {type: string}
+        message: {type: string}
+        details: {type: object}
+    ValidationReport:
+      type: object
+      required: [status, checks]
+      properties:
+        status: {type: string}
+        checks:
+          type: array
+          items: {$ref: "#/components/schemas/ValidationCheck"}
+        tool: {type: [string, "null"]}
+        tool_version: {type: [string, "null"]}
+    Artifact:
+      type: object
+      required: [id, kind, filename, mime_type, size_bytes, sha256, download_url]
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        filename: {type: string}
+        mime_type: {type: string}
+        size_bytes: {type: integer}
+        sha256: {type: string}
+        download_url: {type: string}
+        preview_url: {type: [string, "null"]}
+    CadDesignRequest:
+      type: object
+      required: [description]
+      properties:
+        description: {type: string}
+        parameters: {type: object}
+        output_formats:
+          type: array
+          items: {type: string}
+    PcbDesignRequest:
+      type: object
+      required: [description]
+      properties:
+        description: {type: string}
+        components:
+          type: array
+          items: {type: string}
+        spec: {type: [object, "null"]}
+        outputs:
+          type: array
+          items: {type: string}
+    DesignJob:
+      type: object
+      required: [job_id, engine, status, request_hash, artifacts, validation, created_at, updated_at]
+      properties:
+        job_id: {type: string}
+        engine: {type: string}
+        status: {type: string}
+        request_hash: {type: string}
+        spec: {type: [object, "null"]}
+        artifacts:
+          type: array
+          items: {$ref: "#/components/schemas/Artifact"}
+        validation: {$ref: "#/components/schemas/ValidationReport"}
+        questions:
+          type: array
+          items: {type: string}
+        assumptions:
+          type: array
+          items: {type: string}
+        error: {type: [string, "null"]}
+        created_at: {type: string}
+        updated_at: {type: string}
+    DesignJobResponse:
+      type: object
+      required: [job, legacy]
+      properties:
+        job: {$ref: "#/components/schemas/DesignJob"}
+        legacy: {type: object}

@@ -11,17 +11,17 @@ from typing import Any
 
 class MakerPcbEngine:
 
-    async def process(self, description: str, components: list | None = None) -> dict[str, Any]:
+    async def process(self, description: str, components: list | None = None, spec: dict[str, Any] | None = None) -> dict[str, Any]:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._run, description, components or [])
+        return await loop.run_in_executor(None, self._run, description, components or [], spec or {})
 
-    def _run(self, description: str, components: list) -> dict[str, Any]:
+    def _run(self, description: str, components: list, spec: dict[str, Any]) -> dict[str, Any]:
         board_type = self._detect_board(description)
-        slug = board_type.lower().replace(" ", "_").replace("-", "_")
+        slug = str(spec.get("board_name") or board_type).lower().replace(" ", "_").replace("-", "_")
         filename = f"trinity_{slug}"
 
-        sch = self._schematic(description, board_type)
-        pcb = self._pcb(description, board_type)
+        sch = self._schematic(description, board_type, components, spec)
+        pcb = self._pcb(description, board_type, components, spec)
 
         instructions = (
             "**How to use in KiCad 7:**\n"
@@ -68,8 +68,9 @@ class MakerPcbEngine:
     # Schematic
     # ------------------------------------------------------------------
 
-    def _schematic(self, description: str, board_type: str) -> str:
+    def _schematic(self, description: str, board_type: str, components: list | None = None, spec: dict[str, Any] | None = None) -> str:
         now = datetime.now()
+        component_note = ", ".join(str(value) for value in (components or []))[:180].replace('"', "'") or "No explicit components"
         return f'''\
 (kicad_sch
   (version 20231120)
@@ -80,8 +81,9 @@ class MakerPcbEngine:
     (title "{board_type}")
     (rev "1.0")
     (company "Trinity AI Engineering OS")
-    (comment 1 "{description[:60]}")
+    (comment 1 "{description[:60].replace(chr(34), chr(39))}")
     (comment 2 "Generated {now.strftime('%Y-%m-%d %H:%M')}")
+    (comment 3 "Components: {component_note}")
   )
   (lib_symbols
     (symbol "MCU_Module:ESP32-WROOM-32"
@@ -207,8 +209,14 @@ class MakerPcbEngine:
     # PCB layout
     # ------------------------------------------------------------------
 
-    def _pcb(self, description: str, board_type: str) -> str:
+    def _pcb(self, description: str, board_type: str, components: list | None = None, spec: dict[str, Any] | None = None) -> str:
         now = datetime.now()
+        component_note = ", ".join(str(value) for value in (components or []))[:180].replace('"', "'") or "No explicit components"
+        spec = spec or {}
+        width = float(spec.get("width_mm", 60.0))
+        height = float(spec.get("height_mm", 40.0))
+        board_end_x = 70.0 + width
+        board_end_y = 80.0 + height
         return f'''\
 (kicad_pcb
   (version 20231120)
@@ -223,8 +231,9 @@ class MakerPcbEngine:
     (title "{board_type}")
     (rev "1.0")
     (company "Trinity AI Engineering OS")
-    (comment 1 "{description[:60]}")
+    (comment 1 "{description[:60].replace(chr(34), chr(39))}")
     (comment 2 "Generated {now.strftime('%Y-%m-%d %H:%M')}")
+    (comment 3 "Components: {component_note}")
   )
   (layers
     (0 "F.Cu" signal)
@@ -283,7 +292,7 @@ class MakerPcbEngine:
     (pad "2" smd roundrect (at 1 0) (size 1.6 1.45) (roundrect_rratio 0.25)
       (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "GND"))
   )
-  (gr_rect (start 70 80) (end 135 120) (layer "Edge.Cuts")
+  (gr_rect (start 70 80) (end {board_end_x:.3f} {board_end_y:.3f}) (layer "Edge.Cuts")
     (stroke (width 0.05) (type default)))
   (gr_text "Trinity AI — {board_type}" (at 80 82) (layer "F.SilkS")
     (effects (font (size 1.5 1.5) bold)))

@@ -11,6 +11,7 @@ from app.routes.health import router as health_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from app.routes.engines import router as engines_router
+from app.routes.designs import router as designs_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(health_router, prefix=API)
 app.include_router(chat_router, prefix=API)
 app.include_router(conversations_router, prefix=API)
 app.include_router(engines_router, prefix=API)
+app.include_router(designs_router, prefix=API)
 
 
 @app.get("/")
