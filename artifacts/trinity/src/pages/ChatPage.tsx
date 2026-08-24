@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { AuthPanel } from '@/components/AuthPanel';
 import { Sidebar } from '@/components/Sidebar';
 import { ChatThread } from '@/components/ChatThread';
 import { MessageInput } from '@/components/MessageInput';
+import { OperationsPanel } from '@/components/OperationsPanel';
 import { useListConversations } from '@workspace/api-client-react';
 
 export function ChatPage() {
@@ -22,6 +24,10 @@ export function ChatPage() {
         onSelect={setActiveConversationId} 
       />
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2">
+          <AuthPanel onAuthChanged={() => window.location.reload()} />
+          <OperationsPanel />
+        </div>
         <ChatThread conversationId={activeConversationId} extraMessages={extraMessages} />
         <MessageInput 
           conversationId={activeConversationId} 

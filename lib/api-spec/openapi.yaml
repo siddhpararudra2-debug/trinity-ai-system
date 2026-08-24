@@ -9,9 +9,12 @@ servers:
     description: Base API path
 security:
   - TrinityApiKey: []
+  - BearerAuth: []
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Account registration and bearer authentication
   - name: chat
     description: Unified Trinity chat
   - name: conversations
@@ -28,11 +31,84 @@ tags:
     description: Collaboration sessions
   - name: workflows
     description: Deterministic multi-engine workflows
+  - name: jobs
+    description: Durable queued work and lifecycle control
   - name: fusion-worker
     description: Trusted Fusion desktop worker protocol
   - name: kicad-worker
     description: Authenticated KiCad CLI manufacturing worker
 paths:
+  /metrics:
+    get:
+      operationId: metricsEndpoint
+      tags: [health]
+      summary: Prometheus-compatible request metrics
+      responses:
+        "200": {description: Metrics text, content: {text/plain: {schema: {type: string}}}}
+  /readyz:
+    get:
+      operationId: readinessCheck
+      tags: [health]
+      security: []
+      summary: Readiness probe
+      responses:
+        "200": {description: Readiness state}
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      security: []
+      summary: Register a user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AuthRequest"}
+      responses:
+        "201":
+          description: Created account and bearer token
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthResponse"}
+        "409": {description: Account already exists}
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      security: []
+      summary: Log in and receive a bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AuthRequest"}
+      responses:
+        "200":
+          description: Authenticated account and bearer token
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthResponse"}
+        "401": {description: Invalid credentials}
+  /auth/me:
+    get:
+      operationId: me
+      tags: [auth]
+      summary: Return the current account
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "401": {description: Missing or invalid bearer token}
+  /auth/users:
+    get:
+      operationId: listUsers
+      tags: [auth]
+      summary: List safe user metadata for administrators
+      responses:
+        "200": {description: User metadata, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/User"}}}}}
+        "403": {description: Administrator role required}
   /healthz:
     get:
       operationId: healthCheck
@@ -478,6 +554,100 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/WorkflowPlan"}
+  /workflows/execute:
+    post:
+      operationId: executeWorkflow
+      tags: [workflows]
+      summary: Queue a workflow for approved execution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkflowExecuteRequest"}
+      responses:
+        "202":
+          description: Queued workflow run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WorkflowRun"}
+  /workflows/runs/{run_id}:
+    get:
+      operationId: getWorkflowRun
+      tags: [workflows]
+      summary: Get workflow run and queue status
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Workflow run, content: {application/json: {schema: {$ref: "#/components/schemas/WorkflowRun"}}}}
+  /workflows/runs/{run_id}/approve:
+    post:
+      operationId: approveWorkflow
+      tags: [workflows]
+      summary: Approve a workflow before engineering actions execute
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Approved workflow run, content: {application/json: {schema: {$ref: "#/components/schemas/WorkflowRun"}}}}
+  /workflows/runs/{run_id}/cancel:
+    post:
+      operationId: cancelWorkflowRun
+      tags: [workflows]
+      summary: Cancel a queued workflow run
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Cancelled workflow run}
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List the current user’s durable jobs
+      responses:
+        "200": {description: Durable jobs, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/DurableJob"}}}}}
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Enqueue a durable job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/JobCreateRequest"}
+      responses:
+        "202": {description: Enqueued durable job, content: {application/json: {schema: {$ref: "#/components/schemas/DurableJob"}}}}
+  /jobs/{job_id}:
+    get:
+      operationId: readJob
+      tags: [jobs]
+      summary: Get a durable job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Durable job, content: {application/json: {schema: {$ref: "#/components/schemas/DurableJob"}}}}
+  /jobs/{job_id}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a durable job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Cancelled durable job}
   /fusion/jobs/{job_id}/claim:
     post:
       operationId: claimFusionJob
@@ -549,12 +719,38 @@ paths:
         "200": {description: Updated CAD design job}
 components:
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Trinity-HMAC
+      description: Short-lived HMAC bearer token issued by the account login endpoint.
     TrinityApiKey:
       type: apiKey
       in: header
       name: X-Trinity-Api-Key
       description: Optional in development; required for protected production API endpoints when TRINITY_API_KEY is configured.
   schemas:
+    AuthRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 8, maxLength: 256, format: password}
+    User:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: {type: integer}
+        email: {type: string, format: email}
+        role: {type: string, enum: [user, admin]}
+        created_at: {type: [string, "null"], format: date-time}
+    AuthResponse:
+      type: object
+      required: [user, access_token, token_type]
+      properties:
+        user: {$ref: "#/components/schemas/User"}
+        access_token: {type: string}
+        token_type: {type: string, enum: [bearer]}
     HealthStatus:
       type: object
       required: [status]
@@ -1022,6 +1218,49 @@ components:
         session_id: {type: string}
         members: {type: integer}
         status: {type: string}
+    WorkflowExecuteRequest:
+      type: object
+      required: [objective, require_approval]
+      properties:
+        objective: {type: string}
+        require_approval: {type: boolean, default: true}
+    WorkflowRun:
+      type: object
+      required: [run_id, objective, plan, status]
+      properties:
+        run_id: {type: string}
+        owner_id: {type: [integer, "null"]}
+        objective: {type: string}
+        plan: {$ref: "#/components/schemas/WorkflowPlan"}
+        status: {type: string}
+        queue_job_id: {type: [string, "null"]}
+        queue: {type: [object, "null"]}
+        created_at: {type: [string, "null"], format: date-time}
+        updated_at: {type: [string, "null"], format: date-time}
+    JobCreateRequest:
+      type: object
+      required: [kind, payload, max_attempts]
+      properties:
+        kind: {type: string}
+        payload: {type: object}
+        max_attempts: {type: integer, minimum: 1, maximum: 20, default: 3}
+    DurableJob:
+      type: object
+      required: [id, kind, payload, status, attempts, max_attempts]
+      properties:
+        id: {type: string}
+        owner_id: {type: [integer, "null"]}
+        kind: {type: string}
+        payload: {type: object}
+        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        attempts: {type: integer}
+        max_attempts: {type: integer}
+        worker_id: {type: [string, "null"]}
+        lease_expires_at: {type: [string, "null"], format: date-time}
+        available_at: {type: [string, "null"], format: date-time}
+        started_at: {type: [string, "null"], format: date-time}
+        finished_at: {type: [string, "null"], format: date-time}
+        error: {type: [string, "null"]}
     WorkflowPlanRequest:
       type: object
       required: [objective]

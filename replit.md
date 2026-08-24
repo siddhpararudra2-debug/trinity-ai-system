@@ -54,8 +54,10 @@ Trinity routes user messages to the correct specialist engine automatically:
 - **Vision Engine** — Image upload endpoint with optional pix2tex handwritten LaTeX OCR and free Tesseract printed-text fallback
 - **General AI** — Fallback for unrecognized queries
 - **Firmware Engine** — Free target-specific MCU and flight-controller project generation with validation and downloadable bundles
-- **Collab Engine** — Single-process WebSocket rooms at `/api/ws`; use Redis/pub-sub for multi-worker production deployments
-- **Workflow Planner** — Transparent deterministic multi-engine planning at `/api/workflows/plan`
+- **Collab Engine** — WebSocket rooms at `/api/ws`; uses the in-memory manager by default and mirrors room events through Redis when `TRINITY_REDIS_URL` is configured
+- **Accounts and ownership** — PBKDF2 password hashing, signed bearer tokens, optional production auth enforcement, user/admin roles, conversation and generated-job ownership
+- **Durable jobs** — SQLite-backed queue with attempts, leases, retry, cancellation, worker CLI, and explicit refusal for unsupported external-tool jobs
+- **Workflow Planner/Executor** — Transparent deterministic planning at `/api/workflows/plan`, durable approval-gated queue runs at `/api/workflows/execute`, and status/approve/cancel endpoints
 - **Fusion Worker** — Signed desktop worker protocol for real STEP/STL/F3D exports
 
 ## Firmware Engine
@@ -68,6 +70,9 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - `POST /api/vision/ocr` — upload a PNG/JPEG/BMP/TIFF/WebP image for OCR or LaTeX extraction.
 - `GET /api/collab/sessions/{session_id}` and WebSocket `/api/ws?session_id=...` — join a bounded real-time collaboration room.
 - `POST /api/workflows/plan` — decompose a multi-engine objective into a transparent deterministic sequence.
+- `POST /api/workflows/execute` — persist and queue an approval-gated workflow run; use `/api/workflows/runs/{run_id}/approve`, `/api/workflows/runs/{run_id}`, and `/api/workflows/runs/{run_id}/cancel` to control it.
+- `POST /api/jobs` and `GET /api/jobs/{job_id}` — durable queue lifecycle API; run `python -m app.job_worker` from the API container for bookkeeping and external-worker handoff.
+- `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/auth/me` — account registration and signed bearer authentication.
 - `/api/fusion/jobs/{job_id}/claim|artifacts|complete` — signed trusted Fusion worker protocol for real exports.
 - Firmware generation uses free/open-source toolchains and does not guess unsupported boards or pins.
 - Set `TRINITY_ENABLE_FIRMWARE_BUILDS=1` only in a trusted worker with the required target toolchain installed; otherwise build validation is explicitly skipped and recorded.
@@ -80,12 +85,13 @@ The Firmware Engine is intentionally target-specific rather than claiming univer
 - `POST /api/designs/pcb` creates a typed PCB job, persists the KiCad schematic, PCB layout, design specification, and project ZIP bundle.
 - `GET /api/design-jobs/{job_id}` returns the persisted job status and validation report.
 - `GET /api/artifacts/{artifact_id}` downloads an immutable generated artifact.
-- Generated files are stored below `TRINITY_ARTIFACT_DIR` (default `./trinity_artifacts`).
+- Generated files are stored below `TRINITY_ARTIFACT_DIR` (default `./trinity_artifacts`). Set `TRINITY_ARTIFACT_BACKEND=s3`, `TRINITY_ARTIFACT_BUCKET`, and optional `TRINITY_S3_ENDPOINT` to upload immutable artifacts to S3-compatible storage with expiring presigned links; `boto3` is optional and loaded only for that backend.
 - Set `TRINITY_ENABLE_KICAD_CLI=1` only in a trusted worker with a pinned `kicad-cli` installation to run server-side ERC/DRC checks. For full manufacturing outputs, run `workers/kicad/kicad_worker.py` with `TRINITY_KICAD_WORKER_SECRET` and synchronize the reports, Gerbers, drill files, BOM, and GLB preview through the KiCad worker routes.
 - Fusion STEP/STL/F3D export still requires a connected Fusion desktop worker. Install `workers/fusion/TrinityFusionWorker.py` as a Fusion 360 script/add-in and set `TRINITY_FUSION_WORKER_SECRET` to a random secret of at least 32 characters to enable the signed claim/upload/complete protocol. The server safely returns a validated Fusion script instead of trying to execute `adsk` code on Linux.
 - Vision image uploads use `POST /api/vision/ocr`; pix2tex is optional for handwritten LaTeX and Tesseract is optional for printed-text OCR.
-- Collaboration is single-process by default; use a shared pub/sub adapter for multiple API workers.
-- `/api/healthz` now reports optional capability flags for Tesseract, KiCad CLI, firmware builds, and Fusion worker configuration.
+- Collaboration is single-process by default; install the optional Redis dependency and set `TRINITY_REDIS_URL` for multi-worker pub/sub and presence fan-out.
+- `/api/healthz` reports capability flags, `/api/readyz` is a database readiness probe, and `/api/metrics` emits Prometheus-compatible counters. Every request receives an `X-Request-ID` response header.
+- `deploy/docker-compose.yml` runs the API, durable worker, and Redis; `deploy/.env.example` documents runtime configuration. Use `deploy/backup_sqlite.sh` and `deploy/restore_sqlite.sh` for SQLite data lifecycle operations.
 - Set `TRINITY_API_KEY` to a random secret of at least 32 characters in production; protected API requests must send `X-Trinity-Api-Key` or `Authorization: Bearer ...`. Leave it unset only for local development.
 
 ## Gotchas

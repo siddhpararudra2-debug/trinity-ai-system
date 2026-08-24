@@ -3,12 +3,16 @@ Trinity AI Engineering OS — FastAPI Backend
 Built on top of the trinity-ai GitHub repo foundation.
 """
 from contextlib import asynccontextmanager
+import logging
+import time
+import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import init_db
 from app.routes.health import router as health_router
+from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from app.routes.engines import router as engines_router
@@ -19,6 +23,8 @@ from app.routes.collab import router as collab_router
 from app.routes.fusion import router as fusion_router
 from app.routes.kicad import router as kicad_router
 from app.routes.workflows import router as workflows_router
+from app.routes.jobs import router as jobs_router
+from app.observability import logger, metrics
 from app.security import require_api_key_for_request
 
 
@@ -52,6 +58,19 @@ app.add_middleware(
 )
 
 @app.middleware("http")
+async def request_observability_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - started
+    metrics.observe(request.method, request.url.path, response.status_code, elapsed)
+    response.headers["X-Request-ID"] = request_id
+    logger.info("http_request method=%s path=%s status=%s duration_ms=%.2f request_id=%s", request.method, request.url.path, response.status_code, elapsed * 1000, request_id)
+    return response
+
+
+@app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
     try:
         require_api_key_for_request(request)
@@ -65,6 +84,7 @@ async def api_key_middleware(request: Request, call_next):
 # /api/* traffic to this service without stripping the prefix.
 API = "/api"
 app.include_router(health_router, prefix=API)
+app.include_router(auth_router, prefix=API)
 app.include_router(chat_router, prefix=API)
 app.include_router(conversations_router, prefix=API)
 app.include_router(engines_router, prefix=API)
@@ -75,6 +95,7 @@ app.include_router(collab_router, prefix=API)
 app.include_router(fusion_router, prefix=API)
 app.include_router(kicad_router, prefix=API)
 app.include_router(workflows_router, prefix=API)
+app.include_router(jobs_router, prefix=API)
 
 
 @app.get("/")

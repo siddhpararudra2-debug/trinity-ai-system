@@ -10,3 +10,6 @@ python-multipart==0.0.12
 sympy==1.13.3
 numpy==2.2.1
 Pillow>=10.0.0,<12
+# Optional production backends; local development remains filesystem/in-memory.
+boto3>=1.35,<2
+redis>=5,<6

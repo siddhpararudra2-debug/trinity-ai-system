@@ -66,7 +66,7 @@ class FirmwareJobService:
         self.store = store or FirmwareJobStore()
         self.generator = FirmwareGenerator()
 
-    async def create(self, request: FirmwareRequest) -> FirmwareJob:
+    async def create(self, request: FirmwareRequest, owner_id: int | None = None) -> FirmwareJob:
         target = find_target(request.target_id, request.description)
         target_id = target.id if target else (request.target_id or "unresolved")
         spec = FirmwareSpec(
@@ -90,6 +90,7 @@ class FirmwareJobService:
         assumptions = ["Only registered target profiles can generate code; unsupported boards are not guessed."]
         job = FirmwareJob(
             job_id=job_id,
+            owner_id=owner_id,
             target=target,
             spec=spec,
             status=FirmwareStatus.needs_input if target is None else FirmwareStatus.generated,

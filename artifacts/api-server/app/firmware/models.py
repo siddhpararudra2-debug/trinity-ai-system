@@ -89,6 +89,7 @@ class FirmwareValidation(BaseModel):
 
 class FirmwareJob(BaseModel):
     job_id: str
+    owner_id: int | None = None
     engine: Literal["firmware"] = "firmware"
     target: FirmwareTarget | None = None
     spec: FirmwareSpec

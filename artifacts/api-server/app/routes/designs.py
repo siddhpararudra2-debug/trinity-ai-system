@@ -3,10 +3,12 @@ from __future__ import annotations
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
+from app.auth import get_optional_user
 from app.designs.jobs import DesignJobService
+from app.models import User
 from app.designs.models import CadDesignRequest, DesignJobResponse, PcbDesignRequest
 
 router = APIRouter(tags=["designs"])
@@ -39,28 +41,32 @@ def _legacy(job) -> dict:
 
 
 @router.post("/designs/cad", response_model=DesignJobResponse, status_code=201)
-async def create_cad_design(request: CadDesignRequest) -> DesignJobResponse:
-    job = await _service.create_cad(request)
+async def create_cad_design(request: CadDesignRequest, user: User | None = Depends(get_optional_user)) -> DesignJobResponse:
+    job = await _service.create_cad(request, owner_id=user.id if user else None)
     return DesignJobResponse(job=job, legacy=_legacy(job))
 
 
 @router.post("/designs/pcb", response_model=DesignJobResponse, status_code=201)
-async def create_pcb_design(request: PcbDesignRequest) -> DesignJobResponse:
-    job = await _service.create_pcb(request)
+async def create_pcb_design(request: PcbDesignRequest, user: User | None = Depends(get_optional_user)) -> DesignJobResponse:
+    job = await _service.create_pcb(request, owner_id=user.id if user else None)
     return DesignJobResponse(job=job, legacy=_legacy(job))
 
 
 @router.get("/design-jobs/{job_id}")
-async def get_design_job(job_id: str):
+async def get_design_job(job_id: str, user: User | None = Depends(get_optional_user)):
     job = _service.store.get(job_id)
+    if job is not None and user is not None and job.owner_id != user.id:
+        job = None
     if job is None:
         raise HTTPException(status_code=404, detail="Design job not found")
     return job
 
 
 @router.get("/design-jobs/{job_id}/validation")
-async def get_design_job_validation(job_id: str):
+async def get_design_job_validation(job_id: str, user: User | None = Depends(get_optional_user)):
     job = _service.store.get(job_id)
+    if job is not None and user is not None and job.owner_id != user.id:
+        job = None
     if job is None:
         raise HTTPException(status_code=404, detail="Design job not found")
     return job.validation

@@ -1,11 +1,12 @@
 """Unified Trinity chat endpoint — routes to the appropriate engine."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 
+from app.auth import get_optional_user
 from app.database import get_db
-from app.models import Conversation, Message
+from app.models import Conversation, Message, User
 from app.unified_router.orchestrator import TrinityOrchestrator
 
 router = APIRouter(tags=["chat"])
@@ -25,7 +26,7 @@ class ChatInput(BaseModel):
 
 
 @router.post("/chat")
-async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db)):
+async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db), user: User | None = Depends(get_optional_user)):
     """
     Main Trinity entry point.
 
@@ -41,15 +42,18 @@ async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(Conversation).where(Conversation.id == data.conversation_id)
         )
-        conv = result.scalar_one_or_none() or Conversation(
-            title=data.content[:60]
-        )
-        if conv.id is None:
+        conv = result.scalar_one_or_none()
+        if conv is not None and user is not None and conv.owner_id not in {None, user.id}:
+            raise HTTPException(status_code=403, detail="Conversation belongs to another user")
+        if conv is None:
+            conv = Conversation(title=data.content[:60], owner_id=user.id if user else None)
             db.add(conv)
             await db.flush()
+        elif user is not None and conv.owner_id is None:
+            conv.owner_id = user.id
     else:
         title = data.content[:60] + ("..." if len(data.content) > 60 else "")
-        conv = Conversation(title=title)
+        conv = Conversation(title=title, owner_id=user.id if user else None)
         db.add(conv)
         await db.flush()
 

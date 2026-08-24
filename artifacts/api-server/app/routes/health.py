@@ -3,12 +3,28 @@ import os
 import shutil
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from app.database import get_db
+from app.observability import metrics
 
 router = APIRouter(tags=["health"])
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics_endpoint():
+    return metrics.prometheus()
+
+
+@router.get("/readyz")
+async def readiness_check(db: AsyncSession = Depends(get_db)):
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception as exc:
+        return {"ready": False, "reason": str(exc)}
+    return {"ready": True}
 
 
 @router.get("/healthz")

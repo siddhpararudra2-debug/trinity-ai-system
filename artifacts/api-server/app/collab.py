@@ -1,11 +1,13 @@
 """Lightweight WebSocket collaboration rooms.
 
-This is a single-process implementation. Production deployments should replace
-this manager with a Redis-backed pub/sub layer when multiple API workers run.
+The default is an in-memory room manager. When TRINITY_REDIS_URL is configured
+and the optional redis package is installed, room events are mirrored over Redis
+pub/sub so multiple API workers can broadcast to their local WebSocket clients.
 """
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import re
 import time
@@ -30,6 +32,46 @@ class Room:
 class CollaborationManager:
     def __init__(self) -> None:
         self.rooms: dict[str, Room] = defaultdict(Room)
+        self.redis_url = os.getenv("TRINITY_REDIS_URL", "").strip()
+        self.redis = None
+        self.redis_tasks: dict[str, asyncio.Task] = {}
+
+    async def _ensure_redis_room(self, session_id: str) -> None:
+        if not self.redis_url or session_id in self.redis_tasks:
+            return
+        try:
+            from redis.asyncio import Redis
+            self.redis = self.redis or Redis.from_url(self.redis_url, decode_responses=True)
+            pubsub = self.redis.pubsub()
+            await pubsub.subscribe(self._channel(session_id))
+        except ImportError:
+            return
+
+        async def listen() -> None:
+            try:
+                async for item in pubsub.listen():
+                    if item.get("type") != "message":
+                        continue
+                    try:
+                        message = json.loads(item["data"])
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    await self.broadcast(session_id, message, from_redis=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return
+            finally:
+                try:
+                    await pubsub.unsubscribe(self._channel(session_id))
+                    await pubsub.close()
+                except Exception:
+                    pass
+
+        self.redis_tasks[session_id] = asyncio.create_task(listen())
+
+    def _channel(self, session_id: str) -> str:
+        return f"trinity:collab:{session_id}"
 
     @staticmethod
     def normalize_session(session_id: str) -> str:
@@ -41,6 +83,7 @@ class CollaborationManager:
         session_id = self.normalize_session(session_id)
         await websocket.accept()
         room = self.rooms[session_id]
+        await self._ensure_redis_room(session_id)
         async with room.lock:
             room.clients.add(websocket)
         await self.broadcast(session_id, {"type": "system", "event": "joined", "members": len(room.clients)}, exclude=websocket)
@@ -57,8 +100,11 @@ class CollaborationManager:
             await self.broadcast(session_id, {"type": "system", "event": "left", "members": remaining})
         else:
             self.rooms.pop(session_id, None)
+            task = self.redis_tasks.pop(session_id, None)
+            if task:
+                task.cancel()
 
-    async def broadcast(self, session_id: str, message: dict[str, Any], exclude: WebSocket | None = None) -> None:
+    async def broadcast(self, session_id: str, message: dict[str, Any], exclude: WebSocket | None = None, from_redis: bool = False) -> None:
         room = self.rooms.get(session_id)
         if not room:
             return
@@ -77,6 +123,11 @@ class CollaborationManager:
             async with room.lock:
                 for client in stale:
                     room.clients.discard(client)
+        if self.redis is not None and not from_redis:
+            try:
+                await self.redis.publish(self._channel(session_id), encoded)
+            except Exception:
+                pass
 
     async def handle(self, session_id: str, websocket: WebSocket) -> None:
         try:

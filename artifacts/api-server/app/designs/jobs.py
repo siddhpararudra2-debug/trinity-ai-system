@@ -89,7 +89,7 @@ class DesignJobService:
         self.cad = MakerCadEngine()
         self.pcb = MakerPcbEngine()
 
-    async def create_cad(self, request: CadDesignRequest) -> DesignJob:
+    async def create_cad(self, request: CadDesignRequest, owner_id: int | None = None) -> DesignJob:
         spec, questions, assumptions = parse_cad(request.description, request.parameters)
         if request.output_formats:
             spec.output_formats = request.output_formats
@@ -97,6 +97,7 @@ class DesignJobService:
         now = _now()
         job = DesignJob(
             job_id=job_id,
+            owner_id=owner_id,
             engine="maker_cad",
             status=JobStatus.generating,
             request_hash=_hash(request.model_dump()),
@@ -144,12 +145,13 @@ class DesignJobService:
             self.store.save(job)
             return job
 
-    async def create_pcb(self, request: PcbDesignRequest) -> DesignJob:
+    async def create_pcb(self, request: PcbDesignRequest, owner_id: int | None = None) -> DesignJob:
         spec, questions, assumptions = parse_pcb(request.description, request.components, request.spec, request.outputs)
         job_id = _new_id("pcb")
         now = _now()
         job = DesignJob(
             job_id=job_id,
+            owner_id=owner_id,
             engine="maker_pcb",
             status=JobStatus.generating,
             request_hash=_hash(request.model_dump()),

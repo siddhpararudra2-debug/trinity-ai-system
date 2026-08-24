@@ -120,6 +120,7 @@ class PcbDesignSpec(BaseModel):
 
 class DesignJob(BaseModel):
     job_id: str
+    owner_id: int | None = None
     engine: Literal["maker_cad", "maker_pcb"]
     status: JobStatus
     request_hash: str

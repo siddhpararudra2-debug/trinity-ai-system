@@ -6,7 +6,7 @@ import os
 from fastapi import HTTPException, Request
 
 
-_PUBLIC_PATHS = {"/api/healthz", "/api/docs", "/api/redoc", "/api/openapi.json"}
+_PUBLIC_PATHS = {"/api/healthz", "/api/readyz", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/auth/register", "/api/auth/login"}
 
 
 def configured_api_key() -> str | None:
@@ -22,8 +22,17 @@ def require_api_key_for_request(request: Request) -> None:
     if not supplied:
         authorization = request.headers.get("authorization", "")
         supplied = authorization.removeprefix("Bearer ").strip()
-    if not hmac.compare_digest(supplied, configured):
-        raise HTTPException(status_code=401, detail="A valid Trinity API key is required")
+    if hmac.compare_digest(supplied, configured):
+        return
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        try:
+            from app.auth import decode_access_token
+            decode_access_token(authorization[7:].strip())
+            return
+        except Exception:
+            pass
+    raise HTTPException(status_code=401, detail="A valid Trinity API key or bearer access token is required")
 
 
 def validate_worker_secret(value: str | None) -> None:

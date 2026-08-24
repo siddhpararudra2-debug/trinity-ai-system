@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 import mimetypes
 import re
@@ -26,6 +27,22 @@ class ArtifactStore:
     def __init__(self, root: str | Path | None = None) -> None:
         self.root = Path(root or get_settings().artifact_dir).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self.backend = os.getenv("TRINITY_ARTIFACT_BACKEND", "local").strip().lower()
+        self.s3 = None
+        self.s3_bucket = os.getenv("TRINITY_ARTIFACT_BUCKET", "").strip()
+        self.s3_prefix = os.getenv("TRINITY_ARTIFACT_PREFIX", "trinity").strip("/")
+        if self.backend == "s3":
+            if not self.s3_bucket:
+                raise RuntimeError("TRINITY_ARTIFACT_BUCKET is required when TRINITY_ARTIFACT_BACKEND=s3")
+            try:
+                import boto3
+                kwargs = {}
+                endpoint = os.getenv("TRINITY_S3_ENDPOINT", "").strip()
+                if endpoint:
+                    kwargs["endpoint_url"] = endpoint
+                self.s3 = boto3.client("s3", **kwargs)
+            except ImportError as exc:
+                raise RuntimeError("boto3 is required for the S3 artifact backend") from exc
 
     def job_dir(self, job_id: str) -> Path:
         safe_job = _SAFE_NAME.sub("_", job_id)
@@ -40,6 +57,12 @@ class ArtifactStore:
         artifact_id = f"artifact_{uuid.uuid4().hex}"
         path = self.job_dir(job_id) / f"{artifact_id}_{safe_name}"
         path.write_bytes(data)
+        download_url = f"{download_base}/{artifact_id}"
+        if self.s3 is not None:
+            key = f"{self.s3_prefix}/{safe_job}/{artifact_id}_{safe_name}"
+            content_type = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+            self.s3.put_object(Bucket=self.s3_bucket, Key=key, Body=data, ContentType=content_type)
+            download_url = self.s3.generate_presigned_url("get_object", Params={"Bucket": self.s3_bucket, "Key": key}, ExpiresIn=int(os.getenv("TRINITY_ARTIFACT_URL_TTL", "900")))
         return Artifact(
             id=artifact_id,
             kind=kind,
@@ -47,13 +70,17 @@ class ArtifactStore:
             mime_type=mimetypes.guess_type(safe_name)[0] or "application/octet-stream",
             size_bytes=len(data),
             sha256=digest,
-            download_url=f"{download_base}/{artifact_id}",
+            download_url=download_url,
         )
 
     def register_manifest(self, job_id: str, engine: str, artifacts: list[Artifact], validation: ValidationReport) -> Path:
         manifest = ArtifactManifest(job_id=job_id, engine=engine, generated_at=datetime.now(timezone.utc), files=artifacts, validation=validation)
         path = self.job_dir(job_id) / "manifest.json"
-        path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+        manifest_bytes = manifest.model_dump_json(indent=2).encode("utf-8")
+        path.write_bytes(manifest_bytes)
+        if self.s3 is not None:
+            key = f"{self.s3_prefix}/{_SAFE_NAME.sub('_', job_id)}/manifest.json"
+            self.s3.put_object(Bucket=self.s3_bucket, Key=key, Body=manifest_bytes, ContentType="application/json")
         return path
 
     def locate(self, artifact_id: str) -> Path | None:
