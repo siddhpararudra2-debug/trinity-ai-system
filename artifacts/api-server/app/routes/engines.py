@@ -19,6 +19,14 @@ _literature = LiteratureEngine()
 
 ENGINES_REGISTRY = [
     {
+        "id": "firmware",
+        "name": "Trinity Firmware Engine",
+        "description": "Generates target-specific free-toolchain MCU and flight-controller projects with validation",
+        "status": "ready",
+        "trigger_words": ["firmware", "embedded", "microcontroller", "ESP32", "STM32", "PX4", "ArduPilot", "Betaflight", "INAV"],
+        "icon": "💾",
+    },
+    {
         "id": "math",
         "name": "Trinity Math Engine",
         "description": "Symbolic solving (SymPy), integration, differentiation, dimensional analysis",

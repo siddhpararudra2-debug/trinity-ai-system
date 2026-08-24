@@ -26,6 +26,14 @@ export function EngineTestDialog({ engine, children }: { engine: any, children: 
         res = await pcb.mutateAsync({ data: { description: input } });
       } else if (engine.id === 'literature') {
         res = await lit.mutateAsync({ data: { query: input } });
+      } else if (engine.id === 'firmware') {
+        const response = await fetch('/api/firmware/jobs', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ description: input }),
+        });
+        if (!response.ok) throw new Error(`Firmware request failed (${response.status})`);
+        res = await response.json();
       }
       setResult(res);
     } catch (e: any) {

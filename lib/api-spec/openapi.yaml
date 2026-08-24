@@ -18,6 +18,8 @@ tags:
     description: Trinity engine endpoints
   - name: designs
     description: Typed CAD and PCB design jobs
+  - name: firmware
+    description: Free, target-specific firmware generation
 paths:
   /healthz:
     get:
@@ -305,6 +307,53 @@ paths:
           description: Binary artifact content
           content:
             application/octet-stream: {}
+  /firmware/targets:
+    get:
+      operationId: getFirmwareTargets
+      tags: [firmware]
+      summary: List registered firmware targets
+      responses:
+        "200":
+          description: Supported target profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TargetListResponse"
+  /firmware/jobs:
+    post:
+      operationId: createFirmwareJob
+      tags: [firmware]
+      summary: Generate a target-specific firmware project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirmwareRequest"
+      responses:
+        "201":
+          description: Firmware project job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmwareJobResponse"
+  /firmware/jobs/{job_id}:
+    get:
+      operationId: getFirmwareJob
+      tags: [firmware]
+      summary: Get a firmware job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Firmware job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmwareJobResponse"
 components:
   schemas:
     HealthStatus:
@@ -615,3 +664,143 @@ components:
       properties:
         job: {$ref: "#/components/schemas/DesignJob"}
         legacy: {type: object}
+    FirmwareTarget:
+      type: object
+      required: [id, name, kind, vendor, board, mcu, framework, language, build_system, build_command, flash_command]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {type: string}
+        vendor: {type: string}
+        board: {type: string}
+        mcu: {type: string}
+        framework: {type: string}
+        language: {type: string}
+        build_system: {type: string}
+        build_command: {type: string}
+        flash_command: {type: string}
+        supported_peripherals:
+          type: array
+          items: {type: string}
+        notes:
+          type: array
+          items: {type: string}
+    PinAssignment:
+      type: object
+      required: [name, pin, function]
+      properties:
+        name: {type: string}
+        pin: {type: string}
+        function: {type: string}
+        active_high: {type: boolean}
+    PeripheralSpec:
+      type: object
+      required: [name, kind]
+      properties:
+        name: {type: string}
+        kind: {type: string}
+        bus: {type: [string, "null"]}
+        pins:
+          type: array
+          items: {type: string}
+        options: {type: object}
+    FirmwareRequest:
+      type: object
+      required: [description]
+      properties:
+        description: {type: string}
+        target_id: {type: [string, "null"]}
+        project_name: {type: string}
+        features:
+          type: array
+          items: {type: string}
+        pins:
+          type: array
+          items: {$ref: "#/components/schemas/PinAssignment"}
+        peripherals:
+          type: array
+          items: {$ref: "#/components/schemas/PeripheralSpec"}
+        include_tests: {type: boolean}
+        safety_mode: {type: string}
+    FirmwareArtifact:
+      type: object
+      required: [id, filename, kind, mime_type, size_bytes, sha256, download_url]
+      properties:
+        id: {type: string}
+        filename: {type: string}
+        kind: {type: string}
+        mime_type: {type: string}
+        size_bytes: {type: integer}
+        sha256: {type: string}
+        download_url: {type: string}
+    FirmwareCheck:
+      type: object
+      required: [name, status, message]
+      properties:
+        name: {type: string}
+        status: {type: string}
+        message: {type: string}
+        details: {type: object}
+    FirmwareValidation:
+      type: object
+      required: [status, checks]
+      properties:
+        status: {type: string}
+        checks:
+          type: array
+          items: {$ref: "#/components/schemas/FirmwareCheck"}
+        toolchain: {type: [string, "null"]}
+    FirmwareSpec:
+      type: object
+      required: [target_id, project_name, description, features, pins, peripherals, include_tests, safety_mode]
+      properties:
+        target_id: {type: string}
+        project_name: {type: string}
+        description: {type: string}
+        language: {type: [string, "null"]}
+        framework: {type: [string, "null"]}
+        features:
+          type: array
+          items: {type: string}
+        pins:
+          type: array
+          items: {$ref: "#/components/schemas/PinAssignment"}
+        peripherals:
+          type: array
+          items: {$ref: "#/components/schemas/PeripheralSpec"}
+        include_tests: {type: boolean}
+        safety_mode: {type: string}
+    FirmwareJob:
+      type: object
+      required: [job_id, engine, spec, status, validation, artifacts, created_at, updated_at]
+      properties:
+        job_id: {type: string}
+        engine: {type: string}
+        target: {type: [object, "null"]}
+        spec: {$ref: "#/components/schemas/FirmwareSpec"}
+        status: {type: string}
+        artifacts:
+          type: array
+          items: {$ref: "#/components/schemas/FirmwareArtifact"}
+        validation: {$ref: "#/components/schemas/FirmwareValidation"}
+        questions:
+          type: array
+          items: {type: string}
+        assumptions:
+          type: array
+          items: {type: string}
+        error: {type: [string, "null"]}
+        created_at: {type: string}
+        updated_at: {type: string}
+    FirmwareJobResponse:
+      type: object
+      required: [job]
+      properties:
+        job: {$ref: "#/components/schemas/FirmwareJob"}
+    TargetListResponse:
+      type: object
+      required: [targets]
+      properties:
+        targets:
+          type: array
+          items: {$ref: "#/components/schemas/FirmwareTarget"}

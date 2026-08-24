@@ -53,6 +53,18 @@ Trinity routes user messages to the correct specialist engine automatically:
 - **Literature RAG** — Real arXiv Atom API search; UI renders paper cards with links
 - **Vision Engine** — Stub (pix2tex when installed)
 - **General AI** — Fallback for unrecognized queries
+- **Firmware Engine** — Free target-specific MCU and flight-controller project generation with validation and downloadable bundles
+
+## Firmware Engine
+
+The Firmware Engine is intentionally target-specific rather than claiming universal support. Registered profiles currently cover ESP32 DevKitC and ESP32-S3 DevKitC/ESP-IDF, Arduino Uno and Nano/AVR, STM32F103 Blue Pill, STM32F411 Black Pill, and STM32F746 Nucleo/HAL, Raspberry Pi Pico/RP2040 SDK, nRF52840/Zephyr, Pixhawk FMUv5 and FMUv6C/PX4, Cube Orange/ArduPilot, generic Betaflight STM32 F4 and H7, SpeedyBee F405/Betaflight, generic INAV STM32 F7, and Matek F722/INAV.
+
+- `GET /api/firmware/targets` — list the registered boards and toolchains.
+- `POST /api/firmware/jobs` — generate a deterministic firmware project from an explicit target, feature list, pin map, and peripheral list.
+- `GET /api/firmware/jobs/{job_id}` — retrieve the persisted job, validation report, assumptions, and artifact URLs.
+- Firmware generation uses free/open-source toolchains and does not guess unsupported boards or pins.
+- Flight-controller output is an extension/module scaffold and must be tested in SITL and on a safe bench before hardware or flight use.
+
 
 ## Design jobs and artifact delivery
 

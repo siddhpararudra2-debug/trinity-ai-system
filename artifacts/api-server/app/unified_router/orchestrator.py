@@ -18,6 +18,8 @@ from app.engines.literature_engine import LiteratureEngine
 from app.engines.vision_engine import VisionEngine
 from app.designs.jobs import DesignJobService
 from app.designs.models import CadDesignRequest, PcbDesignRequest
+from app.firmware.jobs import FirmwareJobService
+from app.firmware.models import FirmwareRequest
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +27,11 @@ from app.designs.models import CadDesignRequest, PcbDesignRequest
 # Higher priority wins when multiple engines match.
 # ---------------------------------------------------------------------------
 ROUTING_RULES: list[tuple[str, list[str], int]] = [
+    ("firmware", [
+        r"\b(firmware|embedded|microcontroller|mcu|bare[\s_-]?metal|rtos|driver|bootloader)\b",
+        r"\b(flight[\s_-]?controller|pixhawk|px4|ardupilot|betaflight|inav)\b",
+        r"\b(esp32|stm32|rp2040|raspberry[\s_-]?pi\s+pico|arduino|atmega|nrf52840)\b.*\b(code|firmware|program|driver)\b",
+    ], 12),
     ("maker_pcb", [
         r"\b(pcb|circuit[\s_-]?board|kicad|schematic|route[\s_]+board)\b",
         r"\b(solder|footprint|gerber|netlist|bom|drill[\s_]+file)\b",
@@ -81,6 +88,7 @@ class TrinityOrchestrator:
         self._literature = LiteratureEngine()
         self._vision = VisionEngine()
         self._designs = DesignJobService()
+        self._firmware = FirmwareJobService()
 
     # ------------------------------------------------------------------
     # Public API
@@ -130,6 +138,11 @@ class TrinityOrchestrator:
         if engine_id == "quantum":
             result = await self._quantum.process(query, 2, 1024)
             return {"content": self._fmt_quantum(result), "engine": "quantum", "data": result}
+
+        if engine_id == "firmware":
+            job = await self._firmware.create(FirmwareRequest(description=query))
+            result = job.model_dump(mode="json")
+            return {"content": self._fmt_firmware(job), "engine": "firmware", "data": result}
 
         if engine_id == "maker_cad":
             job = await self._designs.create_cad(CadDesignRequest(description=query))
@@ -198,6 +211,28 @@ class TrinityOrchestrator:
             for state, cnt in top:
                 pct = 100 * cnt / total
                 lines.append(f"  |{state}⟩  →  {cnt} shots  ({pct:.1f}%)")
+        return "\n".join(lines)
+
+    def _fmt_firmware(self, job) -> str:
+        lines = [
+            f"**Trinity Firmware Engine** — job `{job.job_id}`",
+            f"\n**Status:** `{job.status.value}`",
+            f"\n**Target:** `{job.target.name if job.target else 'unresolved'}`",
+            f"\n**Validation:** `{job.validation.status}`",
+        ]
+        if job.questions:
+            lines.append("\n**Target selection required:**")
+            lines.extend(f"- {question}" for question in job.questions)
+        if job.assumptions:
+            lines.append("\n**Precision and safety notes:**")
+            lines.extend(f"- {assumption}" for assumption in job.assumptions)
+        if job.artifacts:
+            lines.append("\n**Firmware project artifacts:**")
+            lines.extend(f"- `{artifact.filename}` — {artifact.download_url}" for artifact in job.artifacts)
+        warnings = [check.message for check in job.validation.checks if check.status in {"warning", "failed"}]
+        if warnings:
+            lines.append("\n**Validation notes:**")
+            lines.extend(f"- {warning}" for warning in warnings)
         return "\n".join(lines)
 
     def _fmt_design_job(self, job) -> str:
@@ -277,6 +312,7 @@ Here's what I can do:
 | **🔌 Maker (PCB)** | "design a 4-layer PCB for ESP32" · "generate KiCad schematic" |
 | **📚 Literature** | "find papers on quantum error correction" · "search arxiv for LLMs" |
 | **👁 Vision** | "extract LaTeX from this image" · "OCR my handwritten equation" |
+| **💾 Firmware** | "write ESP32 firmware" · "generate PX4 module" · "create ArduPilot driver" |
 | **🤝 Collab** | "start a shared research notebook" |
 
 What would you like to build or explore?"""

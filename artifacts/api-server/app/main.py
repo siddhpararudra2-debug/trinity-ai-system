@@ -12,6 +12,7 @@ from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from app.routes.engines import router as engines_router
 from app.routes.designs import router as designs_router
+from app.routes.firmware import router as firmware_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(chat_router, prefix=API)
 app.include_router(conversations_router, prefix=API)
 app.include_router(engines_router, prefix=API)
 app.include_router(designs_router, prefix=API)
+app.include_router(firmware_router, prefix=API)
 
 
 @app.get("/")
@@ -61,6 +63,6 @@ async def root():
         "docs": "/api/docs",
         "engines": [
             "math", "quantum", "maker_cad", "maker_pcb",
-            "literature", "vision", "collab", "orchestrator",
+            "literature", "vision", "firmware", "collab", "orchestrator",
         ],
     }
