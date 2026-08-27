@@ -16,11 +16,24 @@ from app.database import get_db
 from app.models import User
 
 _ITERATIONS = 310_000
+_INSECURE_SECRET = "local-development-auth-secret-change-me"
 
 
 def _auth_secret() -> bytes:
-    value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY") or "local-development-auth-secret-change-me"
+    value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY") or _INSECURE_SECRET
     return value.encode("utf-8")
+
+
+def validate_auth_configuration() -> None:
+    """Reject forgeable defaults whenever bearer auth is enabled."""
+    if os.getenv("TRINITY_AUTH_REQUIRED", "0") != "1":
+        return
+    value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY")
+    if not value or len(value) < 32 or value == _INSECURE_SECRET:
+        raise RuntimeError(
+            "TRINITY_AUTH_REQUIRED=1 requires TRINITY_AUTH_SECRET or TRINITY_API_KEY "
+            "with at least 32 non-default characters"
+        )
 
 
 def hash_password(password: str) -> str:

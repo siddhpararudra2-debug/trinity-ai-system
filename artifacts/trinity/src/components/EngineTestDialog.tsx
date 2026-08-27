@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRunMathEngine, useRunQuantumEngine, useRunMakerCad, useRunMakerPcb, useRunLiteratureEngine } from '@workspace/api-client-react';
+import { getAuthHeaders } from '@/lib/auth';
 
 export function EngineTestDialog({ engine, children }: { engine: any, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -29,11 +30,15 @@ export function EngineTestDialog({ engine, children }: { engine: any, children: 
       } else if (engine.id === 'firmware') {
         const response = await fetch('/api/firmware/jobs', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ description: input }),
         });
         if (!response.ok) throw new Error(`Firmware request failed (${response.status})`);
         res = await response.json();
+      }
+      if (res === undefined) {
+        setResult({ error: `The ${engine.name} engine has no direct diagnostic handler yet.` });
+        return;
       }
       setResult(res);
     } catch (e: any) {

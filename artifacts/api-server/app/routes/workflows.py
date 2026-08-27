@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_optional_user
+from app.auth import get_current_user
 from app.database import get_db
 from app.job_queue import cancel, enqueue, get_job, serialize_job
 from app.models import DurableJob, User, WorkflowRun
@@ -48,12 +48,12 @@ async def create_workflow_plan(request: WorkflowPlanRequest):
 async def execute_workflow(
     request: WorkflowExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     plan = plan_to_dict(build_workflow_plan(request.objective))
     run = WorkflowRun(
         id=f"run_{uuid.uuid4().hex}",
-        owner_id=user.id if user else None,
+        owner_id=user.id,
         objective=request.objective,
         plan_json=json.dumps(plan, sort_keys=True),
         status="awaiting_approval" if request.require_approval else "queued",
@@ -63,7 +63,7 @@ async def execute_workflow(
     await db.refresh(run)
     queue_job = None
     if not request.require_approval:
-        queue_job = await enqueue(db, "workflow", {"run_id": run.id, "plan": plan, "approved": True}, user.id if user else None)
+        queue_job = await enqueue(db, "workflow", {"run_id": run.id, "plan": plan, "approved": True}, user.id)
         run.queue_job_id = queue_job.id
         await db.commit()
         await db.refresh(run)
@@ -74,11 +74,10 @@ async def execute_workflow(
 async def approve_workflow(
     run_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     query = select(WorkflowRun).where(WorkflowRun.id == run_id)
-    if user is not None:
-        query = query.where(WorkflowRun.owner_id == user.id)
+    query = query.where(WorkflowRun.owner_id == user.id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
@@ -86,10 +85,10 @@ async def approve_workflow(
     if run.status not in {"awaiting_approval", "queued"}:
         raise HTTPException(status_code=409, detail="Workflow run is not awaiting approval")
     if run.queue_job_id:
-        queue_job = await get_job(db, run.queue_job_id, user.id if user else None)
+        queue_job = await get_job(db, run.queue_job_id, user.id)
     else:
         plan = json.loads(run.plan_json)
-        queue_job = await enqueue(db, "workflow", {"run_id": run.id, "plan": plan, "approved": True}, user.id if user else None)
+        queue_job = await enqueue(db, "workflow", {"run_id": run.id, "plan": plan, "approved": True}, user.id)
         run.queue_job_id = queue_job.id
     if queue_job is None:
         raise HTTPException(status_code=409, detail="Workflow queue job is unavailable")
@@ -108,16 +107,15 @@ async def approve_workflow(
 async def get_workflow_run(
     run_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     query = select(WorkflowRun).where(WorkflowRun.id == run_id)
-    if user is not None:
-        query = query.where(WorkflowRun.owner_id == user.id)
+    query = query.where(WorkflowRun.owner_id == user.id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Workflow run not found")
-    queue_job = await get_job(db, run.queue_job_id, user.id if user else None) if run.queue_job_id else None
+    queue_job = await get_job(db, run.queue_job_id, user.id) if run.queue_job_id else None
     return _run_payload(run, queue_job)
 
 
@@ -125,16 +123,15 @@ async def get_workflow_run(
 async def cancel_workflow_run(
     run_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     query = select(WorkflowRun).where(WorkflowRun.id == run_id)
-    if user is not None:
-        query = query.where(WorkflowRun.owner_id == user.id)
+    query = query.where(WorkflowRun.owner_id == user.id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Workflow run not found")
-    queue_job = await cancel(db, run.queue_job_id, user.id if user else None) if run.queue_job_id else None
+    queue_job = await cancel(db, run.queue_job_id, user.id) if run.queue_job_id else None
     run.status = "cancelled"
     await db.commit()
     await db.refresh(run)

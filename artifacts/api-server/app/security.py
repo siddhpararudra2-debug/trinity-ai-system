@@ -15,13 +15,18 @@ def configured_api_key() -> str | None:
 
 
 def require_api_key_for_request(request: Request) -> None:
+    # CORS preflight carries no bearer token or application key by design.
+    if request.method == "OPTIONS":
+        return
     configured = configured_api_key()
-    if not configured or request.url.path in _PUBLIC_PATHS or request.url.path.startswith("/api/ws"):
+    if not configured or request.url.path in _PUBLIC_PATHS:
         return
     supplied = request.headers.get("x-trinity-api-key", "")
     if not supplied:
-        authorization = request.headers.get("authorization", "")
-        supplied = authorization.removeprefix("Bearer ").strip()
+        authorization = request.headers.get("authorization", "").strip()
+        scheme, _, credential = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            supplied = credential.strip()
     if hmac.compare_digest(supplied, configured):
         return
     authorization = request.headers.get("authorization", "")

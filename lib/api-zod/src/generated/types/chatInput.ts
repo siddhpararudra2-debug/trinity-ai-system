@@ -10,4 +10,9 @@ export interface ChatInput {
   content: string;
   /** @nullable */
   conversation_id?: number | null;
+  /**
+     * Optional manual specialist-engine selection.
+     * @nullable
+     */
+  engine?: string | null;
 }

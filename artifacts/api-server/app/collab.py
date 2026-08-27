@@ -7,6 +7,7 @@ pub/sub so multiple API workers can broadcast to their local WebSocket clients.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import json
 import re
@@ -16,6 +17,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import WebSocket
+
+from app.auth import decode_access_token
+from app.security import configured_api_key
 
 
 _SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,96}$")
@@ -27,6 +31,25 @@ class Room:
     clients: set[WebSocket] = field(default_factory=set)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     created_at: float = field(default_factory=time.time)
+
+
+def authorize_websocket(websocket: WebSocket) -> bool:
+    """Validate an API key or bearer token before accepting a room connection."""
+    configured = configured_api_key()
+    api_key = websocket.headers.get("x-trinity-api-key", "")
+    authorization = websocket.headers.get("authorization", "")
+    bearer = authorization[7:].strip() if authorization.lower().startswith("bearer ") else websocket.query_params.get("access_token", "")
+    if configured and hmac.compare_digest(api_key, configured):
+        return True
+    if configured and hmac.compare_digest(bearer, configured):
+        return True
+    if bearer:
+        try:
+            decode_access_token(bearer)
+            return True
+        except Exception:
+            return False
+    return False
 
 
 class CollaborationManager:

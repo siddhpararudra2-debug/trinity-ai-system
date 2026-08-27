@@ -453,10 +453,11 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, conversation_id]
               properties:
                 file: {type: string, format: binary}
                 description: {type: string}
+                conversation_id: {type: integer}
       responses:
         "200":
           description: OCR result

@@ -103,6 +103,7 @@ class TrinityOrchestrator:
         query: str,
         history: list | None = None,
         engine_override: str | None = None,
+        owner_id: int | None = None,
     ) -> dict[str, Any]:
         """Detect or explicitly select an engine, then return {content, engine, data}."""
         if engine_override is not None:
@@ -117,7 +118,7 @@ class TrinityOrchestrator:
                 engine_override = None
             else:
                 try:
-                    return await self._dispatch(normalized, query)
+                    return await self._dispatch(normalized, query, owner_id=owner_id)
                 except Exception as exc:
                     return {
                         "content": f"Engine **{normalized}** encountered an issue: {exc}",
@@ -135,7 +136,7 @@ class TrinityOrchestrator:
         engine_id = self._detect(query)
 
         try:
-            return await self._dispatch(engine_id, query)
+            return await self._dispatch(engine_id, query, owner_id=owner_id)
         except Exception as exc:
             return {
                 "content": (
@@ -166,7 +167,7 @@ class TrinityOrchestrator:
     # Dispatch to engines
     # ------------------------------------------------------------------
 
-    async def _dispatch(self, engine_id: str, query: str) -> dict[str, Any]:
+    async def _dispatch(self, engine_id: str, query: str, owner_id: int | None = None) -> dict[str, Any]:
         if engine_id == "math":
             result = await self._math.process(query, "auto")
             return {"content": self._fmt_math(result), "engine": "math", "data": result}
@@ -176,17 +177,17 @@ class TrinityOrchestrator:
             return {"content": self._fmt_quantum(result), "engine": "quantum", "data": result}
 
         if engine_id == "firmware":
-            job = await self._firmware.create(FirmwareRequest(description=query))
+            job = await self._firmware.create(FirmwareRequest(description=query), owner_id=owner_id)
             result = job.model_dump(mode="json")
             return {"content": self._fmt_firmware(job), "engine": "firmware", "data": result}
 
         if engine_id == "maker_cad":
-            job = await self._designs.create_cad(CadDesignRequest(description=query))
+            job = await self._designs.create_cad(CadDesignRequest(description=query), owner_id=owner_id)
             result = job.model_dump(mode="json")
             return {"content": self._fmt_design_job(job), "engine": "maker_cad", "data": result}
 
         if engine_id == "maker_pcb":
-            job = await self._designs.create_pcb(PcbDesignRequest(description=query))
+            job = await self._designs.create_pcb(PcbDesignRequest(description=query), owner_id=owner_id)
             result = job.model_dump(mode="json")
             return {"content": self._fmt_design_job(job), "engine": "maker_pcb", "data": result}
 

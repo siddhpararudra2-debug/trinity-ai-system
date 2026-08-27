@@ -12,11 +12,15 @@ The API stores SQLite data under the `trinity-data` volume and generated files u
 
 Redis is used for cross-instance collaboration broadcasts when `TRINITY_REDIS_URL` is set. If the Redis package or service is unavailable, the API remains usable in single-process mode and exposes the limitation through deployment logs and capability checks. The queue worker uses leases and retries; unsupported engineering work is deliberately refused until a trusted external worker is installed.
 
-Set `TRINITY_AUTH_REQUIRED=1` in production. Account registration creates ordinary users. An administrator is created or promoted only when `TRINITY_BOOTSTRAP_ADMIN_EMAIL` and `TRINITY_BOOTSTRAP_ADMIN_PASSWORD` are supplied at first startup. Rotate the bootstrap password after login and do not commit `.env`.
+Set `TRINITY_AUTH_REQUIRED=1` in production and provide a strong `TRINITY_AUTH_SECRET` plus `TRINITY_API_KEY`. Account registration creates ordinary users. Conversations, messages, jobs, workflows, design jobs, firmware jobs, and artifact downloads require the owning user’s bearer token; the application API key is only an infrastructure boundary and is not a tenant identity. An administrator is created or promoted only when `TRINITY_BOOTSTRAP_ADMIN_EMAIL` and `TRINITY_BOOTSTRAP_ADMIN_PASSWORD` are supplied at first startup. Rotate the bootstrap password after login and do not commit `.env`.
+
+Set `TRINITY_CORS_ORIGINS` to a comma-separated allowlist when the frontend and API use different origins. Browser websocket clients must send a bearer token through the `access_token` query parameter or a custom header supplied by a non-browser client; unauthenticated collaboration rooms are rejected.
 
 The `/api/healthz` endpoint reports capability flags, `/api/readyz` is intended for load-balancer readiness checks, and `/api/metrics` emits Prometheus-compatible counters. Configure log collection for the `trinity.api` logger and retain request IDs when investigating failures.
 
 The repository’s local verification commands are:
+
+Run `pnpm install` with the repository’s configured build approvals before the checks below. The workspace explicitly permits the native packages required by the build, including esbuild.
 
 ```bash
 PYTHONPATH=artifacts/api-server python3 -m unittest discover -s tests -p 'test_*.py' -v

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_optional_user
+from app.auth import get_current_user
 from app.database import get_db
 from app.job_queue import cancel, enqueue, get_job, serialize_job
 from app.models import DurableJob, User
@@ -29,10 +29,10 @@ class JobCancelRequest(BaseModel):
 async def create_job(
     request: JobCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     try:
-        job = await enqueue(db, request.kind, request.payload, user.id if user else None, request.max_attempts)
+        job = await enqueue(db, request.kind, request.payload, user.id, request.max_attempts)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return serialize_job(job)
@@ -41,11 +41,9 @@ async def create_job(
 @router.get("/jobs")
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
-    query = select(DurableJob).order_by(DurableJob.created_at.desc()).limit(100)
-    if user is not None:
-        query = query.where(DurableJob.owner_id == user.id)
+    query = select(DurableJob).where(DurableJob.owner_id == user.id).order_by(DurableJob.created_at.desc()).limit(100)
     result = await db.execute(query)
     return [serialize_job(job) for job in result.scalars().all()]
 
@@ -54,9 +52,9 @@ async def list_jobs(
 async def read_job(
     job_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
-    job = await get_job(db, job_id, user.id if user else None)
+    job = await get_job(db, job_id, user.id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return serialize_job(job)
@@ -67,9 +65,9 @@ async def cancel_job(
     job_id: str,
     request: JobCancelRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
-    job = await cancel(db, job_id, user.id if user else None)
+    job = await cancel(db, job_id, user.id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if request and request.reason:

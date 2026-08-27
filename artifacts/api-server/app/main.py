@@ -4,6 +4,7 @@ Built on top of the trinity-ai GitHub repo foundation.
 """
 from contextlib import asynccontextmanager
 import logging
+import os
 import time
 import uuid
 from fastapi import FastAPI, Request
@@ -26,12 +27,14 @@ from app.routes.workflows import router as workflows_router
 from app.routes.jobs import router as jobs_router
 from app.observability import logger, metrics
 from app.security import require_api_key_for_request
+from app.auth import validate_auth_configuration
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize DB tables on startup, clean up on shutdown."""
     print("🔺 Trinity AI starting up...")
+    validate_auth_configuration()
     await init_db()
     print("✅ Database initialized")
     yield
@@ -48,11 +51,15 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS — allow all origins in development
+# CORS is configurable. Wildcard origins cannot be combined with credentials.
+_raw_cors_origins = os.getenv("TRINITY_CORS_ORIGINS", "*")
+_cors_origins = [origin.strip() for origin in _raw_cors_origins.split(",") if origin.strip()]
+if not _cors_origins:
+    _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials="*" not in _cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

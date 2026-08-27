@@ -6,13 +6,15 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from app.auth import get_optional_user
+from app.auth import get_current_user
 from app.designs.jobs import DesignJobService
 from app.models import User
 from app.designs.models import CadDesignRequest, DesignJobResponse, PcbDesignRequest
+from app.firmware.jobs import FirmwareJobStore
 
 router = APIRouter(tags=["designs"])
 _service = DesignJobService()
+_firmware_store = FirmwareJobStore(_service.store.artifacts)
 
 
 def _legacy(job) -> dict:
@@ -41,21 +43,21 @@ def _legacy(job) -> dict:
 
 
 @router.post("/designs/cad", response_model=DesignJobResponse, status_code=201)
-async def create_cad_design(request: CadDesignRequest, user: User | None = Depends(get_optional_user)) -> DesignJobResponse:
-    job = await _service.create_cad(request, owner_id=user.id if user else None)
+async def create_cad_design(request: CadDesignRequest, user: User = Depends(get_current_user)) -> DesignJobResponse:
+    job = await _service.create_cad(request, owner_id=user.id)
     return DesignJobResponse(job=job, legacy=_legacy(job))
 
 
 @router.post("/designs/pcb", response_model=DesignJobResponse, status_code=201)
-async def create_pcb_design(request: PcbDesignRequest, user: User | None = Depends(get_optional_user)) -> DesignJobResponse:
-    job = await _service.create_pcb(request, owner_id=user.id if user else None)
+async def create_pcb_design(request: PcbDesignRequest, user: User = Depends(get_current_user)) -> DesignJobResponse:
+    job = await _service.create_pcb(request, owner_id=user.id)
     return DesignJobResponse(job=job, legacy=_legacy(job))
 
 
 @router.get("/design-jobs/{job_id}")
-async def get_design_job(job_id: str, user: User | None = Depends(get_optional_user)):
+async def get_design_job(job_id: str, user: User = Depends(get_current_user)):
     job = _service.store.get(job_id)
-    if job is not None and user is not None and job.owner_id != user.id:
+    if job is not None and job.owner_id != user.id:
         job = None
     if job is None:
         raise HTTPException(status_code=404, detail="Design job not found")
@@ -63,9 +65,9 @@ async def get_design_job(job_id: str, user: User | None = Depends(get_optional_u
 
 
 @router.get("/design-jobs/{job_id}/validation")
-async def get_design_job_validation(job_id: str, user: User | None = Depends(get_optional_user)):
+async def get_design_job_validation(job_id: str, user: User = Depends(get_current_user)):
     job = _service.store.get(job_id)
-    if job is not None and user is not None and job.owner_id != user.id:
+    if job is not None and job.owner_id != user.id:
         job = None
     if job is None:
         raise HTTPException(status_code=404, detail="Design job not found")
@@ -73,11 +75,17 @@ async def get_design_job_validation(job_id: str, user: User | None = Depends(get
 
 
 @router.get("/artifacts/{artifact_id}")
-async def download_artifact(artifact_id: str):
+async def download_artifact(artifact_id: str, user: User = Depends(get_current_user)):
     stored = _service.store.artifacts.read(artifact_id)
     if stored is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
     path, _ = stored
+    parent_job_id = path.parent.name
+    design_job = _service.store.get(parent_job_id)
+    firmware_job = _firmware_store.get(parent_job_id) if design_job is None else None
+    owner_id = design_job.owner_id if design_job is not None else firmware_job.owner_id if firmware_job is not None else None
+    if owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Artifact not found")
     prefix = f"{artifact_id}_"
     filename = path.name[len(prefix):] if path.name.startswith(prefix) else path.name
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"

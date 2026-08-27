@@ -2,7 +2,7 @@
 import os
 import shutil
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -23,7 +23,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)):
     try:
         await db.execute(text("SELECT 1"))
     except Exception as exc:
-        return {"ready": False, "reason": str(exc)}
+        raise HTTPException(status_code=503, detail={"ready": False, "reason": str(exc)}) from exc
     return {"ready": True}
 
 
@@ -35,6 +35,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         await db.execute(text("SELECT 1"))
     except Exception as exc:
         db_status = f"unhealthy: {exc}"
+
+    if db_status != "healthy":
+        raise HTTPException(status_code=503, detail={"status": "unhealthy", "db": db_status})
 
     return {
         "status": "ok",

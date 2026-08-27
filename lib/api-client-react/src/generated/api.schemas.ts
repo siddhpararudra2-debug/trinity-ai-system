@@ -5,6 +5,44 @@
  * Trinity AI Engineering OS API
  * OpenAPI spec version: 0.1.0
  */
+export interface AuthRequest {
+  email: string;
+  /**
+     * @minLength 8
+     * @maxLength 256
+     */
+  password: string;
+}
+
+export type UserRole = typeof UserRole[keyof typeof UserRole];
+
+
+export const UserRole = {
+  user: 'user',
+  admin: 'admin',
+} as const;
+
+export interface User {
+  id: number;
+  email: string;
+  role: UserRole;
+  /** @nullable */
+  created_at?: string | null;
+}
+
+export type AuthResponseTokenType = typeof AuthResponseTokenType[keyof typeof AuthResponseTokenType];
+
+
+export const AuthResponseTokenType = {
+  bearer: 'bearer',
+} as const;
+
+export interface AuthResponse {
+  user: User;
+  access_token: string;
+  token_type: AuthResponseTokenType;
+}
+
 export type HealthStatusEngines = { [key: string]: unknown };
 
 export interface HealthStatus {
@@ -17,7 +55,10 @@ export interface ChatInput {
   content: string;
   /** @nullable */
   conversation_id?: number | null;
-  /** Optional manual specialist-engine selection. */
+  /**
+     * Optional manual specialist-engine selection.
+     * @nullable
+     */
   engine?: string | null;
 }
 
@@ -156,4 +197,370 @@ export interface LiteratureResponse {
   summary: string;
   engine: string;
 }
+
+export type ValidationCheckDetails = { [key: string]: unknown };
+
+export interface ValidationCheck {
+  name: string;
+  status: string;
+  message: string;
+  details?: ValidationCheckDetails;
+}
+
+export interface ValidationReport {
+  status: string;
+  checks: ValidationCheck[];
+  /** @nullable */
+  tool?: string | null;
+  /** @nullable */
+  tool_version?: string | null;
+}
+
+export interface Artifact {
+  id: string;
+  kind: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  download_url: string;
+  /** @nullable */
+  preview_url?: string | null;
+}
+
+export type CadDesignRequestParameters = { [key: string]: unknown };
+
+export interface CadDesignRequest {
+  description: string;
+  parameters?: CadDesignRequestParameters;
+  output_formats?: string[];
+}
+
+/**
+ * @nullable
+ */
+export type PcbDesignRequestSpec = { [key: string]: unknown } | null;
+
+export interface PcbDesignRequest {
+  description: string;
+  components?: string[];
+  /** @nullable */
+  spec?: PcbDesignRequestSpec;
+  outputs?: string[];
+}
+
+/**
+ * @nullable
+ */
+export type DesignJobSpec = { [key: string]: unknown } | null;
+
+export interface DesignJob {
+  job_id: string;
+  engine: string;
+  status: string;
+  request_hash: string;
+  /** @nullable */
+  spec?: DesignJobSpec;
+  artifacts: Artifact[];
+  validation: ValidationReport;
+  questions?: string[];
+  assumptions?: string[];
+  /** @nullable */
+  error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DesignJobResponseLegacy = { [key: string]: unknown };
+
+export interface DesignJobResponse {
+  job: DesignJob;
+  legacy: DesignJobResponseLegacy;
+}
+
+export interface FirmwareTarget {
+  id: string;
+  name: string;
+  kind: string;
+  vendor: string;
+  board: string;
+  mcu: string;
+  framework: string;
+  language: string;
+  build_system: string;
+  build_command: string;
+  flash_command: string;
+  supported_peripherals?: string[];
+  notes?: string[];
+}
+
+export interface PinAssignment {
+  name: string;
+  pin: string;
+  function: string;
+  active_high?: boolean;
+}
+
+export type PeripheralSpecOptions = { [key: string]: unknown };
+
+export interface PeripheralSpec {
+  name: string;
+  kind: string;
+  /** @nullable */
+  bus?: string | null;
+  pins?: string[];
+  options?: PeripheralSpecOptions;
+}
+
+export interface FirmwareRequest {
+  description: string;
+  /** @nullable */
+  target_id?: string | null;
+  project_name?: string;
+  features?: string[];
+  pins?: PinAssignment[];
+  peripherals?: PeripheralSpec[];
+  include_tests?: boolean;
+  safety_mode?: string;
+}
+
+export interface FirmwareArtifact {
+  id: string;
+  filename: string;
+  kind: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  download_url: string;
+}
+
+export type FirmwareCheckDetails = { [key: string]: unknown };
+
+export interface FirmwareCheck {
+  name: string;
+  status: string;
+  message: string;
+  details?: FirmwareCheckDetails;
+}
+
+export interface FirmwareValidation {
+  status: string;
+  checks: FirmwareCheck[];
+  /** @nullable */
+  toolchain?: string | null;
+}
+
+export interface FirmwareSpec {
+  target_id: string;
+  project_name: string;
+  description: string;
+  /** @nullable */
+  language?: string | null;
+  /** @nullable */
+  framework?: string | null;
+  features: string[];
+  pins: PinAssignment[];
+  peripherals: PeripheralSpec[];
+  include_tests: boolean;
+  safety_mode: string;
+}
+
+/**
+ * @nullable
+ */
+export type FirmwareJobTarget = { [key: string]: unknown } | null;
+
+export interface FirmwareJob {
+  job_id: string;
+  engine: string;
+  /** @nullable */
+  target?: FirmwareJobTarget;
+  spec: FirmwareSpec;
+  status: string;
+  artifacts: FirmwareArtifact[];
+  validation: FirmwareValidation;
+  questions?: string[];
+  assumptions?: string[];
+  /** @nullable */
+  error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FirmwareJobResponse {
+  job: FirmwareJob;
+}
+
+export interface TargetListResponse {
+  targets: FirmwareTarget[];
+}
+
+export interface VisionResult {
+  description?: string;
+  recognized_text?: string;
+  latex?: string;
+  status?: string;
+  /** @nullable */
+  message?: string | null;
+  engine?: string;
+  /** @nullable */
+  filename?: string | null;
+  /** @nullable */
+  content_type?: string | null;
+  /** @nullable */
+  ocr_backend?: string | null;
+}
+
+export interface CollaborationSession {
+  session_id: string;
+  members: number;
+  status: string;
+}
+
+export interface WorkflowExecuteRequest {
+  objective: string;
+  require_approval: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type WorkflowRunQueue = { [key: string]: unknown } | null;
+
+export interface WorkflowStep {
+  id: string;
+  engine: string;
+  objective: string;
+  depends_on: string[];
+}
+
+export interface WorkflowPlan {
+  objective: string;
+  mode: string;
+  steps: WorkflowStep[];
+}
+
+export interface WorkflowRun {
+  run_id: string;
+  /** @nullable */
+  owner_id?: number | null;
+  objective: string;
+  plan: WorkflowPlan;
+  status: string;
+  /** @nullable */
+  queue_job_id?: string | null;
+  /** @nullable */
+  queue?: WorkflowRunQueue;
+  /** @nullable */
+  created_at?: string | null;
+  /** @nullable */
+  updated_at?: string | null;
+}
+
+export type JobCreateRequestPayload = { [key: string]: unknown };
+
+export interface JobCreateRequest {
+  kind: string;
+  payload: JobCreateRequestPayload;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  max_attempts: number;
+}
+
+export type DurableJobPayload = { [key: string]: unknown };
+
+export type DurableJobStatus = typeof DurableJobStatus[keyof typeof DurableJobStatus];
+
+
+export const DurableJobStatus = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'succeeded',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface DurableJob {
+  id: string;
+  /** @nullable */
+  owner_id?: number | null;
+  kind: string;
+  payload: DurableJobPayload;
+  status: DurableJobStatus;
+  attempts: number;
+  max_attempts: number;
+  /** @nullable */
+  worker_id?: string | null;
+  /** @nullable */
+  lease_expires_at?: string | null;
+  /** @nullable */
+  available_at?: string | null;
+  /** @nullable */
+  started_at?: string | null;
+  /** @nullable */
+  finished_at?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface WorkflowPlanRequest {
+  objective: string;
+}
+
+export interface FusionClaimRequest {
+  worker_id: string;
+  expires_in_seconds?: number;
+}
+
+export type KicadCompleteRequestChecksItem = { [key: string]: unknown };
+
+export interface KicadCompleteRequest {
+  status: string;
+  validation_status: string;
+  artifact_ids?: string[];
+  checks?: KicadCompleteRequestChecksItem[];
+  /** @nullable */
+  kicad_version?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export type FusionCompleteRequestChecksItem = { [key: string]: unknown };
+
+export interface FusionCompleteRequest {
+  token: string;
+  status: string;
+  artifact_ids?: string[];
+  validation_status?: string;
+  checks?: FusionCompleteRequestChecksItem[];
+  /** @nullable */
+  fusion_version?: string | null;
+  /** @nullable */
+  addin_version?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export type RunVisionOcrBody = {
+  file: Blob;
+  description?: string;
+  conversation_id: number;
+};
+
+export type CollaborationWebsocketParams = {
+session_id?: string;
+};
+
+export type UploadKicadArtifactBody = {
+  file: Blob;
+  kind: string;
+};
+
+export type UploadFusionArtifactBody = {
+  file: Blob;
+  token: string;
+  kind?: string;
+};
 

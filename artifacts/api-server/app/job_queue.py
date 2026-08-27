@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DurableJob
@@ -84,8 +84,8 @@ async def claim(
     if lease_seconds < 10 or lease_seconds > 86_400:
         raise ValueError("lease_seconds must be between 10 and 86400")
     now = _now()
-    result = await db.execute(
-        select(DurableJob)
+    candidate_result = await db.execute(
+        select(DurableJob.id)
         .where(
             or_(
                 (DurableJob.status == "queued") & (DurableJob.available_at <= now),
@@ -96,18 +96,40 @@ async def claim(
         .order_by(DurableJob.created_at.asc())
         .limit(1)
     )
-    job = result.scalar_one_or_none()
-    if job is None:
+    candidate_id = candidate_result.scalar_one_or_none()
+    if candidate_id is None:
         return None
-    job.status = "running"
-    job.worker_id = worker_id
-    job.attempts += 1
-    job.started_at = job.started_at or now
-    job.lease_expires_at = now + timedelta(seconds=lease_seconds)
-    job.error = None
+
+    # The predicate is repeated in the UPDATE. If another worker wins the
+    # race after the SELECT, this UPDATE affects zero rows and this worker
+    # returns None instead of executing the same job.
+    claimed = await db.execute(
+        update(DurableJob)
+        .where(
+            DurableJob.id == candidate_id,
+            or_(
+                (DurableJob.status == "queued") & (DurableJob.available_at <= now),
+                (DurableJob.status == "running") & (DurableJob.lease_expires_at < now),
+            ),
+            DurableJob.attempts < DurableJob.max_attempts,
+        )
+        .values(
+            status="running",
+            worker_id=worker_id,
+            attempts=DurableJob.attempts + 1,
+            started_at=func.coalesce(DurableJob.started_at, now),
+            lease_expires_at=now + timedelta(seconds=lease_seconds),
+            error=None,
+        )
+        .returning(DurableJob.id)
+    )
+    claimed_id = claimed.scalar_one_or_none()
+    if claimed_id is None:
+        await db.rollback()
+        return None
     await db.commit()
-    await db.refresh(job)
-    return job
+    result = await db.execute(select(DurableJob).where(DurableJob.id == claimed_id))
+    return result.scalar_one_or_none()
 
 
 async def complete(db: AsyncSession, job_id: str, worker_id: str, success: bool, error: str | None = None) -> DurableJob | None:
