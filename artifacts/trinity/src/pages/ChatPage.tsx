@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AuthPanel } from '@/components/AuthPanel';
 import { Sidebar } from '@/components/Sidebar';
 import { ChatThread } from '@/components/ChatThread';
@@ -9,6 +9,7 @@ import { useListConversations } from '@workspace/api-client-react';
 export function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [extraMessages, setExtraMessages] = useState<any[]>([]);
+  const [selectedEngine, setSelectedEngine] = useState<string | null>(null);
 
   const { data: conversations } = useListConversations();
   useEffect(() => {
@@ -31,6 +32,8 @@ export function ChatPage() {
         <ChatThread conversationId={activeConversationId} extraMessages={extraMessages} />
         <MessageInput 
           conversationId={activeConversationId} 
+          selectedEngine={selectedEngine}
+          onSelectedEngineChange={setSelectedEngine}
           onConversationCreated={setActiveConversationId}
           onVisionResult={(message) => setExtraMessages((current) => [...current, message])}
         />

@@ -25,6 +25,11 @@ from app.workflows import build_workflow_plan, plan_to_dict
 # Routing rules: (engine_id, regex_patterns, base_priority)
 # Higher priority wins when multiple engines match.
 # ---------------------------------------------------------------------------
+ENGINE_IDS = {
+    "firmware", "maker_pcb", "maker_cad", "quantum", "math",
+    "literature", "vision", "collab", "orchestrator",
+}
+
 ROUTING_RULES: list[tuple[str, list[str], int]] = [
     ("firmware", [
         r"\b(firmware|embedded|microcontroller|mcu|bare[\s_-]?metal|rtos|driver|bootloader)\b",
@@ -93,8 +98,33 @@ class TrinityOrchestrator:
     # Public API
     # ------------------------------------------------------------------
 
-    async def route(self, query: str, history: list = None) -> dict[str, Any]:
-        """Detect engine, call it, return {content, engine, data}."""
+    async def route(
+        self,
+        query: str,
+        history: list | None = None,
+        engine_override: str | None = None,
+    ) -> dict[str, Any]:
+        """Detect or explicitly select an engine, then return {content, engine, data}."""
+        if engine_override is not None:
+            normalized = engine_override.strip().lower()
+            if normalized not in ENGINE_IDS:
+                return {
+                    "content": f"Unknown engine `{engine_override}`. Choose one of: {', '.join(sorted(ENGINE_IDS - {'orchestrator'}))}.",
+                    "engine": "orchestrator",
+                    "data": {"error": "unknown_engine", "requested": engine_override},
+                }
+            if normalized == "orchestrator":
+                engine_override = None
+            else:
+                try:
+                    return await self._dispatch(normalized, query)
+                except Exception as exc:
+                    return {
+                        "content": f"Engine **{normalized}** encountered an issue: {exc}",
+                        "engine": "orchestrator",
+                        "data": {"error": str(exc), "attempted": normalized},
+                    }
+
         plan = build_workflow_plan(query)
         if len(plan.steps) > 1:
             return {

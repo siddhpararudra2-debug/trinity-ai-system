@@ -769,6 +769,9 @@ components:
           type: string
         conversation_id:
           type: ["integer", "null"]
+        engine:
+          type: ["string", "null"]
+          description: Optional manual specialist-engine selection.
     ChatResponse:
       type: object
       required: [id, content, engine, created_at, conversation_id]

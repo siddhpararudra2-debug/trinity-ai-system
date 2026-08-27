@@ -5,11 +5,13 @@ import { ImagePlus } from 'lucide-react';
 
 type MessageInputProps = {
   conversationId: number | null;
+  selectedEngine: string | null;
+  onSelectedEngineChange: (engine: string | null) => void;
   onConversationCreated: (id: number) => void;
   onVisionResult?: (message: any) => void;
 };
 
-export function MessageInput({ conversationId, onConversationCreated, onVisionResult }: MessageInputProps) {
+export function MessageInput({ conversationId, selectedEngine, onSelectedEngineChange, onConversationCreated, onVisionResult }: MessageInputProps) {
   const [content, setContent] = useState('');
   const [visionPending, setVisionPending] = useState(false);
   const sendChat = useSendChat();
@@ -21,7 +23,7 @@ export function MessageInput({ conversationId, onConversationCreated, onVisionRe
     e?.preventDefault();
     if (!content.trim() || sendChat.isPending || visionPending) return;
 
-    sendChat.mutate({ data: { content, conversation_id: conversationId } }, {
+    sendChat.mutate({ data: { content, conversation_id: conversationId, engine: selectedEngine } }, {
       onSuccess: (res) => {
         setContent('');
         queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
@@ -81,8 +83,26 @@ export function MessageInput({ conversationId, onConversationCreated, onVisionRe
       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/jpg,image/bmp,image/tiff,image/webp" onChange={handleVisionUpload} className="hidden" />
       <button type="button" title="Upload image for OCR" onClick={() => fileRef.current?.click()} disabled={busy} className="h-[44px] w-[44px] border border-border rounded text-primary hover:bg-white/5 disabled:opacity-50 flex items-center justify-center">
+
         {visionPending ? <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : <ImagePlus className="w-4 h-4" />}
       </button>
+      <select
+        aria-label="Engine override"
+        value={selectedEngine ?? ''}
+        onChange={(event) => onSelectedEngineChange(event.target.value || null)}
+        disabled={busy}
+        className="h-[44px] max-w-[150px] bg-input border border-border rounded px-2 text-[10px] uppercase tracking-widest text-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
+      >
+        <option value="">AUTO ROUTE</option>
+        <option value="math">MATH</option>
+        <option value="quantum">QUANTUM</option>
+        <option value="maker_cad">CAD</option>
+        <option value="maker_pcb">PCB</option>
+        <option value="literature">LITERATURE</option>
+        <option value="firmware">FIRMWARE</option>
+        <option value="vision">VISION</option>
+        <option value="collab">COLLAB</option>
+      </select>
       <div className="flex-1 relative flex items-center bg-input border border-border rounded focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <div className="pl-4 text-primary font-mono text-sm opacity-50">&gt;</div>
         <textarea ref={inputRef} value={content} onChange={(e) => setContent(e.target.value)} onKeyDown={handleKeyDown} placeholder="ENTER COMMAND OR QUERY..." className="flex-1 min-h-[44px] max-h-48 py-3 px-3 bg-transparent border-none focus:outline-none focus:ring-0 resize-none font-mono text-sm scrollbar-hide text-foreground placeholder:text-muted-foreground/50" rows={1} disabled={busy} autoFocus />

@@ -23,6 +23,7 @@ def get_orchestrator() -> TrinityOrchestrator:
 class ChatInput(BaseModel):
     content: str
     conversation_id: int | None = None
+    engine: str | None = None
 
 
 @router.post("/chat")
@@ -74,7 +75,7 @@ async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db), user: U
     history = history_result.scalars().all()
 
     # --- Engine routing -------------------------------------------------------
-    response = await orchestrator.route(data.content, history)
+    response = await orchestrator.route(data.content, history, engine_override=data.engine)
 
     # --- Assistant message --------------------------------------------------
     assistant_msg = Message(

@@ -8,6 +8,18 @@ import yaml
 from app.main import app
 
 
+def route_paths(routes, prefix=""):
+    for route in routes:
+        included_router = getattr(route, "original_router", None)
+        if included_router is not None:
+            context = getattr(route, "include_context", None)
+            yield from route_paths(included_router.routes, prefix + getattr(context, "prefix", ""))
+            continue
+        path = getattr(route, "path", None)
+        if path:
+            yield prefix + path
+
+
 class ApiContractTests(unittest.TestCase):
     def test_openapi_contains_design_paths(self):
         contract_path = Path(__file__).parents[1] / "lib" / "api-spec" / "openapi.yaml"
@@ -16,7 +28,7 @@ class ApiContractTests(unittest.TestCase):
             self.assertIn(path, contract["paths"])
 
     def test_fastapi_contains_design_routes(self):
-        paths = {route.path for route in app.routes}
+        paths = set(route_paths(app.routes))
         self.assertIn("/api/auth/register", paths)
         self.assertIn("/api/auth/login", paths)
         self.assertIn("/api/auth/me", paths)

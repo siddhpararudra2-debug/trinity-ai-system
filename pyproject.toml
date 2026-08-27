@@ -5,11 +5,19 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "boto3>=1.35,<2",
     "fastapi>=0.139.0",
     "httpx>=0.28.1",
     "numpy>=2.4.6",
+    "pillow>=10.0,<12",
     "pydantic-settings>=2.14.2",
+    "python-multipart>=0.0.20",
+    "redis>=5,<6",
     "sqlalchemy[asyncio]>=2.0.51",
     "sympy>=1.14.0",
     "uvicorn[standard]>=0.51.0",
 ]
+
+[tool.setuptools]
+py-modules = ["main"]
+packages = []

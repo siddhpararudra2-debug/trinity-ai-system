@@ -11,6 +11,8 @@ import asyncio
 import re
 from typing import Any
 
+from app.engines.base import BaseEngine
+
 try:
     import sympy as sp
     from sympy import symbols, solve, integrate, diff, simplify, expand, factor, latex
@@ -51,11 +53,22 @@ if SYMPY_AVAILABLE:
     }
 
 _TRANSFORMATIONS = ()
+_SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
 if SYMPY_AVAILABLE:
     _TRANSFORMATIONS = standard_transformations + (implicit_multiplication_application,)
+    _SAFE_GLOBALS.update({
+        "Integer": sp.Integer,
+        "Rational": sp.Rational,
+        "Float": sp.Float,
+        "Symbol": sp.Symbol,
+        "Add": sp.Add,
+        "Mul": sp.Mul,
+        "Pow": sp.Pow,
+    })
 
 # Characters allowed anywhere in the raw expression string (after stripping whitespace)
 _ALLOWED_CHARS_RE = re.compile(r"^[\w\s\+\-\*\/\^\(\)\=\.\,\!\|<>~]+$")
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_]\w*")
 
 # Patterns that must never appear (dunder attrs, Python builtins)
 _DENY_PATTERNS = [
@@ -73,14 +86,19 @@ def _safe_parse(expr_str: str) -> "sp.Expr":
     for pat in _DENY_PATTERNS:
         if pat in lower:
             raise ValueError(f"Disallowed pattern in expression: '{pat}'")
-    if not _ALLOWED_CHARS_RE.match(expr_str):
+    if not _ALLOWED_CHARS_RE.fullmatch(expr_str):
         raise ValueError(
             "Expression contains disallowed characters. "
             "Only standard math notation is allowed."
         )
+    identifiers = set(_IDENTIFIER_RE.findall(expr_str))
+    unknown = sorted(identifier for identifier in identifiers if identifier not in SAFE_LOCALS)
+    if unknown:
+        raise ValueError(f"Unknown identifier(s): {', '.join(unknown)}")
     return parse_expr(
         expr_str,
         local_dict=SAFE_LOCALS,
+        global_dict=_SAFE_GLOBALS,
         transformations=_TRANSFORMATIONS,
         evaluate=True,
     )
@@ -90,7 +108,8 @@ def _safe_parse(expr_str: str) -> "sp.Expr":
 # Engine
 # ---------------------------------------------------------------------------
 
-class MathEngine:
+class MathEngine(BaseEngine):
+    engine_id = "math"
     """Wrapper around SymPy for symbolic math operations."""
 
     async def process(self, expression: str, operation: str = "auto") -> dict[str, Any]:
