@@ -5,10 +5,14 @@
  * Trinity AI Engineering OS API
  * OpenAPI spec version: 0.1.0
  */
+import type { DependencyStatus } from './dependencyStatus';
 import type { FirmwareArtifact } from './firmwareArtifact';
+import type { FirmwareFile } from './firmwareFile';
+import type { FirmwareJobResourceEstimate } from './firmwareJobResourceEstimate';
 import type { FirmwareJobTarget } from './firmwareJobTarget';
 import type { FirmwareSpec } from './firmwareSpec';
 import type { FirmwareValidation } from './firmwareValidation';
+import type { SecurityFinding } from './securityFinding';
 
 export interface FirmwareJob {
   job_id: string;
@@ -17,8 +21,19 @@ export interface FirmwareJob {
   target?: FirmwareJobTarget;
   spec: FirmwareSpec;
   status: string;
+  files?: FirmwareFile[];
   artifacts: FirmwareArtifact[];
   validation: FirmwareValidation;
+  /** @nullable */
+  resource_estimate?: FirmwareJobResourceEstimate;
+  dependencies?: DependencyStatus[];
+  security_findings?: SecurityFinding[];
+  rendering_hint?: string;
+  /** @nullable */
+  detected_language?: string | null;
+  confidence_score?: number;
+  /** @nullable */
+  archive_artifact_id?: string | null;
   questions?: string[];
   assumptions?: string[];
   /** @nullable */

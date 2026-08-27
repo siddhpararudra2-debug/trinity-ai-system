@@ -1078,6 +1078,19 @@ components:
         build_system: {type: string}
         build_command: {type: string}
         flash_command: {type: string}
+        architecture: {type: [string, "null"]}
+        flash_bytes: {type: [integer, "null"]}
+        ram_bytes: {type: [integer, "null"]}
+        clock_hz: {type: [integer, "null"]}
+        pin_count: {type: [integer, "null"]}
+        operating_voltage: {type: [string, "null"]}
+        peripheral_details: {type: object}
+        aliases:
+          type: array
+          items: {type: string}
+        errata:
+          type: array
+          items: {type: string}
         supported_peripherals:
           type: array
           items: {type: string}
@@ -1110,6 +1123,12 @@ components:
         description: {type: string}
         target_id: {type: [string, "null"]}
         project_name: {type: string}
+        framework: {type: [string, "null"]}
+        language: {type: [string, "null"]}
+        previous_code: {type: [string, "null"]}
+        requested_files:
+          type: array
+          items: {type: string}
         features:
           type: array
           items: {type: string}
@@ -1140,6 +1159,8 @@ components:
         status: {type: string}
         message: {type: string}
         details: {type: object}
+        line: {type: [integer, "null"]}
+        severity: {type: [string, "null"]}
     FirmwareValidation:
       type: object
       required: [status, checks]
@@ -1169,6 +1190,48 @@ components:
           items: {$ref: "#/components/schemas/PeripheralSpec"}
         include_tests: {type: boolean}
         safety_mode: {type: string}
+        previous_code: {type: [string, "null"]}
+        requested_files:
+          type: array
+          items: {type: string}
+    FirmwareFile:
+      type: object
+      required: [path, content, language, kind, line_count]
+      properties:
+        path: {type: string}
+        content: {type: string}
+        language: {type: string}
+        kind: {type: string}
+        line_count: {type: integer}
+    ResourceEstimate:
+      type: object
+      required: [flash_bytes, ram_bytes, cpu_percent, confidence, assumptions]
+      properties:
+        flash_bytes: {type: integer}
+        ram_bytes: {type: integer}
+        cpu_percent: {type: number}
+        flash_percent: {type: [number, "null"]}
+        ram_percent: {type: [number, "null"]}
+        confidence: {type: number}
+        assumptions:
+          type: array
+          items: {type: string}
+    DependencyStatus:
+      type: object
+      required: [name, verified, reason]
+      properties:
+        name: {type: string}
+        verified: {type: boolean}
+        reason: {type: string}
+    SecurityFinding:
+      type: object
+      required: [rule, severity, message]
+      properties:
+        rule: {type: string}
+        severity: {type: string}
+        message: {type: string}
+        line: {type: [integer, "null"]}
+        remediation: {type: [string, "null"]}
     FirmwareJob:
       type: object
       required: [job_id, engine, spec, status, validation, artifacts, created_at, updated_at]
@@ -1178,10 +1241,24 @@ components:
         target: {type: [object, "null"]}
         spec: {$ref: "#/components/schemas/FirmwareSpec"}
         status: {type: string}
+        files:
+          type: array
+          items: {$ref: "#/components/schemas/FirmwareFile"}
         artifacts:
           type: array
           items: {$ref: "#/components/schemas/FirmwareArtifact"}
         validation: {$ref: "#/components/schemas/FirmwareValidation"}
+        resource_estimate: {type: [object, "null"]}
+        dependencies:
+          type: array
+          items: {$ref: "#/components/schemas/DependencyStatus"}
+        security_findings:
+          type: array
+          items: {$ref: "#/components/schemas/SecurityFinding"}
+        rendering_hint: {type: string}
+        detected_language: {type: [string, "null"]}
+        confidence_score: {type: number}
+        archive_artifact_id: {type: [string, "null"]}
         questions:
           type: array
           items: {type: string}

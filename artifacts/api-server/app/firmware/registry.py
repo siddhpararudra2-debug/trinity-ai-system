@@ -5,6 +5,7 @@ profile in this registry, so unsupported board/MCU combinations are rejected.
 """
 from __future__ import annotations
 
+from app.firmware.knowledge import extract_hardware_identifier, lookup_hardware
 from app.firmware.models import FirmwareTarget, TargetKind
 
 
@@ -133,6 +134,15 @@ TARGETS.extend([
     ),
 ])
 
+for _target in TARGETS:
+    _hardware = lookup_hardware(_target.mcu)
+    if _hardware:
+        _target.architecture = _target.architecture or _hardware.get("architecture")
+        _target.flash_bytes = _target.flash_bytes or _hardware.get("flash_bytes")
+        _target.ram_bytes = _target.ram_bytes or _hardware.get("ram_bytes")
+        _target.clock_hz = _target.clock_hz or _hardware.get("clock_hz")
+        _target.supported_peripherals = sorted(set(_target.supported_peripherals) | set(_hardware.get("peripherals", [])))
+
 TARGET_BY_ID = {target.id: target for target in TARGETS}
 
 
@@ -140,10 +150,10 @@ def list_targets() -> list[FirmwareTarget]:
     return TARGETS.copy()
 
 
-def find_target(target_id: str | None, description: str) -> FirmwareTarget | None:
+def find_target(target_id: str | None, description: str, framework: str | None = None, language: str | None = None) -> FirmwareTarget | None:
     if target_id:
         return TARGET_BY_ID.get(target_id)
-    text = description.lower()
+    text = f"{description} {framework or ''} {language or ''}".lower()
     aliases = {
         "esp32-devkitc-esp32-idf": ["esp32", "esp32 devkit", "esp32-wroom", "esp-idf"],
         "esp32-s3-devkitc-esp-idf": ["esp32-s3", "esp32 s3"],
@@ -163,6 +173,33 @@ def find_target(target_id: str | None, description: str) -> FirmwareTarget | Non
         "inav-f7-generic": ["inav", "f7 flight controller"],
         "matek-f722-inav": ["matek f722", "matek"],
     }
-    scores = {target_id: sum(len(alias) for alias in terms if alias in text) for target_id, terms in aliases.items()}
+    explicit_paradigm = any(token in text for token in ("micropython", "circuitpython", "verilog", "systemverilog", "vhdl", "fpga", "embedded rust", "embedded-hal", "no_std", "linux driver", "kernel module", "assembly", "risc-v", "riscv"))
+    scores = {} if explicit_paradigm else {target_id: sum(len(alias) for alias in terms if alias in text) for target_id, terms in aliases.items()}
     best_id = max(scores, key=scores.get) if scores else None
-    return TARGET_BY_ID.get(best_id) if best_id and scores[best_id] > 0 else None
+    if best_id and scores[best_id] > 0:
+        return TARGET_BY_ID.get(best_id)
+
+    hardware_id = extract_hardware_identifier(description)
+    knowledge = lookup_hardware(hardware_id)
+    if any(item in text for item in ("verilog", "systemverilog", "vhdl", "fpga")):
+        selected_language = "vhdl" if "vhdl" in text else "verilog"
+        return FirmwareTarget(id="generic-fpga", name="Generic FPGA", kind=TargetKind.fpga, vendor="Unspecified", board="Generic FPGA", mcu="FPGA", framework=framework or "FPGA HDL", language=selected_language, build_system="Icarus Verilog/GHDL", build_command="iverilog -g2012 -o build/design.out *.v", flash_command="vendor-specific FPGA programmer", supported_peripherals=["gpio", "clock", "reset"], notes=["Verify the FPGA family, constraints, clocking, and synthesis tool before deployment."])
+    if "arduino" in text:
+        return FirmwareTarget(id="generic-arduino", name="Generic Arduino-compatible board", kind=TargetKind.generic, vendor="Arduino ecosystem", board="Arduino-compatible board", mcu=hardware_id or "unspecified", framework=framework or "Arduino", language=language or "cpp", build_system="PlatformIO", build_command="pio run", flash_command="pio run -t upload", supported_peripherals=["gpio", "uart", "i2c", "spi", "adc", "pwm"], notes=["Confirm the board definition, bootloader, pins, and library versions before upload."])
+    if "freertos" in text or "free rtos" in text:
+        return FirmwareTarget(id="generic-freertos", name="Generic FreeRTOS target", kind=TargetKind.mcu, vendor="FreeRTOS ecosystem", board="FreeRTOS board", mcu=hardware_id or "unspecified", framework="FreeRTOS", language=language or "c", build_system="CMake", build_command="cmake --build build", flash_command="vendor-specific programmer", supported_peripherals=["gpio", "uart", "i2c", "spi", "timers", "dma"], notes=["Set the exact port, heap implementation, tick rate, and interrupt priority rules before deployment."])
+    if "zephyr" in text and not any(alias in text for alias in ("nrf52840", "nrf52840 dk")):
+        return FirmwareTarget(id="generic-zephyr", name="Generic Zephyr board", kind=TargetKind.mcu, vendor="Zephyr ecosystem", board="Zephyr board", mcu=hardware_id or "unspecified", framework="Zephyr", language=language or "c", build_system="west + CMake", build_command="west build", flash_command="west flash", supported_peripherals=["gpio", "uart", "i2c", "spi", "adc", "pwm"], notes=["Confirm the Zephyr board target and device-tree bindings before flashing."])
+    if "esp-idf" in text and "esp32" not in text:
+        return FirmwareTarget(id="generic-esp-idf", name="Generic ESP-IDF target", kind=TargetKind.mcu, vendor="Espressif", board="ESP32-family board", mcu=hardware_id or "ESP32-family", framework="ESP-IDF", language=language or "c", build_system="CMake + idf.py", build_command="idf.py build", flash_command="idf.py -p PORT flash", supported_peripherals=["gpio", "uart", "i2c", "spi", "adc", "pwm", "wifi", "bluetooth"], notes=["Confirm the exact SoC, module, strapping pins, and SDK version."])
+    if any(item in text for item in ("micropython", "circuitpython")):
+        return FirmwareTarget(id="generic-micropython", name="Generic MicroPython board", kind=TargetKind.generic, vendor="Unspecified", board="MicroPython board", mcu=hardware_id or "unspecified", framework=framework or "MicroPython", language="python", build_system="mpremote", build_command="mpremote run main.py", flash_command="mpremote fs cp main.py :main.py", supported_peripherals=["gpio", "uart", "i2c", "spi", "adc", "pwm"], notes=["Confirm the board port and module APIs before deployment."])
+    if "rust" in text or "embedded-hal" in text or "no_std" in text:
+        return FirmwareTarget(id="generic-embedded-rust", name="Generic embedded Rust target", kind=TargetKind.mcu, vendor="Unspecified", board="Embedded Rust board", mcu=hardware_id or "unspecified", framework=framework or "Embedded Rust", language="rust", build_system="Cargo", build_command="cargo check", flash_command="probe-rs run --chip CHIP", supported_peripherals=["gpio", "uart", "i2c", "spi", "timers"], notes=["Pin the exact HAL crate and target chip before flashing."])
+    if "linux driver" in text or "kernel module" in text:
+        return FirmwareTarget(id="generic-linux-driver", name="Generic embedded Linux board", kind=TargetKind.linux_board, vendor="Unspecified", board="Embedded Linux board", mcu=hardware_id or "linux", framework=framework or "Linux Kernel", language="c", build_system="Kbuild", build_command="make -C /lib/modules/$(uname -r)/build M=$PWD modules", flash_command="deploy through the target Linux image", supported_peripherals=["gpio", "uart", "i2c", "spi", "usb", "can"], notes=["Build against the exact target kernel headers and device tree."])
+    if "assembly" in text or "risc-v" in text or "riscv" in text:
+        return FirmwareTarget(id="generic-assembly", name="Generic embedded assembly target", kind=TargetKind.mcu, vendor="Unspecified", board="Embedded board", mcu=hardware_id or "unspecified", framework=framework or "Bare Metal Assembly", language="assembly", build_system="GNU binutils", build_command="make", flash_command="vendor-specific programmer", supported_peripherals=["gpio", "uart", "interrupt"], notes=["Verify ABI, ISA extension set, startup code, and linker script."])
+    if knowledge:
+        return FirmwareTarget(id=f"mcu-{knowledge['id'].lower()}", name=f"Knowledge-base target {knowledge['id']}", kind=TargetKind.mcu, vendor="Knowledge base", board=knowledge["id"], mcu=knowledge["id"], framework=framework or "Bare Metal", language=language or "c", build_system="CMake + vendor toolchain", build_command="cmake --build build", flash_command="vendor-specific programmer", architecture=knowledge.get("architecture"), flash_bytes=knowledge.get("flash_bytes"), ram_bytes=knowledge.get("ram_bytes"), clock_hz=knowledge.get("clock_hz"), supported_peripherals=knowledge.get("peripherals", []), notes=["Knowledge-base profile; confirm exact package, registers, pin map, and errata against the datasheet."])
+    return None

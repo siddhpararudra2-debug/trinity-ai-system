@@ -32,9 +32,9 @@ ENGINE_IDS = {
 
 ROUTING_RULES: list[tuple[str, list[str], int]] = [
     ("firmware", [
-        r"\b(firmware|embedded|microcontroller|mcu|bare[\s_-]?metal|rtos|driver|bootloader)\b",
-        r"\b(flight[\s_-]?controller|pixhawk|px4|ardupilot|betaflight|inav)\b",
-        r"\b(esp32|stm32|rp2040|raspberry[\s_-]?pi\s+pico|arduino|atmega|nrf52840)\b.*\b(code|firmware|program|driver)\b",
+        r"\b(firmware|embedded|microcontroller|mcu|bare[\s_-]?metal|rtos|driver|bootloader|bsp|hal|peripheral|register|gpio|uart|spi|i2c|interrupt|isr|dma|timer|pwm|adc|dac|can|usb|linker[\s_-]?script|device[\s_-]?tree|flash)\b",
+        r"\b(flight[\s_-]?controller|pixhawk|px4|ardupilot|betaflight|inav|fpga|verilog|systemverilog|vhdl|arduino|esp-idf|freertos|free[\s_-]?rtos|zephyr|micropython|circuitpython|embedded[\s_-]?rust|assembly|linux[\s_-]?driver|kernel[\s_-]?module)\b",
+        r"\b(esp32|stm32|pic\d+|rp2040|raspberry[\s_-]?pi\s+pico|arduino|atmega|nrf52840|lpc\d+)\b.*\b(code|firmware|program|driver|board|project)\b",
     ], 12),
     ("maker_pcb", [
         r"\b(pcb|circuit[\s_-]?board|kicad|schematic|route[\s_]+board)\b",
@@ -104,6 +104,7 @@ class TrinityOrchestrator:
         history: list | None = None,
         engine_override: str | None = None,
         owner_id: int | None = None,
+        conversation_key: str | None = None,
     ) -> dict[str, Any]:
         """Detect or explicitly select an engine, then return {content, engine, data}."""
         if engine_override is not None:
@@ -118,7 +119,7 @@ class TrinityOrchestrator:
                 engine_override = None
             else:
                 try:
-                    return await self._dispatch(normalized, query, owner_id=owner_id)
+                    return await self._dispatch(normalized, query, owner_id=owner_id, conversation_key=conversation_key)
                 except Exception as exc:
                     return {
                         "content": f"Engine **{normalized}** encountered an issue: {exc}",
@@ -136,7 +137,7 @@ class TrinityOrchestrator:
         engine_id = self._detect(query)
 
         try:
-            return await self._dispatch(engine_id, query, owner_id=owner_id)
+            return await self._dispatch(engine_id, query, owner_id=owner_id, conversation_key=conversation_key)
         except Exception as exc:
             return {
                 "content": (
@@ -167,7 +168,7 @@ class TrinityOrchestrator:
     # Dispatch to engines
     # ------------------------------------------------------------------
 
-    async def _dispatch(self, engine_id: str, query: str, owner_id: int | None = None) -> dict[str, Any]:
+    async def _dispatch(self, engine_id: str, query: str, owner_id: int | None = None, conversation_key: str | None = None) -> dict[str, Any]:
         if engine_id == "math":
             result = await self._math.process(query, "auto")
             return {"content": self._fmt_math(result), "engine": "math", "data": result}
@@ -177,7 +178,7 @@ class TrinityOrchestrator:
             return {"content": self._fmt_quantum(result), "engine": "quantum", "data": result}
 
         if engine_id == "firmware":
-            job = await self._firmware.create(FirmwareRequest(description=query), owner_id=owner_id)
+            job = await self._firmware.create(FirmwareRequest(description=query), owner_id=owner_id, conversation_key=conversation_key)
             result = job.model_dump(mode="json")
             return {"content": self._fmt_firmware(job), "engine": "firmware", "data": result}
 

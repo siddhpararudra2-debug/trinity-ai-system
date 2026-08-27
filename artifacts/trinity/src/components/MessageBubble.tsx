@@ -6,6 +6,7 @@ import { LiteratureMessage } from './messages/LiteratureMessage';
 import { TextMessage } from './messages/TextMessage';
 import { VisionMessage } from './messages/VisionMessage';
 import { WorkflowMessage } from './messages/WorkflowMessage';
+import { FirmwareMessage } from './messages/FirmwareMessage';
 
 export function MessageBubble({ message }: { message: any }) {
   const isUser = message.role === 'user';
@@ -36,6 +37,7 @@ export function MessageBubble({ message }: { message: any }) {
 function MessageContent({ message }: { message: any }) {
   if (!message.data) return <TextMessage content={message.content} />;
   if (message.data.workflow) return <WorkflowMessage data={message.data} />;
+  if (message.engine === 'firmware' || message.data.engine === 'firmware' || message.data.rendering_hint === 'firmware-code') return <FirmwareMessage data={message.data.job || message.data} />;
   if (message.data.recognized_text || message.data.ocr_backend || message.data.status === 'awaiting_image') return <VisionMessage data={message.data} />;
   
   if (message.data.latex || message.data.expression) return <MathMessage data={message.data} />;

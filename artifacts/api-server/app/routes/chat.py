@@ -75,7 +75,7 @@ async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db), user: U
     history = history_result.scalars().all()
 
     # --- Engine routing -------------------------------------------------------
-    response = await orchestrator.route(data.content, history, engine_override=data.engine, owner_id=user.id)
+    response = await orchestrator.route(data.content, history, engine_override=data.engine, owner_id=user.id, conversation_key=f"conversation:{conv.id}")
 
     # --- Assistant message --------------------------------------------------
     assistant_msg = Message(

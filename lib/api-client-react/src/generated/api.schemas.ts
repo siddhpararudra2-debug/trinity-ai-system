@@ -278,6 +278,8 @@ export interface DesignJobResponse {
   legacy: DesignJobResponseLegacy;
 }
 
+export type FirmwareTargetPeripheralDetails = { [key: string]: unknown };
+
 export interface FirmwareTarget {
   id: string;
   name: string;
@@ -290,6 +292,21 @@ export interface FirmwareTarget {
   build_system: string;
   build_command: string;
   flash_command: string;
+  /** @nullable */
+  architecture?: string | null;
+  /** @nullable */
+  flash_bytes?: number | null;
+  /** @nullable */
+  ram_bytes?: number | null;
+  /** @nullable */
+  clock_hz?: number | null;
+  /** @nullable */
+  pin_count?: number | null;
+  /** @nullable */
+  operating_voltage?: string | null;
+  peripheral_details?: FirmwareTargetPeripheralDetails;
+  aliases?: string[];
+  errata?: string[];
   supported_peripherals?: string[];
   notes?: string[];
 }
@@ -317,6 +334,13 @@ export interface FirmwareRequest {
   /** @nullable */
   target_id?: string | null;
   project_name?: string;
+  /** @nullable */
+  framework?: string | null;
+  /** @nullable */
+  language?: string | null;
+  /** @nullable */
+  previous_code?: string | null;
+  requested_files?: string[];
   features?: string[];
   pins?: PinAssignment[];
   peripherals?: PeripheralSpec[];
@@ -341,6 +365,10 @@ export interface FirmwareCheck {
   status: string;
   message: string;
   details?: FirmwareCheckDetails;
+  /** @nullable */
+  line?: number | null;
+  /** @nullable */
+  severity?: string | null;
 }
 
 export interface FirmwareValidation {
@@ -363,12 +391,56 @@ export interface FirmwareSpec {
   peripherals: PeripheralSpec[];
   include_tests: boolean;
   safety_mode: string;
+  /** @nullable */
+  previous_code?: string | null;
+  requested_files?: string[];
+}
+
+export interface FirmwareFile {
+  path: string;
+  content: string;
+  language: string;
+  kind: string;
+  line_count: number;
+}
+
+export interface ResourceEstimate {
+  flash_bytes: number;
+  ram_bytes: number;
+  cpu_percent: number;
+  /** @nullable */
+  flash_percent?: number | null;
+  /** @nullable */
+  ram_percent?: number | null;
+  confidence: number;
+  assumptions: string[];
+}
+
+export interface DependencyStatus {
+  name: string;
+  verified: boolean;
+  reason: string;
+}
+
+export interface SecurityFinding {
+  rule: string;
+  severity: string;
+  message: string;
+  /** @nullable */
+  line?: number | null;
+  /** @nullable */
+  remediation?: string | null;
 }
 
 /**
  * @nullable
  */
 export type FirmwareJobTarget = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type FirmwareJobResourceEstimate = { [key: string]: unknown } | null;
 
 export interface FirmwareJob {
   job_id: string;
@@ -377,8 +449,19 @@ export interface FirmwareJob {
   target?: FirmwareJobTarget;
   spec: FirmwareSpec;
   status: string;
+  files?: FirmwareFile[];
   artifacts: FirmwareArtifact[];
   validation: FirmwareValidation;
+  /** @nullable */
+  resource_estimate?: FirmwareJobResourceEstimate;
+  dependencies?: DependencyStatus[];
+  security_findings?: SecurityFinding[];
+  rendering_hint?: string;
+  /** @nullable */
+  detected_language?: string | null;
+  confidence_score?: number;
+  /** @nullable */
+  archive_artifact_id?: string | null;
   questions?: string[];
   assumptions?: string[];
   /** @nullable */

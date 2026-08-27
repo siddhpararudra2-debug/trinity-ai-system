@@ -508,6 +508,17 @@ export const GetFirmwareTargetsResponse = zod.object({
   "build_system": zod.string(),
   "build_command": zod.string(),
   "flash_command": zod.string(),
+  "architecture": zod.string().nullish(),
+  "flash_bytes": zod.number().nullish(),
+  "ram_bytes": zod.number().nullish(),
+  "clock_hz": zod.number().nullish(),
+  "pin_count": zod.number().nullish(),
+  "operating_voltage": zod.string().nullish(),
+  "peripheral_details": zod.object({
+
+}).optional(),
+  "aliases": zod.array(zod.string()).optional(),
+  "errata": zod.array(zod.string()).optional(),
   "supported_peripherals": zod.array(zod.string()).optional(),
   "notes": zod.array(zod.string()).optional()
 }))
@@ -521,6 +532,10 @@ export const CreateFirmwareJobBody = zod.object({
   "description": zod.string(),
   "target_id": zod.string().nullish(),
   "project_name": zod.string().optional(),
+  "framework": zod.string().nullish(),
+  "language": zod.string().nullish(),
+  "previous_code": zod.string().nullish(),
+  "requested_files": zod.array(zod.string()).optional(),
   "features": zod.array(zod.string()).optional(),
   "pins": zod.array(zod.object({
   "name": zod.string(),
@@ -571,9 +586,18 @@ export const CreateFirmwareJobResponse = zod.object({
 }).optional()
 })),
   "include_tests": zod.boolean(),
-  "safety_mode": zod.string()
+  "safety_mode": zod.string(),
+  "previous_code": zod.string().nullish(),
+  "requested_files": zod.array(zod.string()).optional()
 }),
   "status": zod.string(),
+  "files": zod.array(zod.object({
+  "path": zod.string(),
+  "content": zod.string(),
+  "language": zod.string(),
+  "kind": zod.string(),
+  "line_count": zod.number()
+})).optional(),
   "artifacts": zod.array(zod.object({
   "id": zod.string(),
   "filename": zod.string(),
@@ -591,10 +615,31 @@ export const CreateFirmwareJobResponse = zod.object({
   "message": zod.string(),
   "details": zod.object({
 
-}).optional()
+}).optional(),
+  "line": zod.number().nullish(),
+  "severity": zod.string().nullish()
 })),
   "toolchain": zod.string().nullish()
 }),
+  "resource_estimate": zod.object({
+
+}).nullish(),
+  "dependencies": zod.array(zod.object({
+  "name": zod.string(),
+  "verified": zod.boolean(),
+  "reason": zod.string()
+})).optional(),
+  "security_findings": zod.array(zod.object({
+  "rule": zod.string(),
+  "severity": zod.string(),
+  "message": zod.string(),
+  "line": zod.number().nullish(),
+  "remediation": zod.string().nullish()
+})).optional(),
+  "rendering_hint": zod.string().optional(),
+  "detected_language": zod.string().nullish(),
+  "confidence_score": zod.number().optional(),
+  "archive_artifact_id": zod.string().nullish(),
   "questions": zod.array(zod.string()).optional(),
   "assumptions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),
@@ -641,9 +686,18 @@ export const GetFirmwareJobResponse = zod.object({
 }).optional()
 })),
   "include_tests": zod.boolean(),
-  "safety_mode": zod.string()
+  "safety_mode": zod.string(),
+  "previous_code": zod.string().nullish(),
+  "requested_files": zod.array(zod.string()).optional()
 }),
   "status": zod.string(),
+  "files": zod.array(zod.object({
+  "path": zod.string(),
+  "content": zod.string(),
+  "language": zod.string(),
+  "kind": zod.string(),
+  "line_count": zod.number()
+})).optional(),
   "artifacts": zod.array(zod.object({
   "id": zod.string(),
   "filename": zod.string(),
@@ -661,10 +715,31 @@ export const GetFirmwareJobResponse = zod.object({
   "message": zod.string(),
   "details": zod.object({
 
-}).optional()
+}).optional(),
+  "line": zod.number().nullish(),
+  "severity": zod.string().nullish()
 })),
   "toolchain": zod.string().nullish()
 }),
+  "resource_estimate": zod.object({
+
+}).nullish(),
+  "dependencies": zod.array(zod.object({
+  "name": zod.string(),
+  "verified": zod.boolean(),
+  "reason": zod.string()
+})).optional(),
+  "security_findings": zod.array(zod.object({
+  "rule": zod.string(),
+  "severity": zod.string(),
+  "message": zod.string(),
+  "line": zod.number().nullish(),
+  "remediation": zod.string().nullish()
+})).optional(),
+  "rendering_hint": zod.string().optional(),
+  "detected_language": zod.string().nullish(),
+  "confidence_score": zod.number().optional(),
+  "archive_artifact_id": zod.string().nullish(),
   "questions": zod.array(zod.string()).optional(),
   "assumptions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),

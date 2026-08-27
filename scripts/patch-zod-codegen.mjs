@@ -11,6 +11,7 @@ source = source.replaceAll(
   'zod.instanceof(File)',
   "zod.custom<File>((value) => typeof File !== 'undefined' && value instanceof File)",
 );
+source = source.replace(/\s+$/u, '\n');
 fs.writeFileSync(generated, source);
 const indexPath = path.join(root, 'lib', 'api-zod', 'src', 'index.ts');
 fs.writeFileSync(indexPath, `export * from './generated/api';\nexport type {\n  RunVisionOcrBody as RunVisionOcrBodyType,\n  UploadFusionArtifactBody as UploadFusionArtifactBodyType,\n  UploadKicadArtifactBody as UploadKicadArtifactBodyType,\n} from './generated/types';\n`);

@@ -5,15 +5,13 @@
  * Trinity AI Engineering OS API
  * OpenAPI spec version: 0.1.0
  */
-import type { FirmwareCheckDetails } from './firmwareCheckDetails';
 
-export interface FirmwareCheck {
-  name: string;
-  status: string;
+export interface SecurityFinding {
+  rule: string;
+  severity: string;
   message: string;
-  details?: FirmwareCheckDetails;
   /** @nullable */
   line?: number | null;
   /** @nullable */
-  severity?: string | null;
+  remediation?: string | null;
 }

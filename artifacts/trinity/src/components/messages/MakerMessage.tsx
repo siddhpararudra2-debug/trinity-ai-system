@@ -1,4 +1,5 @@
 import React from 'react';
+import { getAuthHeaders } from '@/lib/auth';
 
 type Artifact = {
   id: string;
@@ -45,10 +46,10 @@ export function MakerMessage({ data }: { data: any }) {
           <div className="flex flex-col gap-2">
             <div className="text-xs text-primary uppercase tracking-widest">GENERATED ARTIFACTS</div>
             {artifacts.map((artifact) => (
-              <a key={artifact.id} href={artifact.download_url} download={artifact.filename} className="flex items-center justify-between gap-4 p-3 bg-black/30 border border-white/10 rounded hover:border-primary/60 transition-colors">
+              <button key={artifact.id} type="button" onClick={() => void handleArtifactDownload(artifact)} className="flex items-center justify-between gap-4 rounded border border-white/10 bg-black/30 p-3 text-left transition-colors hover:border-primary/60">
                 <span className="truncate text-foreground/90">{artifact.filename}</span>
                 <span className="shrink-0 text-[10px] text-primary">DOWNLOAD · {formatBytes(artifact.size_bytes)}</span>
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -69,6 +70,20 @@ export function MakerMessage({ data }: { data: any }) {
     data?.sch_content ? { filename: `${data.filename || 'trinity_board'}.kicad_sch`, content: data.sch_content } : null,
     data?.pcb_content ? { filename: `${data.filename || 'trinity_board'}.kicad_pcb`, content: data.pcb_content } : null,
   ].filter(Boolean) as { filename: string; content: string }[];
+
+  const handleArtifactDownload = async (artifact: Artifact) => {
+    const response = await fetch(artifact.download_url, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = artifact.filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const handleDownload = (artifact: { filename: string; content: string }) => {
     const blob = new Blob([artifact.content], { type: 'text/plain' });

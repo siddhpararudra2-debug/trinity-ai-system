@@ -13,6 +13,13 @@ export interface FirmwareRequest {
   /** @nullable */
   target_id?: string | null;
   project_name?: string;
+  /** @nullable */
+  framework?: string | null;
+  /** @nullable */
+  language?: string | null;
+  /** @nullable */
+  previous_code?: string | null;
+  requested_files?: string[];
   features?: string[];
   pins?: PinAssignment[];
   peripherals?: PeripheralSpec[];

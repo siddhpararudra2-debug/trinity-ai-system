@@ -5,6 +5,7 @@
  * Trinity AI Engineering OS API
  * OpenAPI spec version: 0.1.0
  */
+import type { FirmwareTargetPeripheralDetails } from './firmwareTargetPeripheralDetails';
 
 export interface FirmwareTarget {
   id: string;
@@ -18,6 +19,21 @@ export interface FirmwareTarget {
   build_system: string;
   build_command: string;
   flash_command: string;
+  /** @nullable */
+  architecture?: string | null;
+  /** @nullable */
+  flash_bytes?: number | null;
+  /** @nullable */
+  ram_bytes?: number | null;
+  /** @nullable */
+  clock_hz?: number | null;
+  /** @nullable */
+  pin_count?: number | null;
+  /** @nullable */
+  operating_voltage?: string | null;
+  peripheral_details?: FirmwareTargetPeripheralDetails;
+  aliases?: string[];
+  errata?: string[];
   supported_peripherals?: string[];
   notes?: string[];
 }

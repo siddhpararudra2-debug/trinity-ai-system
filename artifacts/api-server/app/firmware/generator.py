@@ -41,12 +41,26 @@ class FirmwareGenerator:
             files.update(self._pico(name, target, spec))
         elif target.framework == "Zephyr":
             files.update(self._zephyr(name, target, spec))
+        elif target.framework == "FreeRTOS":
+            files.update(self._freertos(name, target, spec))
         elif target.framework == "PX4":
             files.update(self._px4(name, target, spec))
         elif target.framework == "ArduPilot":
             files.update(self._ardupilot(name, target, spec))
         elif target.framework in {"Betaflight", "INAV"}:
             files.update(self._flight_controller_extension(name, target, spec))
+        elif target.framework == "MicroPython":
+            files.update(self._micropython(target, spec))
+        elif target.framework == "Embedded Rust":
+            files.update(self._embedded_rust(name, target, spec))
+        elif target.framework == "FPGA HDL":
+            files.update(self._fpga(target, spec))
+        elif target.framework == "Linux Kernel":
+            files.update(self._linux_driver(name, target, spec))
+        elif target.framework == "Bare Metal Assembly":
+            files.update(self._assembly(target, spec))
+        elif target.framework == "Bare Metal":
+            files.update(self._bare_metal(target, spec))
         else:
             raise ValueError(f"No generator is registered for framework {target.framework!r}")
         if spec.include_tests:
@@ -99,6 +113,13 @@ class FirmwareGenerator:
             "src/main.c": source,
         }
 
+    def _freertos(self, name: str, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        return {
+            "CMakeLists.txt": f"cmake_minimum_required(VERSION 3.22)\nproject({name} C)\nadd_executable({name} src/main.c)\n",
+            "include/FreeRTOSConfig.h": "#pragma once\n#define configUSE_PREEMPTION 1\n#define configTICK_RATE_HZ 1000\n#define configTOTAL_HEAP_SIZE (16 * 1024)\n",
+            "src/main.c": "#include \"FreeRTOS.h\"\n#include \"task.h\"\n#include \"semphr.h\"\n\nstatic void heartbeat_task(void *argument) { (void)argument; for (;;) { /* feed watchdog and process bounded work */ vTaskDelay(pdMS_TO_TICKS(1000)); } }\nint main(void) { xTaskCreate(heartbeat_task, \"heartbeat\", 512, NULL, 1, NULL); vTaskStartScheduler(); for (;;) {} }\n",
+        }
+
     def _zephyr(self, name: str, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
         source = """#include <zephyr/kernel.h>\n#include <zephyr/device.h>\n\nint main(void)\n{\n    while (1) {\n        /* Bind peripherals through devicetree overlays, not guessed pins. */\n        k_msleep(1000);\n    }\n    return 0;\n}\n"""
         return {
@@ -128,6 +149,35 @@ class FirmwareGenerator:
             "src/trinity_feature.c": f"""/* {target.framework} extension skeleton for {target.board}. */\n#include <stdint.h>\n\nvoid trinity_feature_init(void)\n{{\n    /* Bind the real target's pin/peripheral definitions before flashing. */\n}}\n\nvoid trinity_feature_update(void)\n{{\n    /* Preserve the flight stack's scheduler, failsafes, and arming checks. */\n}}\n""",
             "README_EXTENSION.md": f"# {target.framework} extension\n\nThis project is an extension point, not a replacement flight-controller firmware image. Select the exact {target.framework} target definition and run its native build/test process before hardware flashing.\n",
         }
+
+    def _micropython(self, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        return {
+            "boot.py": "# Minimal boot configuration; keep startup work bounded.\n",
+            "main.py": """from machine import Pin\nfrom time import sleep_ms\n\nLED = Pin(2, Pin.OUT)\n\ndef main():\n    while True:\n        LED.value(not LED.value())\n        sleep_ms(1000)\n\nif __name__ == \"__main__\":\n    main()\n""",
+        }
+
+    def _embedded_rust(self, name: str, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        return {
+            "Cargo.toml": f"[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nembedded-hal = \"1\"\n",
+            "src/main.rs": "#![no_std]\n#![no_main]\n\nuse core::panic::PanicInfo;\n\n#[panic_handler]\nfn panic(_info: &PanicInfo) -> ! { loop {} }\n\n#[no_mangle]\npub extern \"C\" fn main() -> ! { loop {} }\n",
+            "memory.x": "/* Replace with the exact target linker memory map. */\nMEMORY { FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 512K RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 128K }\n",
+            ".cargo/config.toml": "[build]\ntarget = \"thumbv7em-none-eabihf\"\n",
+        }
+
+    def _fpga(self, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        if target.language == "vhdl":
+            return {"rtl/top.vhd": "library ieee;\nuse ieee.std_logic_1164.all;\n\nentity top is port (clk : in std_logic; led : out std_logic); end entity;\narchitecture rtl of top is begin led <= clk; end architecture;\n", "tb/top_tb.vhd": "library ieee; use ieee.std_logic_1164.all;\nentity top_tb is end; architecture sim of top_tb is begin end;\n", "constraints/pins.pcf": "# Assign exact package pins before synthesis.\n"}
+        return {"rtl/top.v": "module top(input wire clk, output wire led);\n  assign led = clk;\nendmodule\n", "tb/top_tb.v": "`timescale 1ns/1ps\nmodule top_tb; reg clk = 0; wire led; top dut(.clk(clk), .led(led)); always #5 clk = ~clk; initial begin #100 $finish; end endmodule\n", "constraints/pins.pcf": "# Assign exact package pins before synthesis.\n"}
+
+    def _linux_driver(self, name: str, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        return {"driver/trinity_driver.c": "#include <linux/module.h>\n#include <linux/platform_device.h>\n\nstatic int trinity_probe(struct platform_device *pdev) { return 0; }\nstatic void trinity_remove(struct platform_device *pdev) {}\nstatic struct platform_driver trinity_driver = { .probe = trinity_probe, .remove_new = trinity_remove, .driver = { .name = \"trinity_driver\" } };\nmodule_platform_driver(trinity_driver);\nMODULE_LICENSE(\"GPL\");\n", "Makefile": "obj-m += trinity_driver.o\nall:\n\t$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules\nclean:\n\t$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean\n"}
+
+    def _assembly(self, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        return {"src/startup.S": ".syntax unified\n.thumb\n.global Reset_Handler\n.type Reset_Handler, %function\nReset_Handler:\n    bl main\n1:  b 1b\n", "src/main.c": "int main(void) { for (;;) { } }\n", "Makefile": "all:\n\t$(CC) -c src/startup.S -o startup.o\n"}
+
+    def _bare_metal(self, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
+        source = self._common_c_source(target, spec, "", "    /* Configure clocks and peripherals only from the verified datasheet. */", "    /* Feed the watchdog in the real target integration. */")
+        return {"CMakeLists.txt": "cmake_minimum_required(VERSION 3.22)\nproject(trinity_firmware C)\nadd_executable(trinity_firmware src/main.c)\n", "src/main.c": source, "linker.ld": "/* Replace memory regions with the exact target map. */\n", "startup.S": "/* Supply the target startup/vector table from the vendor SDK. */\n"}
 
     def _spec_test(self, target: FirmwareTarget, spec: FirmwareSpec) -> str:
         return f"""import json\nfrom pathlib import Path\n\n\ndef test_generated_spec_is_explicit():\n    spec = json.loads(Path(__file__).parents[1].joinpath('firmware_spec.json').read_text())\n    assert spec['target_id'] == {target.id!r}\n    assert spec['safety_mode'] in {{'development', 'bench', 'flight'}}\n"""

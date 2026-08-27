@@ -21,4 +21,7 @@ export interface FirmwareSpec {
   peripherals: PeripheralSpec[];
   include_tests: boolean;
   safety_mode: string;
+  /** @nullable */
+  previous_code?: string | null;
+  requested_files?: string[];
 }

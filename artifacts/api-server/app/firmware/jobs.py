@@ -4,9 +4,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import asyncio
+import os
 import tempfile
+import time
 import uuid
 import zipfile
+from collections import deque
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -14,10 +18,16 @@ from typing import Any
 
 from app.designs.artifacts import ArtifactStore
 from app.firmware.builds import run_firmware_build
+from app.firmware.analysis import analysis_checks, estimate_resources
 from app.firmware.generator import FirmwareGenerator
-from app.firmware.models import FirmwareArtifact, FirmwareJob, FirmwareRequest, FirmwareSpec, FirmwareStatus, FirmwareValidation
+from app.firmware.models import DependencyStatus, FirmwareArtifact, FirmwareFile, FirmwareJob, FirmwareRequest, FirmwareSpec, FirmwareStatus, FirmwareValidation
 from app.firmware.registry import TARGETS, find_target
+from app.firmware.universal import FirmwareEngine
 from app.firmware.validator import validate_firmware
+
+
+class FirmwareRateLimitError(ValueError):
+    """Raised when a user exceeds the firmware generation budget."""
 
 
 class FirmwareJobStore:
@@ -65,21 +75,28 @@ class FirmwareJobService:
     def __init__(self, store: FirmwareJobStore | None = None) -> None:
         self.store = store or FirmwareJobStore()
         self.generator = FirmwareGenerator()
+        self.engine = FirmwareEngine(self.generator)
+        self._cache: dict[str, tuple[Any, dict[str, Any]]] = {}
+        self._requests: dict[int, deque[float]] = {}
+        self._rate_lock = asyncio.Lock()
 
-    async def create(self, request: FirmwareRequest, owner_id: int | None = None) -> FirmwareJob:
-        target = find_target(request.target_id, request.description)
+    async def create(self, request: FirmwareRequest, owner_id: int | None = None, conversation_key: str | None = None) -> FirmwareJob:
+        await self._enforce_rate_limit(owner_id)
+        target = find_target(request.target_id, request.description, request.framework, request.language)
         target_id = target.id if target else (request.target_id or "unresolved")
         spec = FirmwareSpec(
             target_id=target_id,
             project_name=request.project_name,
             description=request.description,
-            language=target.language if target else None,
-            framework=target.framework if target else None,
+            language=request.language or (target.language if target else None),
+            framework=request.framework or (target.framework if target else None),
             features=request.features or self._infer_features(request.description),
             pins=request.pins,
             peripherals=request.peripherals,
             include_tests=request.include_tests,
             safety_mode=request.safety_mode,
+            previous_code=request.previous_code,
+            requested_files=request.requested_files,
         )
         job_id = f"fw_{uuid.uuid4().hex}"
         now = _now()
@@ -105,10 +122,36 @@ class FirmwareJobService:
             return job
 
         try:
-            generated = self.generator.generate(target, spec)
+            cache_key = _hash({"request": request.model_dump(mode="json"), "target": target.id})
+            cached = None if self.engine.llm.config.enabled else self._cache.get(cache_key)
+            if cached:
+                generated, metadata = cached
+            else:
+                generated, metadata = await self.engine.generate(request, target, spec, conversation_key=conversation_key or (f"owner:{owner_id}" if owner_id is not None else None))
+                if not self.engine.llm.config.enabled:
+                    self._cache[cache_key] = (generated, metadata)
             validation = validate_firmware(target, spec, generated.files)
+            extra_checks, security_findings, dependency_items = analysis_checks(spec, target, generated.files)
+            validation.checks.extend(extra_checks)
+            if any(check.status == "failed" for check in extra_checks):
+                validation.status = "failed"
+            elif validation.status == "passed" and any(check.status == "warning" for check in extra_checks):
+                validation.status = "warnings"
             job.validation = validation
+            job.dependencies = dependency_items
+            job.security_findings = security_findings
+            job.resource_estimate = estimate_resources(generated.files, target, spec)
+            job.detected_language = target.language
+            job.confidence_score = metadata.get("confidence_score", 0.5)
+            job.rendering_hint = metadata.get("rendering_hint", "firmware-code")
             job.assumptions.extend(generated.assumptions)
+            if any(item.severity == "critical" for item in security_findings):
+                job.status = FirmwareStatus.failed
+                job.error = "Critical security findings blocked firmware delivery. Review validation checks and remediate the generated request."
+                job.updated_at = _now()
+                self.store.save(job)
+                return job
+            job.files = metadata["files"]
             with tempfile.TemporaryDirectory(prefix=f"{job_id}_") as workspace:
                 workspace_path = Path(workspace)
                 for filename, content in generated.files.items():
@@ -128,7 +171,9 @@ class FirmwareJobService:
                 kind = "firmware_bundle_metadata" if filename.endswith(".json") else "firmware_documentation" if filename.endswith(".md") else "firmware_source"
                 stored = self.store.artifacts.write(job_id, filename, content, kind, download_base="/api/artifacts")
                 job.artifacts.append(_artifact_from_design_artifact(stored))
-            job.artifacts.append(_artifact_from_design_artifact(self._bundle(job_id, spec.project_name, generated.files)))
+            bundle = self._bundle(job_id, spec.project_name, generated.files)
+            job.artifacts.append(_artifact_from_design_artifact(bundle))
+            job.archive_artifact_id = bundle.id
             job.status = FirmwareStatus.needs_review if validation.status != "passed" or target.kind.value == "flight_controller" else FirmwareStatus.generated
         except Exception as exc:
             job.status = FirmwareStatus.failed
@@ -144,6 +189,19 @@ class FirmwareJobService:
             for filename, content in files.items():
                 archive.writestr(f"{project_name}/{filename}", content)
         return self.store.artifacts.write(job_id, f"{project_name}.zip", buffer.getvalue(), "firmware_project_bundle", download_base="/api/artifacts")
+
+    async def _enforce_rate_limit(self, owner_id: int | None) -> None:
+        if owner_id is None:
+            return
+        limit = max(1, int(os.getenv("TRINITY_FIRMWARE_RATE_LIMIT_PER_MINUTE", "12")))
+        now = time.monotonic()
+        async with self._rate_lock:
+            history = self._requests.setdefault(owner_id, deque())
+            while history and history[0] <= now - 60:
+                history.popleft()
+            if len(history) >= limit:
+                raise FirmwareRateLimitError("Firmware generation rate limit exceeded; try again later.")
+            history.append(now)
 
     def _infer_features(self, description: str) -> list[str]:
         text = description.lower()

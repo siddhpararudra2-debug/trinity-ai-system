@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import get_current_user
-from app.firmware.jobs import FirmwareJobService
+from app.firmware.jobs import FirmwareJobService, FirmwareRateLimitError
 from app.models import User
 from app.firmware.models import FirmwareJobResponse, FirmwareRequest, TargetListResponse
 from app.firmware.registry import list_targets
@@ -19,7 +19,11 @@ async def get_firmware_targets() -> TargetListResponse:
 
 @router.post("/firmware/jobs", response_model=FirmwareJobResponse, status_code=201)
 async def create_firmware_job(request: FirmwareRequest, user: User = Depends(get_current_user)) -> FirmwareJobResponse:
-    return FirmwareJobResponse(job=await _service.create(request, owner_id=user.id))
+    try:
+        job = await _service.create(request, owner_id=user.id)
+    except FirmwareRateLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return FirmwareJobResponse(job=job)
 
 
 @router.get("/firmware/jobs/{job_id}", response_model=FirmwareJobResponse)
