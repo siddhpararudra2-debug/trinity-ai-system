@@ -1,19 +1,28 @@
 [project]
-name = "repl-nix-workspace"
-version = "0.1.0"
-description = "Add your description here"
+name = "trinity-ai"
+version = "1.0.0"
+description = "Trinity AI Engineering OS - Unified AI Engineering and Research Operating System"
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "alembic>=1.19.1",
+    "argon2-cffi>=25.1.0",
+    "asyncpg>=0.31.0",
     "boto3>=1.35,<2",
     "fastapi>=0.139.0",
     "httpx>=0.28.1",
     "numpy>=2.4.6",
+    "opentelemetry-api>=1.44.0",
+    "opentelemetry-sdk>=1.44.0",
+    "passlib[argon2]>=1.7,<2",
     "pillow>=10.0,<12",
     "pydantic-settings>=2.14.2",
+    "python-jose[cryptography]>=3.3,<4",
     "python-multipart>=0.0.20",
     "redis>=5,<6",
+    "slowapi>=0.1.9,<1",
     "sqlalchemy[asyncio]>=2.0.51",
+    "structlog>=26.1.0",
     "sympy>=1.14.0",
     "uvicorn[standard]>=0.51.0",
 ]
@@ -21,3 +30,8 @@ dependencies = [
 [tool.setuptools]
 py-modules = ["main"]
 packages = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

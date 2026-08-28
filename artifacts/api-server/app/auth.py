@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import os
 import secrets
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,11 +17,15 @@ from app.models import User
 
 _ITERATIONS = 310_000
 _INSECURE_SECRET = "local-development-auth-secret-change-me"
+_ALGORITHM = "HS256"
+_DEFAULT_TOKEN_LIFETIME = 86_400  # 24 hours
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
-def _auth_secret() -> bytes:
+def _auth_secret() -> str:
     value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY") or _INSECURE_SECRET
-    return value.encode("utf-8")
+    return value
 
 
 def validate_auth_configuration() -> None:
@@ -37,47 +41,33 @@ def validate_auth_configuration() -> None:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _ITERATIONS)
-    return f"pbkdf2_sha256${_ITERATIONS}${base64.urlsafe_b64encode(salt).decode()}${base64.urlsafe_b64encode(digest).decode()}"
+    return pwd_context.hash(password)
 
 
 def verify_password(password: str, encoded: str) -> bool:
-    try:
-        algorithm, iterations_text, salt_text, digest_text = encoded.split("$", 3)
-        if algorithm != "pbkdf2_sha256":
-            return False
-        iterations = int(iterations_text)
-        salt = base64.urlsafe_b64decode(salt_text.encode())
-        expected = base64.urlsafe_b64decode(digest_text.encode())
-    except (ValueError, TypeError):
-        return False
-    actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    return hmac.compare_digest(actual, expected)
+    return pwd_context.verify(password, encoded)
 
 
-def issue_access_token(user_id: int, expires_in: int = 86_400) -> str:
-    expires_at = int(time.time()) + expires_in
-    payload = f"{user_id}|{expires_at}"
-    encoded = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
-    signature = hmac.new(_auth_secret(), encoded.encode(), hashlib.sha256).digest()
-    return f"{encoded}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+def issue_access_token(user_id: int, expires_in: int = _DEFAULT_TOKEN_LIFETIME) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + timedelta(seconds=expires_in),
+        "iss": "trinity-ai",
+    }
+    return jwt.encode(payload, _auth_secret(), algorithm=_ALGORITHM)
 
 
 def decode_access_token(token: str) -> int:
     try:
-        encoded, signature = token.split(".", 1)
-        expected = hmac.new(_auth_secret(), encoded.encode(), hashlib.sha256).digest()
-        supplied = base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
-        if not hmac.compare_digest(expected, supplied):
-            raise ValueError("invalid signature")
-        payload = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)).decode()
-        user_id_text, expires_text = payload.split("|", 1)
-        if int(expires_text) < int(time.time()):
-            raise ValueError("expired token")
-        return int(user_id_text)
-    except (ValueError, TypeError, UnicodeDecodeError):
-        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+        payload = jwt.decode(token, _auth_secret(), algorithms=[_ALGORITHM], issuer="trinity-ai")
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise ValueError("missing subject claim")
+        return int(user_id)
+    except (JWTError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token") from exc
 
 
 def bearer_token(request: Request) -> str | None:

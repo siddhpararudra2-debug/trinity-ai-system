@@ -10,6 +10,9 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.database import init_db
 from app.routes.health import router as health_router
@@ -28,6 +31,11 @@ from app.routes.jobs import router as jobs_router
 from app.observability import logger, metrics
 from app.security import require_api_key_for_request
 from app.auth import validate_auth_configuration
+from app.config import get_settings
+
+settings = get_settings()
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -41,19 +49,26 @@ async def lifespan(app: FastAPI):
     print("🔻 Trinity AI shutting down...")
 
 
+_disable_docs = settings.disable_docs or os.getenv("TRINITY_DISABLE_DOCS", "0") == "1"
+
 app = FastAPI(
     title="Trinity AI",
     description="Unified AI Engineering and Research Operating System",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url=None if _disable_docs else "/api/docs",
+    redoc_url=None if _disable_docs else "/api/redoc",
+    openapi_url=None if _disable_docs else "/api/openapi.json",
 )
 
-# CORS is configurable. Wildcard origins cannot be combined with credentials.
-_raw_cors_origins = os.getenv("TRINITY_CORS_ORIGINS", "*")
-_cors_origins = [origin.strip() for origin in _raw_cors_origins.split(",") if origin.strip()]
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+_raw_cors_origins = settings.cors_origins
+if _raw_cors_origins == "*":
+    _cors_origins = ["*"]
+else:
+    _cors_origins = [origin.strip() for origin in _raw_cors_origins.split(",") if origin.strip()]
 if not _cors_origins:
     _cors_origins = ["*"]
 app.add_middleware(
@@ -87,8 +102,6 @@ async def api_key_middleware(request: Request, call_next):
         return JSONResponse(status_code=status_code, content={"detail": detail})
     return await call_next(request)
 
-# All routes are prefixed with /api because the reverse proxy routes
-# /api/* traffic to this service without stripping the prefix.
 API = "/api"
 app.include_router(health_router, prefix=API)
 app.include_router(auth_router, prefix=API)
@@ -110,7 +123,7 @@ async def root():
     return {
         "system": "Trinity AI Engineering OS",
         "version": "1.0.0",
-        "docs": "/api/docs",
+        "docs": "/api/docs" if not _disable_docs else "disabled",
         "engines": [
             "math", "quantum", "maker_cad", "maker_pcb",
             "literature", "vision", "firmware", "collab", "orchestrator",

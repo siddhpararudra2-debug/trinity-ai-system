@@ -15,7 +15,6 @@ def configured_api_key() -> str | None:
 
 
 def require_api_key_for_request(request: Request) -> None:
-    # CORS preflight carries no bearer token or application key by design.
     if request.method == "OPTIONS":
         return
     configured = configured_api_key()

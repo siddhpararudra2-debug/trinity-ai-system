@@ -10,11 +10,11 @@ out-tsc
 
 # dependencies
 node_modules
+.pnpm-store
 
 # IDEs and editors
 /.idea
 .project
-.classpath
 .c9/
 *.launch
 .settings/
@@ -41,12 +41,17 @@ testem.log
 .DS_Store
 Thumbs.db
 
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
-
-# Replit
+# Replit (removed)
+.replit
+.replitignore
 .cache/
 .local/
+attached_assets/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
 
 # SQLite databases
 *.db
@@ -60,6 +65,18 @@ __pycache__/
 *.pyc
 *.pyo
 .pythonlibs/
+.venv/
+*.egg-info/
+
+# Alembic
+alembic/versions/*.pyc
 
 # Agent memory (internal only)
 .agents/
+
+# Logs
+logs/
+*.log
+
+# Release artifacts
+releases/
