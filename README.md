@@ -4,7 +4,7 @@ Trinity AI is a full-stack engineering workspace that gives users one terminal-s
 
 This README is an implementation guide, not a product promise. It separates behavior verified in the repository from capabilities that still depend on external tools or need implementation.
 
-**Documentation status:** 2026-08-31 · **License:** MIT
+**Documentation status:** 2026-08-31 · **License:** Private proprietary — Ram and Rudra
 **Runtime shape:** React/Vite frontend + Python/FastAPI API + SQLite persistence + optional Redis and trusted workers
 
 ## Current status at a glance
@@ -206,3 +206,5 @@ The detailed, evidence-based roadmap is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 ## Source documentation
 
 The supplied `trinity-ai-documentation.docx` was used as a product brief. Its descriptions are retained where the code confirms them and marked as planned, optional, externally dependent, or not currently implemented where the repository differs.
+
+This repository is private and is jointly owned by Ram and Rudra. See [`LICENSE`](LICENSE) for the private proprietary usage terms. It is not an open-source project.

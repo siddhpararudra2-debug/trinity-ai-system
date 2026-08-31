@@ -2,6 +2,7 @@
 name = "trinity-ai"
 version = "1.0.0"
 description = "Trinity AI Engineering OS - Unified AI Engineering and Research Operating System"
+license = "Proprietary"
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
