@@ -4,7 +4,12 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     commit-message:
       prefix: "ci"
 
@@ -12,36 +17,61 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
     commit-message:
-      prefix: "deps(python)"
+      prefix: "chore"
 
   # Node / pnpm Monorepo Dependencies
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      node-dependencies:
+        patterns:
+          - "*"
     commit-message:
-      prefix: "deps(node)"
+      prefix: "chore"
 
   # Docker Dependencies
   - package-ecosystem: "docker"
     directory: "/deploy"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      deploy-images:
+        patterns:
+          - "*"
     commit-message:
-      prefix: "deps(docker)"
+      prefix: "chore"
 
   - package-ecosystem: "docker"
     directory: "/artifacts/api-server"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      api-server-images:
+        patterns:
+          - "*"
     commit-message:
-      prefix: "deps(docker)"
+      prefix: "chore"
 
   - package-ecosystem: "docker"
     directory: "/workers/firmware"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      firmware-images:
+        patterns:
+          - "*"
     commit-message:
-      prefix: "deps(docker)"
+      prefix: "chore"
