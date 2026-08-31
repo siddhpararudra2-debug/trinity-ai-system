@@ -58,8 +58,8 @@ catalogs:
       specifier: ^4.1.14
       version: 4.3.2
     tsx:
-      specifier: ^4.21.0
-      version: 4.23.0
+      specifier: ^4.23.12
+      version: 4.23.12
     vite:
       specifier: ^7.3.2
       version: 7.3.6
@@ -636,7 +636,7 @@ importers:
         version: 25.9.4
       tsx:
         specifier: 'catalog:'
-        version: 4.23.0
+        version: 4.23.12
 
 packages:
 
@@ -2918,6 +2918,11 @@ packages:
 
   tsx@4.23.0:
     resolution: {integrity: sha512-eUdUIaCr963q2h5u3+QwvYp0+eqPvn+egeqZUm0hwERCqqx1E3kK5ehbGCvqSE5MQAULr67ww0cA3jKc3YkM1w==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
+  tsx@4.23.12:
+    resolution: {integrity: sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -5422,6 +5427,12 @@ snapshots:
   tslib@2.8.1: {}
 
   tsx@4.23.0:
+    dependencies:
+      esbuild: 0.27.3
+    optionalDependencies:
+      fsevents: 2.3.3
+
+  tsx@4.23.12:
     dependencies:
       esbuild: 0.27.3
     optionalDependencies:
