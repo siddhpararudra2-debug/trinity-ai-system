@@ -4,9 +4,8 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Iterable
 
-from app.firmware.models import FirmwareSpec, FirmwareTarget, PeripheralSpec
+from app.firmware.models import FirmwareSpec, FirmwareTarget
 
 
 @dataclass(frozen=True)
@@ -140,7 +139,7 @@ class FirmwareGenerator:
     def _ardupilot(self, name: str, target: FirmwareTarget, spec: FirmwareSpec) -> dict[str, str]:
         return {
             "libraries/AP_Trinity/AP_Trinity.h": "#pragma once\nclass AP_Trinity { public: void update(); };\n",
-            "libraries/AP_Trinity/AP_Trinity.cpp": f"""#include \"AP_Trinity.h\"\n\nvoid AP_Trinity::update()\n{{\n    // Integrate through ArduPilot scheduler, parameters, and HAL APIs.\n    // Do not bypass EKF, arming checks, failsafes, or actuator safety interlocks.\n}}\n""",
+            "libraries/AP_Trinity/AP_Trinity.cpp": """#include \"AP_Trinity.h\"\n\nvoid AP_Trinity::update()\n{\n    // Integrate through ArduPilot scheduler, parameters, and HAL APIs.\n    // Do not bypass EKF, arming checks, failsafes, or actuator safety interlocks.\n}\n""",
             "libraries/AP_Trinity/library.properties": "name=AP_Trinity\nversion=0.1.0\n",
         }
 

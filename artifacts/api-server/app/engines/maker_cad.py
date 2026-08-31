@@ -226,7 +226,6 @@ def run(context):
 '''
 
     def _gear(self, p: dict) -> str:
-        import math as _math
         pitch_r = p["teeth"] * p["mod"] / 2
         outer_r = pitch_r + p["mod"]
         root_r  = pitch_r - 1.25 * p["mod"]

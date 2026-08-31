@@ -24,7 +24,7 @@ class FirmwareLLMConfig:
     timeout_seconds: float
 
     @classmethod
-    def from_env(cls) -> "FirmwareLLMConfig":
+    def from_env(cls) -> FirmwareLLMConfig:
         return cls(
             enabled=os.getenv("TRINITY_FIRMWARE_LLM_ENABLED", "0") == "1",
             endpoint=os.getenv("TRINITY_FIRMWARE_LLM_ENDPOINT", "https://api.openai.com/v1/chat/completions"),

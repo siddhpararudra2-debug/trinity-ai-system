@@ -15,7 +15,7 @@ from app.engines.base import BaseEngine
 
 try:
     import sympy as sp
-    from sympy import symbols, solve, integrate, diff, simplify, expand, factor, latex
+    from sympy import solve, integrate, diff, simplify, expand, factor, latex
     from sympy.parsing.sympy_parser import (
         parse_expr,
         standard_transformations,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
@@ -86,7 +86,7 @@ async def complete_kicad_job(job_id: str, request: KicadCompleteRequest, worker_
     job.status = JobStatus(request.status)
     job.error = request.error
     job.assumptions.append("Completed by authenticated KiCad CLI worker.")
-    job.updated_at = datetime.now(timezone.utc)
+    job.updated_at = datetime.now(UTC)
     _store.save(job)
     _store.artifacts.register_manifest(job.job_id, job.engine, job.artifacts, job.validation)
     return {"job": job}

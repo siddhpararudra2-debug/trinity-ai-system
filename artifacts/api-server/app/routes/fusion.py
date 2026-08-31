@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
@@ -58,10 +58,10 @@ async def claim_fusion_job(job_id: str, request: FusionClaimRequest, worker_secr
     if stored is None:
         raise HTTPException(status_code=409, detail="Fusion script artifact is unavailable")
     script_bytes = stored[1]
-    expires_at = int(datetime.now(timezone.utc).timestamp()) + request.expires_in_seconds
+    expires_at = int(datetime.now(UTC).timestamp()) + request.expires_in_seconds
     token = make_worker_token(job_id, request.worker_id, script_hash(script_bytes), expires_at)
     job.status = JobStatus.generating
-    job.updated_at = datetime.now(timezone.utc)
+    job.updated_at = datetime.now(UTC)
     _store.save(job)
     return {
         "job_id": job_id,
@@ -153,7 +153,7 @@ async def complete_fusion_job(job_id: str, request: FusionCompleteRequest, worke
     job.status = JobStatus(request.status)
     job.error = request.error
     job.assumptions.append(f"Completed by Fusion worker {worker_id}.")
-    job.updated_at = datetime.now(timezone.utc)
+    job.updated_at = datetime.now(UTC)
     _store.save(job)
     _store.artifacts.register_manifest(job.job_id, job.engine, job.artifacts, job.validation)
     return {"job": job}

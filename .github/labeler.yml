@@ -1,0 +1,45 @@
+area/backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'artifacts/api-server/**'
+          - 'pyproject.toml'
+          - 'uv.lock'
+          - 'alembic/**'
+          - 'alembic.ini'
+          - 'tests/**'
+
+area/frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'artifacts/trinity/**'
+          - 'artifacts/mockup-sandbox/**'
+          - 'package.json'
+          - 'pnpm-workspace.yaml'
+          - 'pnpm-lock.yaml'
+
+area/contracts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'lib/**'
+
+area/workers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'workers/**'
+
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - '.ruff.toml'
+
+area/deploy:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'deploy/**'
+
+area/documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'

@@ -2,7 +2,6 @@
 Trinity Literature RAG Engine — Searches arXiv for research papers.
 Falls back gracefully to representative results when network is unavailable.
 """
-import asyncio
 import xml.etree.ElementTree as ET
 from typing import Any
 

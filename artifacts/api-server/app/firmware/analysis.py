@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from app.firmware.knowledge import validate_pin_assignments
 from app.firmware.models import DependencyStatus, FirmwareCheck, FirmwareSpec, FirmwareTarget, ResourceEstimate, SecurityFinding

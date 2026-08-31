@@ -11,7 +11,7 @@ from typing import Any
 from app.designs.models import (
     CadDesignSpec,
     ComponentSpec,
-    MountingHoleSpec,
+    HoleSpec,
     NetSpec,
     PcbDesignSpec,
 )
