@@ -72,7 +72,7 @@ jobs:
           uv pip audit || echo "Completed Python audit with advisories noted"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
