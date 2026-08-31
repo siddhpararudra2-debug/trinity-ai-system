@@ -3,7 +3,6 @@ Trinity AI Engineering OS — FastAPI Backend
 Built on top of the trinity-ai GitHub repo foundation.
 """
 from contextlib import asynccontextmanager
-import logging
 import os
 import time
 import uuid

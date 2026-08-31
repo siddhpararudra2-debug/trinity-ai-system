@@ -84,7 +84,6 @@ class QuantumEngine:
             import numpy as np
             rng = np.random.default_rng()
         except ImportError:
-            import random
             rng = None
 
         circuit_key = self._detect(description)

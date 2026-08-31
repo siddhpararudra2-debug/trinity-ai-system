@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import os
-import json
 import mimetypes
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any
 
 from app.config import get_settings
 from app.designs.models import Artifact, ArtifactManifest, ValidationReport
@@ -51,6 +49,7 @@ class ArtifactStore:
         return path
 
     def write(self, job_id: str, filename: str, content: str | bytes, kind: str, download_base: str = "/api/artifacts") -> Artifact:
+        safe_job = _SAFE_NAME.sub("_", job_id)
         safe_name = _safe_filename(filename)
         data = content.encode("utf-8") if isinstance(content, str) else content
         digest = hashlib.sha256(data).hexdigest()
@@ -74,7 +73,7 @@ class ArtifactStore:
         )
 
     def register_manifest(self, job_id: str, engine: str, artifacts: list[Artifact], validation: ValidationReport) -> Path:
-        manifest = ArtifactManifest(job_id=job_id, engine=engine, generated_at=datetime.now(timezone.utc), files=artifacts, validation=validation)
+        manifest = ArtifactManifest(job_id=job_id, engine=engine, generated_at=datetime.now(UTC), files=artifacts, validation=validation)
         path = self.job_dir(job_id) / "manifest.json"
         manifest_bytes = manifest.model_dump_json(indent=2).encode("utf-8")
         path.write_bytes(manifest_bytes)

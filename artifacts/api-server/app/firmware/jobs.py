@@ -11,7 +11,7 @@ import time
 import uuid
 import zipfile
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -20,7 +20,7 @@ from app.designs.artifacts import ArtifactStore
 from app.firmware.builds import run_firmware_build
 from app.firmware.analysis import analysis_checks, estimate_resources
 from app.firmware.generator import FirmwareGenerator
-from app.firmware.models import DependencyStatus, FirmwareArtifact, FirmwareFile, FirmwareJob, FirmwareRequest, FirmwareSpec, FirmwareStatus, FirmwareValidation
+from app.firmware.models import FirmwareArtifact, FirmwareJob, FirmwareRequest, FirmwareSpec, FirmwareStatus, FirmwareValidation
 from app.firmware.registry import TARGETS, find_target
 from app.firmware.universal import FirmwareEngine
 from app.firmware.validator import validate_firmware
@@ -52,7 +52,7 @@ class FirmwareJobStore:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _hash(value: Any) -> str:

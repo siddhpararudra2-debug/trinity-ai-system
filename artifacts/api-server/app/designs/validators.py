@@ -6,13 +6,10 @@ opt-in and only runs when an administrator explicitly enables it.
 from __future__ import annotations
 
 import ast
-import json
 import os
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Any
 
 from app.designs.models import CadDesignSpec, PcbDesignSpec, ValidationCheck, ValidationReport, ValidationStatus
 

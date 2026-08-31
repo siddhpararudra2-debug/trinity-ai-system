@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import os
-import secrets
-import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request
@@ -49,7 +47,7 @@ def verify_password(password: str, encoded: str) -> bool:
 
 
 def issue_access_token(user_id: int, expires_in: int = _DEFAULT_TOKEN_LIFETIME) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "iat": now,

@@ -6,9 +6,8 @@ import json
 import re
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 
 from app.designs.artifacts import ArtifactStore
@@ -59,7 +58,7 @@ class DesignJobStore:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _new_id(prefix: str) -> str:
