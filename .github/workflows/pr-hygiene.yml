@@ -16,9 +16,12 @@ jobs:
   lint-pr-title:
     name: Lint PR Title (Conventional Commits)
     runs-on: ubuntu-latest
+    # Dependabot owns its generated title format; human-authored PRs must use
+    # the conventional-commit types listed below.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Validate Conventional Commits format
-        uses: amannn/action-semantic-pull-request@v5
+        uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -34,8 +37,6 @@ jobs:
             ci
             chore
             revert
-            deps
-            dependencies
           requireScope: false
           ignoreLabels: |
             bot
@@ -46,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Label based on modified files
         uses: actions/labeler@v5

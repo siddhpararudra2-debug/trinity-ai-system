@@ -61,11 +61,16 @@ flowchart TD
 - Automatically applies area labels (`area/backend`, `area/frontend`, `area/workers`, `area/contracts`, etc.) via [`.github/labeler.yml`](file:///d:/trinity%20ai/trinity-ai-system/.github/labeler.yml).
 
 ### 🤖 Dependabot Maintenance (`dependabot.yml`)
-- Weekly automated dependency updates for:
+- Monthly automated dependency updates for:
   - GitHub Actions (`github-actions`)
   - Python packages (`pip` / `pyproject.toml`)
   - Node workspace packages (`npm` / `package.json`)
   - Docker base images (`docker`)
+- Updates are grouped by ecosystem and directory, with at most one open Dependabot PR per update source.
+- Dependabot-generated PRs are exempt from human Conventional Commit title validation; human-authored PRs remain subject to it.
+- Dependency and base-image updates still require review and passing CI before merging.
+
+CodeQL is configured as an optional job because GitHub code scanning must be enabled for this private repository before CodeQL can upload results. Set the repository variable `CODEQL_ENABLED=true` only after enabling that GitHub feature. The Python and Node dependency audits remain available without CodeQL.
 
 ---
 
