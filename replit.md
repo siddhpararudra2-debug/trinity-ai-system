@@ -1,4 +1,6 @@
-# Trinity AI
+# Trinity AI (legacy Replit notes)
+
+The canonical project documentation is [`README.md`](README.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md). This file contains historical Replit-oriented notes and may describe intended capabilities ahead of the current implementation. In particular, the current repository has deterministic regex routing and an optional firmware-only LLM adapter; it does not yet implement a general AI/code fallback, global LLM router, vector-search literature RAG, or a ReAct execution loop.
 
 A unified AI Engineering and Research Operating System with 8 specialized engines: math, quantum, maker (CAD & PCB), literature, vision, code, and general AI — all accessible through a single terminal-style chat interface.
 
