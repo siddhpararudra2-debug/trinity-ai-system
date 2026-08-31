@@ -36,7 +36,7 @@ flowchart TD
 
 ### ⚛️ Frontend Monorepo Quality & Build (`frontend-ci`)
 - **Node & pnpm**: Runs Node.js 22 with frozen lockfile validation (`pnpm install --frozen-lockfile`).
-- **TypeScript Typecheck**: Compiles and checks types across all 9 monorepo packages (`pnpm run typecheck`).
+- **TypeScript Typecheck**: Compiles and checks types across the configured workspace packages (`pnpm run typecheck`). The current workspace has three `artifacts` packages, four `lib` packages, and one `scripts` package.
 - **Production Builds**: Builds production bundles for `@workspace/trinity` (Vite + React) and `@workspace/mockup-sandbox`.
 
 ### 📜 API Contract & Drift Check (`api-contract-drift`)
@@ -77,6 +77,9 @@ Before opening a pull request, run the same checks locally:
 ```bash
 # 1. Sync dependencies into virtual environment
 uv sync
+
+# The API contract test imports PyYAML; add it to the declared project
+# dependencies before relying on a clean-environment test run.
 
 # 2. Run Ruff linter
 uv run ruff check --select E9,F .
