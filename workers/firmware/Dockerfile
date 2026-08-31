@@ -1,7 +1,7 @@
 # Trinity Firmware Compilation Sandbox
 # Isolated build environment for deterministic firmware generation.
 # Security: no network, non-root, read-only root, resource limits.
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN groupadd -r firmware && useradd -r -g firmware -d /work firmware
 
