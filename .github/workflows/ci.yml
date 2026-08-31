@@ -74,6 +74,10 @@ jobs:
   frontend-ci:
     name: Frontend Monorepo Quality & Build
     runs-on: ubuntu-latest
+    env:
+      PORT: 5173
+      BASE_PATH: /
+      NODE_ENV: production
 
     steps:
       - name: Checkout repository
@@ -157,6 +161,7 @@ jobs:
 
       - name: Validate Docker Compose Configuration
         run: |
+          cp deploy/.env.example deploy/.env
           docker compose -f deploy/docker-compose.yml config
 
       - name: Build API Server Docker Image

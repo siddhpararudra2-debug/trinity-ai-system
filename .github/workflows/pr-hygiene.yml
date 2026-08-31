@@ -34,7 +34,12 @@ jobs:
             ci
             chore
             revert
+            deps
+            dependencies
           requireScope: false
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
 
   auto-label:
     name: Auto Label PR by Area
