@@ -1,0 +1,451 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Trinity AI Engineering OS API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: chat
+    description: Unified Trinity chat
+  - name: conversations
+    description: Conversation management
+  - name: engines
+    description: Trinity engine endpoints
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status including DB and engine status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /chat:
+    post:
+      operationId: sendChat
+      tags: [chat]
+      summary: Send a message to Trinity
+      description: Routes to the appropriate engine based on query content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: Trinity response with engine-specific data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{id}:
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation and all its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted successfully
+  /conversations/{id}/messages:
+    get:
+      operationId: getMessages
+      tags: [conversations]
+      summary: Get all messages for a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+  /engines:
+    get:
+      operationId: listEngines
+      tags: [engines]
+      summary: List all Trinity engines with status
+      responses:
+        "200":
+          description: Available engines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Engine"
+  /engines/math:
+    post:
+      operationId: runMathEngine
+      tags: [engines]
+      summary: Run the Trinity Math Engine directly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MathInput"
+      responses:
+        "200":
+          description: Math computation result with LaTeX and steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MathResponse"
+  /engines/quantum:
+    post:
+      operationId: runQuantumEngine
+      tags: [engines]
+      summary: Run the Trinity Quantum Lab
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuantumInput"
+      responses:
+        "200":
+          description: Quantum circuit simulation result with Bloch sphere data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuantumResponse"
+  /engines/maker/cad:
+    post:
+      operationId: runMakerCad
+      tags: [engines]
+      summary: Run the Trinity Maker Engine (CAD)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MakerCadInput"
+      responses:
+        "200":
+          description: Fusion 360 Python script for the requested part
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MakerCadResponse"
+  /engines/maker/pcb:
+    post:
+      operationId: runMakerPcb
+      tags: [engines]
+      summary: Run the Trinity Maker Engine (PCB)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MakerPcbInput"
+      responses:
+        "200":
+          description: KiCad schematic and PCB layout files
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MakerPcbResponse"
+  /engines/literature:
+    post:
+      operationId: runLiteratureEngine
+      tags: [engines]
+      summary: Run the Trinity Literature RAG engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiteratureInput"
+      responses:
+        "200":
+          description: Research papers and knowledge graph data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiteratureResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        db:
+          type: string
+        engines:
+          type: object
+    ChatInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        conversation_id:
+          type: ["integer", "null"]
+    ChatResponse:
+      type: object
+      required: [id, content, engine, created_at, conversation_id]
+      properties:
+        id:
+          type: integer
+        conversation_id:
+          type: integer
+        content:
+          type: string
+        engine:
+          type: string
+        data:
+          type: ["object", "null"]
+        created_at:
+          type: string
+    Conversation:
+      type: object
+      required: [id, title, created_at, message_count]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        message_count:
+          type: integer
+        last_engine:
+          type: ["string", "null"]
+    ConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+    Message:
+      type: object
+      required: [id, conversation_id, role, content, created_at]
+      properties:
+        id:
+          type: integer
+        conversation_id:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        engine:
+          type: ["string", "null"]
+        data:
+          type: ["object", "null"]
+        created_at:
+          type: string
+    Engine:
+      type: object
+      required: [id, name, description, status, trigger_words, icon]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        trigger_words:
+          type: array
+          items:
+            type: string
+        icon:
+          type: string
+    MathInput:
+      type: object
+      required: [expression]
+      properties:
+        expression:
+          type: string
+        operation:
+          type: string
+    MathResponse:
+      type: object
+      required: [expression, result, engine]
+      properties:
+        expression:
+          type: string
+        result:
+          type: string
+        latex:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        engine:
+          type: string
+    QuantumInput:
+      type: object
+      required: [circuit_description]
+      properties:
+        circuit_description:
+          type: string
+        num_qubits:
+          type: integer
+        shots:
+          type: integer
+    QuantumResponse:
+      type: object
+      required: [description, engine]
+      properties:
+        description:
+          type: string
+        circuit_diagram:
+          type: string
+        bloch_sphere:
+          type: object
+        counts:
+          type: object
+        state_vector:
+          type: array
+          items:
+            type: number
+        engine:
+          type: string
+    MakerCadInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+        parameters:
+          type: object
+    MakerCadResponse:
+      type: object
+      required: [description, script, filename, engine]
+      properties:
+        description:
+          type: string
+        script:
+          type: string
+        filename:
+          type: string
+        instructions:
+          type: string
+        engine:
+          type: string
+    MakerPcbInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+        components:
+          type: array
+          items:
+            type: string
+    MakerPcbResponse:
+      type: object
+      required: [description, sch_content, pcb_content, filename, engine]
+      properties:
+        description:
+          type: string
+        sch_content:
+          type: string
+        pcb_content:
+          type: string
+        filename:
+          type: string
+        instructions:
+          type: string
+        engine:
+          type: string
+    LiteratureInput:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        max_results:
+          type: integer
+    Paper:
+      type: object
+      required: [title, authors, abstract, url]
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        abstract:
+          type: string
+        url:
+          type: string
+        published:
+          type: string
+    LiteratureResponse:
+      type: object
+      required: [query, papers, summary, engine]
+      properties:
+        query:
+          type: string
+        papers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Paper"
+        summary:
+          type: string
+        engine:
+          type: string

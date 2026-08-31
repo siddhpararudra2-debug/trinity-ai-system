@@ -1,0 +1,82 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+.pnpm-store
+
+# IDEs and editors
+/.idea
+.project
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Replit (removed)
+.replit
+.replitignore
+.cache/
+.local/
+attached_assets/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# SQLite databases
+*.db
+*.sqlite
+
+# Generated Trinity design artifacts
+trinity_artifacts/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pythonlibs/
+.venv/
+*.egg-info/
+
+# Alembic
+alembic/versions/*.pyc
+
+# Agent memory (internal only)
+.agents/
+
+# Logs
+logs/
+*.log
+
+# Release artifacts
+releases/

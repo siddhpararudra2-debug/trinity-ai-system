@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Trinity AI"
+version = "1.0.0"
+id = "artifacts/trinity"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23924
+
+[services.development]
+run = "pnpm --filter @workspace/trinity run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/trinity", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/trinity/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23924"
+BASE_PATH = "/"

@@ -1,0 +1,19 @@
+{
+  "name": "trinity-workspace",
+  "version": "1.0.0",
+  "description": "A unified AI Engineering and Research Operating System with 8 specialized engines.",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "node -e \"const a=process.env.npm_config_user_agent||'';if(!a.startsWith('pnpm/')){console.error('Use pnpm instead');process.exit(1)}\"",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test"
+  },
+  "private": true,
+  "devDependencies": {
+    "prettier": "^3.9.4",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "addin",
+  "author": "Trinity AI Engineering OS",
+  "description": "Trusted Trinity CAD export worker for signed STEP, STL, and F3D jobs.",
+  "version": "1.0.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": false
+}
