@@ -44,13 +44,12 @@ async def send_chat(data: ChatInput, db: AsyncSession = Depends(get_db), user: U
             select(Conversation).where(Conversation.id == data.conversation_id)
         )
         conv = result.scalar_one_or_none()
-        if conv is not None and conv.owner_id != user.id:
-            raise HTTPException(status_code=403, detail="Conversation belongs to another user")
         if conv is None:
-            conv = Conversation(title=data.content[:60], owner_id=user.id)
-            db.add(conv)
-            await db.flush()
-        elif conv.owner_id is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if conv.owner_id is not None and conv.owner_id != user.id:
+            raise HTTPException(status_code=403, detail="Conversation belongs to another user")
+        if conv.owner_id is None:
+            # Orphan conversation — adopt to current user
             conv.owner_id = user.id
     else:
         title = data.content[:60] + ("..." if len(data.content) > 60 else "")

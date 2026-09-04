@@ -102,6 +102,12 @@ export const HealthCheckResponse = zod.object({
   "db": zod.string().optional(),
   "engines": zod.object({
 
+}).optional(),
+  "capabilities": zod.object({
+  "tesseract": zod.boolean().optional(),
+  "kicad_cli": zod.boolean().optional(),
+  "firmware_builds": zod.boolean().optional(),
+  "fusion_worker": zod.boolean().optional()
 }).optional()
 })
 
@@ -1126,3 +1132,161 @@ export const CompleteFusionJobBody = zod.object({
 })
 
 export const CompleteFusionJobResponse = zod.unknown()
+
+
+/**
+ * @summary Extract equations from paper text into SymPy blocks
+ */
+export const paperToCodeBodyPaperTextMin = 10;
+export const paperToCodeBodyPaperTextMax = 200000;
+
+export const paperToCodeBodyEquationHintMax = 4000;
+
+
+
+export const PaperToCodeBody = zod.object({
+  "paper_text": zod.string().min(paperToCodeBodyPaperTextMin).max(paperToCodeBodyPaperTextMax),
+  "equation_hint": zod.string().max(paperToCodeBodyEquationHintMax).nullish()
+})
+
+export const PaperToCodeResponse = zod.unknown()
+
+
+/**
+ * @summary Diagram image to PCB intent
+ */
+export const whiteboardToPcbBodyImageBase64Min = 20;
+
+export const whiteboardToPcbBodyObjectiveMax = 4000;
+
+
+
+export const WhiteboardToPcbBody = zod.object({
+  "image_base64": zod.string().min(whiteboardToPcbBodyImageBase64Min),
+  "objective": zod.string().max(whiteboardToPcbBodyObjectiveMax).optional()
+})
+
+export const WhiteboardToPcbResponse = zod.unknown()
+
+
+/**
+ * @summary Execute multi-engine pipeline
+ */
+export const executePipelineBodyObjectiveMin = 3;
+export const executePipelineBodyObjectiveMax = 4000;
+
+
+
+export const ExecutePipelineBody = zod.object({
+  "objective": zod.string().min(executePipelineBodyObjectiveMin).max(executePipelineBodyObjectiveMax),
+  "context": zod.object({
+
+}).nullish()
+})
+
+export const ExecutePipelineResponse = zod.unknown()
+
+
+/**
+ * @summary BOM normalization and sourcing from components
+ */
+export const BomFromComponentsBody = zod.object({
+  "components": zod.array(zod.object({
+
+})),
+  "preferences": zod.object({
+
+}).nullish()
+})
+
+export const BomFromComponentsResponse = zod.unknown()
+
+
+/**
+ * @summary BOM normalization and sourcing from CSV
+ */
+export const bomFromCsvBodyCsvTextMin = 3;
+
+
+
+export const BomFromCsvBody = zod.object({
+  "csv_text": zod.string().min(bomFromCsvBodyCsvTextMin),
+  "preferences": zod.object({
+
+}).nullish()
+})
+
+export const BomFromCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Create forkable project link
+ */
+export const shareProjectBodyTitleMin = 3;
+export const shareProjectBodyTitleMax = 255;
+
+export const shareProjectBodyPublicDefault = true;
+
+export const ShareProjectBody = zod.object({
+  "title": zod.string().min(shareProjectBodyTitleMin).max(shareProjectBodyTitleMax),
+  "manifest": zod.object({
+
+}),
+  "public": zod.boolean().default(shareProjectBodyPublicDefault)
+})
+
+export const ShareProjectResponse = zod.void()
+
+
+/**
+ * @summary Get shared project by token
+ */
+export const GetSharedProjectParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetSharedProjectResponse = zod.unknown()
+
+
+/**
+ * @summary Fork a shared project
+ */
+export const ForkSharedProjectParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const ForkSharedProjectResponse = zod.void()
+
+
+/**
+ * @summary Lightweight PCB SVG preview
+ */
+export const pcbSvgPreviewQueryJobIdDefault = `demo`;
+
+export const PcbSvgPreviewQueryParams = zod.object({
+  "job_id": zod.coerce.string().default(pcbSvgPreviewQueryJobIdDefault)
+})
+
+export const PcbSvgPreviewResponse = zod.unknown()
+
+
+/**
+ * @summary List MCP tools
+ */
+export const ListMcpToolsResponse = zod.unknown()
+
+
+/**
+ * @summary Invoke an MCP tool
+ */
+export const InvokeMcpToolParams = zod.object({
+  "tool_name": zod.coerce.string()
+})
+
+export const InvokeMcpToolBody = zod.object({
+  "arguments": zod.object({
+
+}).optional()
+})
+
+export const InvokeMcpToolResponse = zod.unknown()

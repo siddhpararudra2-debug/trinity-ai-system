@@ -28,7 +28,17 @@ def _auth_secret() -> str:
 
 def validate_auth_configuration() -> None:
     """Reject forgeable defaults whenever bearer auth is enabled."""
+    # Warn even when auth not required: insecure default + placeholder secrets must be replaced
+    placeholder = "replace-with"
+    insecure = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY") or ""
+    if insecure and placeholder in insecure.lower():
+        raise RuntimeError("Placeholder secret detected — replace TRINITY_AUTH_SECRET / TRINITY_API_KEY with real random values")
     if os.getenv("TRINITY_AUTH_REQUIRED", "0") != "1":
+        # In development, warn if using insecure default
+        value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY") or ""
+        if not value or value == _INSECURE_SECRET or len(value) < 32:
+            import logging
+            logging.getLogger("trinity.api").warning("TRINITY_AUTH_SECRET not set or too short — using insecure default; set a 32+ char secret for any non-dev use")
         return
     value = os.getenv("TRINITY_AUTH_SECRET") or os.getenv("TRINITY_API_KEY")
     if not value or len(value) < 32 or value == _INSECURE_SECRET:
@@ -96,7 +106,13 @@ async def get_current_admin(user: User = Depends(get_current_user)) -> User:
 async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
     token = bearer_token(request)
     if token:
-        return await get_current_user(request, db)
+        try:
+            return await get_current_user(request, db)
+        except HTTPException:
+            # When auth not required, treat invalid token as anonymous rather than 401
+            if os.getenv("TRINITY_AUTH_REQUIRED", "0") == "1":
+                raise
+            return None
     if os.getenv("TRINITY_AUTH_REQUIRED", "0") == "1":
         raise HTTPException(status_code=401, detail="Bearer access token required")
     return None

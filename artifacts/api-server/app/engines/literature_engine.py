@@ -20,16 +20,21 @@ ATOM = "http://www.w3.org/2005/Atom"
 class LiteratureEngine:
 
     async def process(self, query: str, max_results: int = 5) -> dict[str, Any]:
+        is_fallback = False
         try:
             papers = await self._arxiv(query, max_results)
+            if not papers:
+                raise RuntimeError("no papers returned")
         except Exception:
             papers = self._fallback_papers(query)
+            is_fallback = True
 
         return {
             "query": query,
             "papers": papers,
             "summary": self._summarize(query, papers),
-            "source": "arXiv",
+            "source": "fallback" if is_fallback else "arXiv",
+            "is_fallback": is_fallback,
             "engine": "literature",
         }
 

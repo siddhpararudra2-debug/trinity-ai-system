@@ -22,6 +22,8 @@ import type {
 import type {
   AuthRequest,
   AuthResponse,
+  BomFromComponentsRequest,
+  BomFromCsvRequest,
   CadDesignRequest,
   ChatInput,
   ChatResponse,
@@ -48,17 +50,23 @@ import type {
   MakerPcbResponse,
   MathInput,
   MathResponse,
+  McpToolCall,
   Message,
+  PaperToCodeRequest,
   PcbDesignRequest,
+  PcbSvgPreviewParams,
+  PipelineExecuteRequest,
   QuantumInput,
   QuantumResponse,
   RunVisionOcrBody,
+  ShareProjectRequest,
   TargetListResponse,
   UploadFusionArtifactBody,
   UploadKicadArtifactBody,
   User,
   ValidationReport,
   VisionResult,
+  WhiteboardPcbRequest,
   WorkflowExecuteRequest,
   WorkflowPlan,
   WorkflowPlanRequest,
@@ -3280,5 +3288,812 @@ export const useCompleteFusionJob = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCompleteFusionJobMutationOptions(options));
+    }
+
+export const getPaperToCodeUrl = () => {
+
+
+
+
+  return `/api/pipelines/paper-to-code`
+}
+
+/**
+ * @summary Extract equations from paper text into SymPy blocks
+ */
+export const paperToCode = async (paperToCodeRequest: PaperToCodeRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPaperToCodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paperToCodeRequest)
+  }
+);}
+
+
+
+
+
+export const getPaperToCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof paperToCode>>, TError,{data: BodyType<PaperToCodeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof paperToCode>>, TError,{data: BodyType<PaperToCodeRequest>}, TContext> => {
+
+const mutationKey = ['paperToCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof paperToCode>>, {data: BodyType<PaperToCodeRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  paperToCode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PaperToCodeMutationResult = NonNullable<Awaited<ReturnType<typeof paperToCode>>>
+    export type PaperToCodeMutationBody = BodyType<PaperToCodeRequest>
+    export type PaperToCodeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Extract equations from paper text into SymPy blocks
+ */
+export const usePaperToCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof paperToCode>>, TError,{data: BodyType<PaperToCodeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof paperToCode>>,
+        TError,
+        {data: BodyType<PaperToCodeRequest>},
+        TContext
+      > => {
+      return useMutation(getPaperToCodeMutationOptions(options));
+    }
+
+export const getWhiteboardToPcbUrl = () => {
+
+
+
+
+  return `/api/pipelines/whiteboard-to-pcb`
+}
+
+/**
+ * @summary Diagram image to PCB intent
+ */
+export const whiteboardToPcb = async (whiteboardPcbRequest: WhiteboardPcbRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getWhiteboardToPcbUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(whiteboardPcbRequest)
+  }
+);}
+
+
+
+
+
+export const getWhiteboardToPcbMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof whiteboardToPcb>>, TError,{data: BodyType<WhiteboardPcbRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof whiteboardToPcb>>, TError,{data: BodyType<WhiteboardPcbRequest>}, TContext> => {
+
+const mutationKey = ['whiteboardToPcb'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof whiteboardToPcb>>, {data: BodyType<WhiteboardPcbRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  whiteboardToPcb(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WhiteboardToPcbMutationResult = NonNullable<Awaited<ReturnType<typeof whiteboardToPcb>>>
+    export type WhiteboardToPcbMutationBody = BodyType<WhiteboardPcbRequest>
+    export type WhiteboardToPcbMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Diagram image to PCB intent
+ */
+export const useWhiteboardToPcb = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof whiteboardToPcb>>, TError,{data: BodyType<WhiteboardPcbRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof whiteboardToPcb>>,
+        TError,
+        {data: BodyType<WhiteboardPcbRequest>},
+        TContext
+      > => {
+      return useMutation(getWhiteboardToPcbMutationOptions(options));
+    }
+
+export const getExecutePipelineUrl = () => {
+
+
+
+
+  return `/api/pipelines/execute`
+}
+
+/**
+ * @summary Execute multi-engine pipeline
+ */
+export const executePipeline = async (pipelineExecuteRequest: PipelineExecuteRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getExecutePipelineUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pipelineExecuteRequest)
+  }
+);}
+
+
+
+
+
+export const getExecutePipelineMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executePipeline>>, TError,{data: BodyType<PipelineExecuteRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof executePipeline>>, TError,{data: BodyType<PipelineExecuteRequest>}, TContext> => {
+
+const mutationKey = ['executePipeline'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof executePipeline>>, {data: BodyType<PipelineExecuteRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  executePipeline(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExecutePipelineMutationResult = NonNullable<Awaited<ReturnType<typeof executePipeline>>>
+    export type ExecutePipelineMutationBody = BodyType<PipelineExecuteRequest>
+    export type ExecutePipelineMutationError = ErrorType<void>
+
+    /**
+ * @summary Execute multi-engine pipeline
+ */
+export const useExecutePipeline = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executePipeline>>, TError,{data: BodyType<PipelineExecuteRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof executePipeline>>,
+        TError,
+        {data: BodyType<PipelineExecuteRequest>},
+        TContext
+      > => {
+      return useMutation(getExecutePipelineMutationOptions(options));
+    }
+
+export const getBomFromComponentsUrl = () => {
+
+
+
+
+  return `/api/sourcing/bom/components`
+}
+
+/**
+ * @summary BOM normalization and sourcing from components
+ */
+export const bomFromComponents = async (bomFromComponentsRequest: BomFromComponentsRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getBomFromComponentsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bomFromComponentsRequest)
+  }
+);}
+
+
+
+
+
+export const getBomFromComponentsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bomFromComponents>>, TError,{data: BodyType<BomFromComponentsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bomFromComponents>>, TError,{data: BodyType<BomFromComponentsRequest>}, TContext> => {
+
+const mutationKey = ['bomFromComponents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bomFromComponents>>, {data: BodyType<BomFromComponentsRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bomFromComponents(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BomFromComponentsMutationResult = NonNullable<Awaited<ReturnType<typeof bomFromComponents>>>
+    export type BomFromComponentsMutationBody = BodyType<BomFromComponentsRequest>
+    export type BomFromComponentsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary BOM normalization and sourcing from components
+ */
+export const useBomFromComponents = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bomFromComponents>>, TError,{data: BodyType<BomFromComponentsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bomFromComponents>>,
+        TError,
+        {data: BodyType<BomFromComponentsRequest>},
+        TContext
+      > => {
+      return useMutation(getBomFromComponentsMutationOptions(options));
+    }
+
+export const getBomFromCsvUrl = () => {
+
+
+
+
+  return `/api/sourcing/bom/csv`
+}
+
+/**
+ * @summary BOM normalization and sourcing from CSV
+ */
+export const bomFromCsv = async (bomFromCsvRequest: BomFromCsvRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getBomFromCsvUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bomFromCsvRequest)
+  }
+);}
+
+
+
+
+
+export const getBomFromCsvMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bomFromCsv>>, TError,{data: BodyType<BomFromCsvRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bomFromCsv>>, TError,{data: BodyType<BomFromCsvRequest>}, TContext> => {
+
+const mutationKey = ['bomFromCsv'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bomFromCsv>>, {data: BodyType<BomFromCsvRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bomFromCsv(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BomFromCsvMutationResult = NonNullable<Awaited<ReturnType<typeof bomFromCsv>>>
+    export type BomFromCsvMutationBody = BodyType<BomFromCsvRequest>
+    export type BomFromCsvMutationError = ErrorType<unknown>
+
+    /**
+ * @summary BOM normalization and sourcing from CSV
+ */
+export const useBomFromCsv = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bomFromCsv>>, TError,{data: BodyType<BomFromCsvRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bomFromCsv>>,
+        TError,
+        {data: BodyType<BomFromCsvRequest>},
+        TContext
+      > => {
+      return useMutation(getBomFromCsvMutationOptions(options));
+    }
+
+export const getShareProjectUrl = () => {
+
+
+
+
+  return `/api/projects/share`
+}
+
+/**
+ * @summary Create forkable project link
+ */
+export const shareProject = async (shareProjectRequest: ShareProjectRequest, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getShareProjectUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shareProjectRequest)
+  }
+);}
+
+
+
+
+
+export const getShareProjectMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareProject>>, TError,{data: BodyType<ShareProjectRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof shareProject>>, TError,{data: BodyType<ShareProjectRequest>}, TContext> => {
+
+const mutationKey = ['shareProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof shareProject>>, {data: BodyType<ShareProjectRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  shareProject(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ShareProjectMutationResult = NonNullable<Awaited<ReturnType<typeof shareProject>>>
+    export type ShareProjectMutationBody = BodyType<ShareProjectRequest>
+    export type ShareProjectMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create forkable project link
+ */
+export const useShareProject = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareProject>>, TError,{data: BodyType<ShareProjectRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof shareProject>>,
+        TError,
+        {data: BodyType<ShareProjectRequest>},
+        TContext
+      > => {
+      return useMutation(getShareProjectMutationOptions(options));
+    }
+
+export const getGetSharedProjectUrl = (token: string,) => {
+
+
+
+
+  return `/api/projects/shared/${token}`
+}
+
+/**
+ * @summary Get shared project by token
+ */
+export const getSharedProject = async (token: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getGetSharedProjectUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSharedProjectQueryKey = (token: string,) => {
+    return [
+    `/api/projects/shared/${token}`
+    ] as const;
+    }
+
+
+export const getGetSharedProjectQueryOptions = <TData = Awaited<ReturnType<typeof getSharedProject>>, TError = ErrorType<void>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedProject>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSharedProjectQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSharedProject>>> = ({ signal }) => getSharedProject(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSharedProject>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSharedProjectQueryResult = NonNullable<Awaited<ReturnType<typeof getSharedProject>>>
+export type GetSharedProjectQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get shared project by token
+ */
+
+export function useGetSharedProject<TData = Awaited<ReturnType<typeof getSharedProject>>, TError = ErrorType<void>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedProject>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSharedProjectQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getForkSharedProjectUrl = (token: string,) => {
+
+
+
+
+  return `/api/projects/shared/${token}/fork`
+}
+
+/**
+ * @summary Fork a shared project
+ */
+export const forkSharedProject = async (token: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getForkSharedProjectUrl(token),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getForkSharedProjectMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof forkSharedProject>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof forkSharedProject>>, TError,{token: string}, TContext> => {
+
+const mutationKey = ['forkSharedProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof forkSharedProject>>, {token: string}> = (props) => {
+          const {token} = props ?? {};
+
+          return  forkSharedProject(token,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ForkSharedProjectMutationResult = NonNullable<Awaited<ReturnType<typeof forkSharedProject>>>
+
+    export type ForkSharedProjectMutationError = ErrorType<void>
+
+    /**
+ * @summary Fork a shared project
+ */
+export const useForkSharedProject = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof forkSharedProject>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof forkSharedProject>>,
+        TError,
+        {token: string},
+        TContext
+      > => {
+      return useMutation(getForkSharedProjectMutationOptions(options));
+    }
+
+export const getPcbSvgPreviewUrl = (params?: PcbSvgPreviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/preview/pcb-svg?${stringifiedParams}` : `/api/preview/pcb-svg`
+}
+
+/**
+ * @summary Lightweight PCB SVG preview
+ */
+export const pcbSvgPreview = async (params?: PcbSvgPreviewParams, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPcbSvgPreviewUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPcbSvgPreviewQueryKey = (params?: PcbSvgPreviewParams,) => {
+    return [
+    `/api/preview/pcb-svg`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getPcbSvgPreviewQueryOptions = <TData = Awaited<ReturnType<typeof pcbSvgPreview>>, TError = ErrorType<unknown>>(params?: PcbSvgPreviewParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof pcbSvgPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPcbSvgPreviewQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof pcbSvgPreview>>> = ({ signal }) => pcbSvgPreview(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof pcbSvgPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type PcbSvgPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof pcbSvgPreview>>>
+export type PcbSvgPreviewQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Lightweight PCB SVG preview
+ */
+
+export function usePcbSvgPreview<TData = Awaited<ReturnType<typeof pcbSvgPreview>>, TError = ErrorType<unknown>>(
+ params?: PcbSvgPreviewParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof pcbSvgPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getPcbSvgPreviewQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListMcpToolsUrl = () => {
+
+
+
+
+  return `/api/mcp/tools`
+}
+
+/**
+ * @summary List MCP tools
+ */
+export const listMcpTools = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getListMcpToolsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMcpToolsQueryKey = () => {
+    return [
+    `/api/mcp/tools`
+    ] as const;
+    }
+
+
+export const getListMcpToolsQueryOptions = <TData = Awaited<ReturnType<typeof listMcpTools>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMcpTools>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMcpToolsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMcpTools>>> = ({ signal }) => listMcpTools({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMcpTools>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMcpToolsQueryResult = NonNullable<Awaited<ReturnType<typeof listMcpTools>>>
+export type ListMcpToolsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List MCP tools
+ */
+
+export function useListMcpTools<TData = Awaited<ReturnType<typeof listMcpTools>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMcpTools>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMcpToolsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInvokeMcpToolUrl = (toolName: string,) => {
+
+
+
+
+  return `/api/mcp/tools/${toolName}`
+}
+
+/**
+ * @summary Invoke an MCP tool
+ */
+export const invokeMcpTool = async (toolName: string,
+    mcpToolCall: McpToolCall, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getInvokeMcpToolUrl(toolName),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mcpToolCall)
+  }
+);}
+
+
+
+
+
+export const getInvokeMcpToolMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invokeMcpTool>>, TError,{toolName: string;data: BodyType<McpToolCall>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof invokeMcpTool>>, TError,{toolName: string;data: BodyType<McpToolCall>}, TContext> => {
+
+const mutationKey = ['invokeMcpTool'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof invokeMcpTool>>, {toolName: string;data: BodyType<McpToolCall>}> = (props) => {
+          const {toolName,data} = props ?? {};
+
+          return  invokeMcpTool(toolName,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InvokeMcpToolMutationResult = NonNullable<Awaited<ReturnType<typeof invokeMcpTool>>>
+    export type InvokeMcpToolMutationBody = BodyType<McpToolCall>
+    export type InvokeMcpToolMutationError = ErrorType<void>
+
+    /**
+ * @summary Invoke an MCP tool
+ */
+export const useInvokeMcpTool = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invokeMcpTool>>, TError,{toolName: string;data: BodyType<McpToolCall>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof invokeMcpTool>>,
+        TError,
+        {toolName: string;data: BodyType<McpToolCall>},
+        TContext
+      > => {
+      return useMutation(getInvokeMcpToolMutationOptions(options));
     }
 

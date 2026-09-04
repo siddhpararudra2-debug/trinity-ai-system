@@ -37,6 +37,8 @@ tags:
     description: Trusted Fusion desktop worker protocol
   - name: kicad-worker
     description: Authenticated KiCad CLI manufacturing worker
+  - name: extensions
+    description: Pipelines, sourcing, project sharing and previews
 paths:
   /metrics:
     get:
@@ -718,6 +720,144 @@ paths:
             schema: {$ref: "#/components/schemas/FusionCompleteRequest"}
       responses:
         "200": {description: Updated CAD design job}
+  /pipelines/paper-to-code:
+    post:
+      operationId: paperToCode
+      tags: [extensions]
+      summary: Extract equations from paper text into SymPy blocks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PaperToCodeRequest"}
+      responses:
+        "200": {description: Paper-to-code pipeline result}
+  /pipelines/whiteboard-to-pcb:
+    post:
+      operationId: whiteboardToPcb
+      tags: [extensions]
+      summary: Diagram image to PCB intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WhiteboardPcbRequest"}
+      responses:
+        "200": {description: Whiteboard-to-PCB result}
+  /pipelines/execute:
+    post:
+      operationId: executePipeline
+      tags: [extensions]
+      summary: Execute multi-engine pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PipelineExecuteRequest"}
+      responses:
+        "200": {description: Pipeline execution result}
+        "400": {description: Objective does not produce pipeline}
+  /sourcing/bom/components:
+    post:
+      operationId: bomFromComponents
+      tags: [extensions]
+      summary: BOM normalization and sourcing from components
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/BomFromComponentsRequest"}
+      responses:
+        "200": {description: Sourced BOM}
+  /sourcing/bom/csv:
+    post:
+      operationId: bomFromCsv
+      tags: [extensions]
+      summary: BOM normalization and sourcing from CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/BomFromCsvRequest"}
+      responses:
+        "200": {description: Sourced BOM}
+  /projects/share:
+    post:
+      operationId: shareProject
+      tags: [extensions]
+      summary: Create forkable project link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ShareProjectRequest"}
+      responses:
+        "201": {description: Created share link}
+  /projects/shared/{token}:
+    get:
+      operationId: getSharedProject
+      tags: [extensions]
+      summary: Get shared project by token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Shared project}
+        "404": {description: Not found}
+        "403": {description: Private project}
+  /projects/shared/{token}/fork:
+    post:
+      operationId: forkSharedProject
+      tags: [extensions]
+      summary: Fork a shared project
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "201": {description: Forked project}
+        "404": {description: Not found}
+        "403": {description: Forbidden}
+  /preview/pcb-svg:
+    get:
+      operationId: pcbSvgPreview
+      tags: [extensions]
+      summary: Lightweight PCB SVG preview
+      parameters:
+        - name: job_id
+          in: query
+          required: false
+          schema: {type: string, default: demo}
+      responses:
+        "200": {description: SVG preview}
+  /mcp/tools:
+    get:
+      operationId: listMcpTools
+      tags: [extensions]
+      summary: List MCP tools
+      responses:
+        "200": {description: MCP tool list}
+  /mcp/tools/{tool_name}:
+    post:
+      operationId: invokeMcpTool
+      tags: [extensions]
+      summary: Invoke an MCP tool
+      parameters:
+        - name: tool_name
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/McpToolCall"}
+      responses:
+        "200": {description: MCP tool result}
+        "404": {description: Unknown tool}
 components:
   securitySchemes:
     BearerAuth:
@@ -762,6 +902,13 @@ components:
           type: string
         engines:
           type: object
+        capabilities:
+          type: object
+          properties:
+            tesseract: {type: boolean}
+            kicad_cli: {type: boolean}
+            firmware_builds: {type: boolean}
+            fusion_worker: {type: boolean}
     ChatInput:
       type: object
       required: [content]
@@ -1386,6 +1533,47 @@ components:
           items: {type: object}
         kicad_version: {type: [string, "null"]}
         error: {type: [string, "null"]}
+    PaperToCodeRequest:
+      type: object
+      required: [paper_text]
+      properties:
+        paper_text: {type: string, minLength: 10, maxLength: 200000}
+        equation_hint: {type: [string, "null"], maxLength: 4000}
+    WhiteboardPcbRequest:
+      type: object
+      required: [image_base64]
+      properties:
+        image_base64: {type: string, minLength: 20}
+        objective: {type: string, maxLength: 4000}
+    PipelineExecuteRequest:
+      type: object
+      required: [objective]
+      properties:
+        objective: {type: string, minLength: 3, maxLength: 4000}
+        context: {type: [object, "null"]}
+    BomFromComponentsRequest:
+      type: object
+      required: [components]
+      properties:
+        components: {type: array, items: {type: object}}
+        preferences: {type: [object, "null"]}
+    BomFromCsvRequest:
+      type: object
+      required: [csv_text]
+      properties:
+        csv_text: {type: string, minLength: 3}
+        preferences: {type: [object, "null"]}
+    ShareProjectRequest:
+      type: object
+      required: [title, manifest]
+      properties:
+        title: {type: string, minLength: 3, maxLength: 255}
+        manifest: {type: object}
+        public: {type: boolean, default: true}
+    McpToolCall:
+      type: object
+      properties:
+        arguments: {type: object}
     FusionCompleteRequest:
       type: object
       required: [token, status]

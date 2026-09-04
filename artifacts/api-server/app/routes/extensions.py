@@ -63,10 +63,15 @@ async def paper_to_code(request: PaperToCodeRequest):
 
 @router.post("/pipelines/whiteboard-to-pcb")
 async def whiteboard_to_pcb(request: WhiteboardPcbRequest):
+    raw = request.image_base64.strip()
+    if raw.startswith("data:") and not raw.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="image_base64 must be data:image/* base64")
     try:
-        image_data = base64.b64decode(request.image_base64.split(",", 1)[-1], validate=False)
+        image_data = base64.b64decode(raw.split(",", 1)[-1], validate=True)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid image_base64: {exc}") from exc
+    if len(image_data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large (max 10MB)")
     return await _whiteboard.run(image_data, request.objective)
 
 

@@ -6,7 +6,7 @@ import os
 from fastapi import HTTPException, Request
 
 
-_PUBLIC_PATHS = {"/api/healthz", "/api/readyz", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/auth/register", "/api/auth/login"}
+_PUBLIC_PATHS = {"/", "/api/healthz", "/api/readyz", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/auth/register", "/api/auth/login"}
 
 
 def configured_api_key() -> str | None:

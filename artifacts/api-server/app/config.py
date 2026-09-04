@@ -4,11 +4,11 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     """Application settings loaded from environment."""
-    database_url: str = "sqlite+aiosqlite:///./trinity.db"
+    database_url: str = "sqlite+aiosqlite:///./data/trinity.db"
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
     google_api_key: str | None = None
-    artifact_dir: str = "./trinity_artifacts"
+    artifact_dir: str = "./artifacts"
     disable_docs: bool = False
     auth_secret: str = ""
     api_key: str = ""

@@ -53,9 +53,11 @@ attached_assets/
 .env.local
 .env.*.local
 
-# SQLite databases
+# SQLite databases — canonical location is data/trinity.db (see TRINITY_DATABASE_URL)
 *.db
 *.sqlite
+data/
+artifacts/
 
 # Generated Trinity design artifacts
 trinity_artifacts/

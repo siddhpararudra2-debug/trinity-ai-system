@@ -5,10 +5,12 @@
  * Trinity AI Engineering OS API
  * OpenAPI spec version: 0.1.0
  */
+import type { HealthStatusCapabilities } from './healthStatusCapabilities';
 import type { HealthStatusEngines } from './healthStatusEngines';
 
 export interface HealthStatus {
   status: string;
   db?: string;
   engines?: HealthStatusEngines;
+  capabilities?: HealthStatusCapabilities;
 }

@@ -95,12 +95,13 @@ async def request_observability_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
+    from fastapi import HTTPException
     try:
         require_api_key_for_request(request)
-    except Exception as exc:
-        status_code = getattr(exc, "status_code", 401)
-        detail = getattr(exc, "detail", "A valid Trinity API key is required")
-        return JSONResponse(status_code=status_code, content={"detail": detail})
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    except Exception:
+        return JSONResponse(status_code=500, content={"detail": "Internal authentication error"})
     return await call_next(request)
 
 API = "/api"

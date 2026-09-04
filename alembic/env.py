@@ -22,7 +22,13 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-db_url = os.getenv("TRINITY_DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+# Prefer TRINITY_DATABASE_URL env, fallback to config/database default
+try:
+    from app.config import get_settings
+    _default_url = get_settings().database_url
+except Exception:
+    _default_url = config.get_main_option("sqlalchemy.url")
+db_url = os.getenv("TRINITY_DATABASE_URL", _default_url)
 config.set_main_option("sqlalchemy.url", db_url)
 
 

@@ -45,10 +45,18 @@ export interface AuthResponse {
 
 export type HealthStatusEngines = { [key: string]: unknown };
 
+export type HealthStatusCapabilities = {
+  tesseract?: boolean;
+  kicad_cli?: boolean;
+  firmware_builds?: boolean;
+  fusion_worker?: boolean;
+};
+
 export interface HealthStatus {
   status: string;
   db?: string;
   engines?: HealthStatusEngines;
+  capabilities?: HealthStatusCapabilities;
 }
 
 export interface ChatInput {
@@ -610,6 +618,84 @@ export interface KicadCompleteRequest {
   error?: string | null;
 }
 
+export interface PaperToCodeRequest {
+  /**
+     * @minLength 10
+     * @maxLength 200000
+     */
+  paper_text: string;
+  /**
+     * @maxLength 4000
+     * @nullable
+     */
+  equation_hint?: string | null;
+}
+
+export interface WhiteboardPcbRequest {
+  /** @minLength 20 */
+  image_base64: string;
+  /** @maxLength 4000 */
+  objective?: string;
+}
+
+/**
+ * @nullable
+ */
+export type PipelineExecuteRequestContext = { [key: string]: unknown } | null;
+
+export interface PipelineExecuteRequest {
+  /**
+     * @minLength 3
+     * @maxLength 4000
+     */
+  objective: string;
+  /** @nullable */
+  context?: PipelineExecuteRequestContext;
+}
+
+export type BomFromComponentsRequestComponentsItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type BomFromComponentsRequestPreferences = { [key: string]: unknown } | null;
+
+export interface BomFromComponentsRequest {
+  components: BomFromComponentsRequestComponentsItem[];
+  /** @nullable */
+  preferences?: BomFromComponentsRequestPreferences;
+}
+
+/**
+ * @nullable
+ */
+export type BomFromCsvRequestPreferences = { [key: string]: unknown } | null;
+
+export interface BomFromCsvRequest {
+  /** @minLength 3 */
+  csv_text: string;
+  /** @nullable */
+  preferences?: BomFromCsvRequestPreferences;
+}
+
+export type ShareProjectRequestManifest = { [key: string]: unknown };
+
+export interface ShareProjectRequest {
+  /**
+     * @minLength 3
+     * @maxLength 255
+     */
+  title: string;
+  manifest: ShareProjectRequestManifest;
+  public?: boolean;
+}
+
+export type McpToolCallArguments = { [key: string]: unknown };
+
+export interface McpToolCall {
+  arguments?: McpToolCallArguments;
+}
+
 export type FusionCompleteRequestChecksItem = { [key: string]: unknown };
 
 export interface FusionCompleteRequest {
@@ -645,5 +731,9 @@ export type UploadFusionArtifactBody = {
   file: Blob;
   token: string;
   kind?: string;
+};
+
+export type PcbSvgPreviewParams = {
+job_id?: string;
 };
 

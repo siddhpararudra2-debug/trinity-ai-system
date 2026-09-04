@@ -20,7 +20,7 @@ export function StlViewer({ url, label = 'CAD Preview' }: Props) {
     (async () => {
       try {
         const THREE = await import('three');
-        const { STLLoader } = await import('three/examples/jsm/loaders/STLLoader.js');
+        const { STLLoader } = await import('three/addons/loaders/STLLoader.js');
         const container = mountRef.current!;
         const width = container.clientWidth || 420;
         const height = 280;
@@ -37,9 +37,20 @@ export function StlViewer({ url, label = 'CAD Preview' }: Props) {
         scene.add(light);
         scene.add(new THREE.AmbientLight(0x404040, 0.8));
         const loader = new STLLoader();
+        // Fetch with auth then load from blob URL (protected artifacts need Bearer header)
+        const headers: Record<string, string> = {};
+        try {
+          const t = typeof window !== "undefined" ? window.localStorage.getItem("trinity_access_token") : null;
+          if (t) headers["Authorization"] = `Bearer ${t}`;
+        } catch {}
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`STL fetch failed: ${res.status} ${res.statusText}`);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
         loader.load(
-          url,
+          blobUrl,
           (geometry) => {
+            URL.revokeObjectURL(blobUrl);
             if (disposed) return;
             geometry.computeBoundingBox();
             const mesh = new THREE.Mesh(
@@ -58,7 +69,10 @@ export function StlViewer({ url, label = 'CAD Preview' }: Props) {
             setReady(true);
           },
           undefined,
-          (err) => setError(String(err)),
+          (err) => {
+            URL.revokeObjectURL(blobUrl);
+            setError(String(err));
+          },
         );
       } catch (err) {
         setError(String(err));
@@ -83,7 +97,8 @@ export function StlViewer({ url, label = 'CAD Preview' }: Props) {
   return (
     <div className="overflow-hidden rounded border border-white/10 bg-[#0b1220]">
       <div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-widest text-primary">
-        {label} {ready ? '· LIVE' : '· LOADING'}
+        {label} {ready ? '· PREVIEW' : '· LOADING'}
+        <span className="ml-2 normal-case text-muted-foreground">Static preview — not validated for manufacture</span>
       </div>
       {error && <div className="p-3 text-xs text-red-400">{error}</div>}
       <div ref={mountRef} className="h-[280px] w-full" />

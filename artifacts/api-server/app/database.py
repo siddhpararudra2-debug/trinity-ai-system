@@ -10,9 +10,10 @@ from sqlalchemy import inspect, select, text
 
 from app.config import get_settings
 
-settings = get_settings()
+def _get_engine():
+    return create_async_engine(get_settings().database_url, echo=False)
 
-engine = create_async_engine(settings.database_url, echo=False)
+engine = _get_engine()
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
