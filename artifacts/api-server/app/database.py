@@ -11,7 +11,15 @@ from sqlalchemy import inspect, select, text
 from app.config import get_settings
 
 def _get_engine():
-    return create_async_engine(get_settings().database_url, echo=False)
+    db_url = get_settings().database_url
+    if db_url and "sqlite" in db_url and ":///" in db_url:
+        db_file_path = db_url.split(":///", 1)[-1]
+        if db_file_path and db_file_path != ":memory:":
+            db_dir = os.path.dirname(os.path.abspath(db_file_path))
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+    return create_async_engine(db_url, echo=False)
+
 
 engine = _get_engine()
 AsyncSessionLocal = async_sessionmaker(

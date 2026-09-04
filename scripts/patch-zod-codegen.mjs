@@ -15,3 +15,11 @@ source = source.replace(/\s+$/u, '\n');
 fs.writeFileSync(generated, source);
 const indexPath = path.join(root, 'lib', 'api-zod', 'src', 'index.ts');
 fs.writeFileSync(indexPath, `export * from './generated/api';\nexport type {\n  RunVisionOcrBody as RunVisionOcrBodyType,\n  UploadFusionArtifactBody as UploadFusionArtifactBodyType,\n  UploadKicadArtifactBody as UploadKicadArtifactBodyType,\n} from './generated/types';\n`);
+
+const apiClientIndexPath = path.join(root, 'lib', 'api-client-react', 'src', 'index.ts');
+const apiClientCanonical = `export * from "./generated/api";\nexport * from "./generated/api.schemas";\nexport { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";\nexport type { AuthTokenGetter } from "./custom-fetch";\n`;
+if (fs.readFileSync(apiClientIndexPath, 'utf8') !== apiClientCanonical) {
+  fs.writeFileSync(apiClientIndexPath, apiClientCanonical);
+}
+
+

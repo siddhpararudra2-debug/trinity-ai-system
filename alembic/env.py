@@ -31,6 +31,14 @@ except Exception:
 db_url = os.getenv("TRINITY_DATABASE_URL", _default_url)
 config.set_main_option("sqlalchemy.url", db_url)
 
+if db_url and "sqlite" in db_url and ":///" in db_url:
+    db_file_path = db_url.split(":///", 1)[-1]
+    if db_file_path and db_file_path != ":memory:":
+        db_dir = os.path.dirname(os.path.abspath(db_file_path))
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

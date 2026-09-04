@@ -8,9 +8,8 @@ WORKDIR /srv
 COPY requirements.txt /srv/requirements.txt
 RUN pip install --no-cache-dir -r /srv/requirements.txt
 COPY app /srv/app
-COPY alembic.ini /srv/alembic.ini
-COPY alembic /srv/alembic
 RUN mkdir -p /srv/data /srv/artifacts && useradd -r app && chown -R app:app /srv/data /srv/artifacts
+
 USER app
 HEALTHCHECK --interval=10s --timeout=5s --retries=10 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/healthz')"
 EXPOSE 8000

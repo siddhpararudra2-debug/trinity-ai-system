@@ -60,8 +60,10 @@ jobs:
 
       - name: Test Alembic database migrations
         run: |
+          mkdir -p data
           uv run alembic upgrade head
           uv run alembic check
+
 
       - name: Upload test results
         if: always()
