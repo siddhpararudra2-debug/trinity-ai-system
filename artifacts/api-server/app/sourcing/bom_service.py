@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 
@@ -81,7 +81,7 @@ class BomSourcingService:
                     "unit_price_usd": unit_price,
                     "extended_price_usd": round(unit_price * qty, 3),
                     "stock": (hash(sku) % 9000) + 100,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
         return {"quotes": quotes, "preferred": preferred[0] if preferred else None}

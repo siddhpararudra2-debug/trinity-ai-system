@@ -91,7 +91,7 @@ async def upload_fusion_artifact(
     try:
         worker_id = verify_worker_token(token, job_id, script.sha256)
     except FusionAuthError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     filename = os.path.basename(file.filename or "fusion_export.bin")
     data = await file.read(_MAX_EXPORT_BYTES + 1)
     if len(data) > _MAX_EXPORT_BYTES:
@@ -114,7 +114,7 @@ async def complete_fusion_job(job_id: str, request: FusionCompleteRequest, worke
     try:
         worker_id = verify_worker_token(request.token, job_id, script.sha256)
     except FusionAuthError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     checks = []
     for raw in request.checks:
         raw_status = raw.get("status", "warning")

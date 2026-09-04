@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from sqlalchemy import select
@@ -50,7 +50,7 @@ class ProjectSharingService:
         manifest = json.loads(source.manifest_json)
         manifest["provenance"] = {
             "forked_from": source.id,
-            "forked_at": datetime.now(timezone.utc).isoformat(),
+            "forked_at": datetime.now(UTC).isoformat(),
             "source_title": source.title,
         }
         fork = SharedProject(

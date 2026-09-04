@@ -31,7 +31,7 @@ async def run_once(worker_id: str) -> dict | None:
                 run = result.scalar_one_or_none()
                 try:
                     plan = plan_from_payload(payload.get("plan") or {})
-                    execution = await PipelineExecutor().execute_plan(
+                    await PipelineExecutor().execute_plan(
                         plan,
                         owner_id=job.owner_id,
                         context=payload.get("context"),

@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class FourBarMechanism:
@@ -15,11 +14,11 @@ class FourBarMechanism:
 
     def check_grashof(self):
         links = sorted([self.a, self.b, self.c, self.d])
-        s, p, q, l = links
-        if s + l <= p + q:
-            print(f"Grashof condition satisfied (s+l={s+l:.3f} <= p+q={p+q:.3f}) -> Mechanism is Grashof.")
+        s, p, q, l_link = links
+        if s + l_link <= p + q:
+            print(f"Grashof condition satisfied (s+l={s+l_link:.3f} <= p+q={p+q:.3f}) -> Mechanism is Grashof.")
         else:
-            print(f"Grashof condition NOT satisfied (s+l={s+l:.3f} > p+q={p+q:.3f}) -> Non-Grashof (limited rocking).")
+            print(f"Grashof condition NOT satisfied (s+l={s+l_link:.3f} > p+q={p+q:.3f}) -> Non-Grashof (limited rocking).")
 
     def position_analysis(self, theta):
         a, b, c, d = self.a, self.b, self.c, self.d
@@ -32,12 +31,12 @@ class FourBarMechanism:
 
         disc = B**2 - 4 * A * C
         if disc < 0:
-            return None, None 
+            return None, None
 
         sqrt_disc = np.sqrt(disc)
 
         phi1 = 2 * np.arctan2(-B + sqrt_disc, 2 * A)
-        phi2 = 2 * np.arctan2(-B - sqrt_disc, 2 * A)
+        2 * np.arctan2(-B - sqrt_disc, 2 * A)
 
         phi = phi1
 

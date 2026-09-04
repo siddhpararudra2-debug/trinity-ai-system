@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class FirmwareStatus(str, Enum):
+class FirmwareStatus(StrEnum):
     generated = "generated"
     needs_input = "needs_input"
     needs_review = "needs_review"
     failed = "failed"
 
 
-class TargetKind(str, Enum):
+class TargetKind(StrEnum):
     mcu = "mcu"
     flight_controller = "flight_controller"
     fpga = "fpga"

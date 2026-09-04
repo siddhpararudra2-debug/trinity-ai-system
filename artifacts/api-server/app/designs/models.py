@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, PositiveFloat, field_validator
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     queued = "queued"
     parsing = "parsing"
     generating = "generating"
@@ -19,7 +19,7 @@ class JobStatus(str, Enum):
     failed = "failed"
 
 
-class ValidationStatus(str, Enum):
+class ValidationStatus(StrEnum):
     passed = "passed"
     warnings = "warnings"
     failed = "failed"

@@ -215,7 +215,7 @@ class TrinityOrchestrator:
             return {"content": self._fmt_vision(result), "engine": "vision", "data": result}
 
         if engine_id == "general_ai":
-            result = await self._general.process(query, history=history)
+            result = await self._general.process(query, history=[])
             return {"content": result.get("content", ""), "engine": "general_ai", "data": result}
 
         if engine_id == "paper_to_code":

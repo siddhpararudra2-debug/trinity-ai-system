@@ -1,7 +1,7 @@
 """initial_schema_with_jwt_auth
 
 Revision ID: 7cc619171d8e
-Revises: 
+Revises:
 Create Date: 2026-08-28 18:01:48.524486
 
 """

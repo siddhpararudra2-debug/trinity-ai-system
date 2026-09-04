@@ -33,8 +33,8 @@ def verify_worker_token(token: str, job_id: str, script_sha256: str) -> str:
     try:
         worker_id, expiry_text, signature = token.split(".", 2)
         expires_at = int(expiry_text)
-    except (ValueError, TypeError):
-        raise FusionAuthError("Malformed Fusion worker token")
+    except (ValueError, TypeError) as err:
+        raise FusionAuthError("Malformed Fusion worker token") from err
     if expires_at < int(time.time()):
         raise FusionAuthError("Fusion worker token has expired")
     message = f"{job_id}|{worker_id}|{script_sha256}|{expires_at}"

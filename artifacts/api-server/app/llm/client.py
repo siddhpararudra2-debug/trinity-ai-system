@@ -21,7 +21,7 @@ class TrinityLLMConfig:
     timeout_seconds: float
 
     @classmethod
-    def from_env(cls) -> "TrinityLLMConfig":
+    def from_env(cls) -> TrinityLLMConfig:
         settings = get_settings()
         api_key = (settings.openai_api_key or os.getenv("OPENAI_API_KEY") or "").strip()
         return cls(
