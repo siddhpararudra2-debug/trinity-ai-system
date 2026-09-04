@@ -1,4 +1,4 @@
-FROM node:22-slim AS build
+FROM node:26-slim AS build
 WORKDIR /workspace
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
@@ -16,7 +16,7 @@ COPY scripts scripts
 ENV PORT=5173 BASE_PATH=/ NODE_ENV=production
 RUN pnpm --filter @workspace/trinity run build
 
-FROM nginx:1.29-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/artifacts/trinity/dist/public /usr/share/nginx/html
 EXPOSE 80
