@@ -7,6 +7,8 @@ import { TextMessage } from './messages/TextMessage';
 import { VisionMessage } from './messages/VisionMessage';
 import { WorkflowMessage } from './messages/WorkflowMessage';
 import { FirmwareMessage } from './messages/FirmwareMessage';
+import { PaperToCodeMessage } from './messages/PaperToCodeMessage';
+import { BomSourcingMessage } from './messages/BomSourcingMessage';
 
 export function MessageBubble({ message }: { message: any }) {
   const isUser = message.role === 'user';
@@ -37,6 +39,8 @@ export function MessageBubble({ message }: { message: any }) {
 function MessageContent({ message }: { message: any }) {
   if (!message.data) return <TextMessage content={message.content} />;
   if (message.data.workflow) return <WorkflowMessage data={message.data} />;
+  if (message.engine === 'paper_to_code' || message.data.engine === 'paper_to_code' || message.data.blocks) return <PaperToCodeMessage data={message.data} />;
+  if (message.engine === 'bom_sourcing' || message.data.engine === 'bom_sourcing' || message.data.lines) return <BomSourcingMessage data={message.data} />;
   if (message.engine === 'firmware' || message.data.engine === 'firmware' || message.data.rendering_hint === 'firmware-code') return <FirmwareMessage data={message.data.job || message.data} />;
   if (message.data.recognized_text || message.data.ocr_backend || message.data.status === 'awaiting_image') return <VisionMessage data={message.data} />;
   

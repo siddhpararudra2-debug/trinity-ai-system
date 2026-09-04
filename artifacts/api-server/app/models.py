@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models for Trinity conversations and messages."""
 import json
 from datetime import datetime
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, func
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -69,6 +69,22 @@ class WorkflowRun(Base):
     queue_job_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SharedProject(Base):
+    __tablename__ = "shared_projects"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    share_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    manifest_json: Mapped[str] = mapped_column(Text)
+    public: Mapped[bool] = mapped_column(Boolean, default=True)
+    forked_from_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Message(Base):

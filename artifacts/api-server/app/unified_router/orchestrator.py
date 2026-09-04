@@ -14,6 +14,7 @@ from app.engines.maker_cad import MakerCadEngine
 from app.engines.maker_pcb import MakerPcbEngine
 from app.engines.literature_engine import LiteratureEngine
 from app.engines.vision_engine import VisionEngine
+from app.engines.general_ai import GeneralAIEngine
 from app.designs.jobs import DesignJobService
 from app.designs.models import CadDesignRequest, PcbDesignRequest
 from app.firmware.jobs import FirmwareJobService
@@ -27,7 +28,8 @@ from app.workflows import build_workflow_plan, plan_to_dict
 # ---------------------------------------------------------------------------
 ENGINE_IDS = {
     "firmware", "maker_pcb", "maker_cad", "quantum", "math",
-    "literature", "vision", "collab", "orchestrator",
+    "literature", "vision", "collab", "general_ai", "paper_to_code",
+    "whiteboard_pcb", "orchestrator",
 }
 
 ROUTING_RULES: list[tuple[str, list[str], int]] = [
@@ -72,6 +74,14 @@ ROUTING_RULES: list[tuple[str, list[str], int]] = [
         r"\b(image[\s_]+to[\s_]+latex|latex[\s_]+from[\s_]+image|extract[\s_]+latex)\b",
         r"\b(pdf[\s_]+export|export[\s_]+to[\s_]+pdf|generate[\s_]+pdf)\b",
     ], 6),
+    ("whiteboard_pcb", [
+        r"\b(whiteboard|hand[\s-]?drawn|sketch)\b.*\b(circuit|schematic|pcb)\b",
+        r"\b(diagram[\s-]?to[\s-]?pcb|sketch[\s-]?to[\s-]?kicad)\b",
+    ], 11),
+    ("paper_to_code", [
+        r"\b(paper[\s-]?to[\s-]?code|equation[\s-]?to[\s-]?code|formula[\s-]?to[\s-]?python)\b",
+        r"\b(extract|convert)\b.*\b(equation|formula)\b.*\b(code|sympy|python)\b",
+    ], 10),
     ("collab", [
         r"\b(collaborat|share[\s_]+notebook|real[\s_-]?time[\s_]+edit|multi[\s_-]?user)\b",
     ], 5),
@@ -91,6 +101,7 @@ class TrinityOrchestrator:
         self._pcb = MakerPcbEngine()
         self._literature = LiteratureEngine()
         self._vision = VisionEngine()
+        self._general = GeneralAIEngine()
         self._designs = DesignJobService()
         self._firmware = FirmwareJobService()
 
@@ -135,6 +146,9 @@ class TrinityOrchestrator:
                 "data": {"workflow": plan_to_dict(plan)},
             }
         engine_id = self._detect(query)
+        if engine_id == "orchestrator":
+            result = await self._general.process(query, history=self._normalize_history(history))
+            return {"content": result.get("content", self._help_message()), "engine": "general_ai", "data": result}
 
         try:
             return await self._dispatch(engine_id, query, owner_id=owner_id, conversation_key=conversation_key)
@@ -199,6 +213,22 @@ class TrinityOrchestrator:
         if engine_id == "vision":
             result = await self._vision.process(query)
             return {"content": self._fmt_vision(result), "engine": "vision", "data": result}
+
+        if engine_id == "general_ai":
+            result = await self._general.process(query, history=history)
+            return {"content": result.get("content", ""), "engine": "general_ai", "data": result}
+
+        if engine_id == "paper_to_code":
+            from app.pipelines.paper_to_code import PaperToCodePipeline
+            result = await PaperToCodePipeline().run(query)
+            return {"content": self._fmt_paper_to_code(result), "engine": "paper_to_code", "data": result}
+
+        if engine_id == "whiteboard_pcb":
+            return {
+                "content": "**Trinity Whiteboard-to-PCB** — Upload a circuit diagram image via `POST /api/pipelines/whiteboard-to-pcb` or attach an image in chat with vision routing enabled.",
+                "engine": "whiteboard_pcb",
+                "data": {"status": "awaiting_image", "endpoint": "/api/pipelines/whiteboard-to-pcb"},
+            }
 
         if engine_id == "collab":
             return {
@@ -343,6 +373,34 @@ class TrinityOrchestrator:
         if r.get("latex"):
             return f"**Trinity Vision Engine** 👁\n\n**Extracted LaTeX:**\n```latex\n{r['latex']}\n```"
         return f"**Trinity Vision Engine** 👁\n\n{r.get('message', 'Ready.')}"
+
+    def _normalize_history(self, history: list | None) -> list[dict[str, str]] | None:
+        if not history:
+            return None
+        normalized: list[dict[str, str]] = []
+        for item in history:
+            if isinstance(item, dict):
+                role = str(item.get("role", ""))
+                content = str(item.get("content", ""))
+            else:
+                role = str(getattr(item, "role", ""))
+                content = str(getattr(item, "content", ""))
+            if role and content:
+                normalized.append({"role": role, "content": content})
+        return normalized or None
+
+    def _fmt_paper_to_code(self, r: dict) -> str:
+        lines = ["**Trinity Paper-to-Code** 📄→🐍"]
+        if r.get("status") == "no_equations_found":
+            lines.append("\nNo equations were detected in the supplied text.")
+            return "\n".join(lines)
+        for block in r.get("blocks", [])[:5]:
+            lines.append(f"\n**Block {block['index']}:** `{block['source_expression']}`")
+            if block.get("latex"):
+                lines.append(f"LaTeX: `{block['latex']}`")
+            if block.get("result"):
+                lines.append(f"Result: `{block['result']}`")
+        return "\n".join(lines)
 
     def _help_message(self) -> str:
         return """\

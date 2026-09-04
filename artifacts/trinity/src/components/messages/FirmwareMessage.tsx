@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Clipboard, Download, FileArchive, Maximize2, Minimize2 } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/auth';
+import { WebSerialFlasher } from '@/components/preview/WebSerialFlasher';
 
 type FirmwareFile = { path: string; content: string; language?: string };
 type FirmwareArtifact = { id: string; filename: string; download_url: string; kind?: string; size_bytes?: number };
@@ -83,5 +84,6 @@ export function FirmwareMessage({ data }: { data: FirmwareJob }) {
     {data.resource_estimate && <section className="grid gap-3 rounded border border-white/10 bg-black/20 p-3 sm:grid-cols-3"><ResourceBar label="Flash" value={`${data.resource_estimate.flash_bytes} B`} percent={data.resource_estimate.flash_percent} /><ResourceBar label="RAM" value={`${data.resource_estimate.ram_bytes} B`} percent={data.resource_estimate.ram_percent} /><ResourceBar label="CPU" value={`${data.resource_estimate.cpu_percent}%`} percent={data.resource_estimate.cpu_percent} /></section>}
     {data.dependencies && data.dependencies.length > 0 && <section className="rounded border border-white/10 p-3"><div className="mb-2 text-[10px] uppercase tracking-widest text-primary">DEPENDENCIES</div>{data.dependencies.map((dependency) => <div key={dependency.name} className="flex gap-2 text-xs"><span className={dependency.verified ? 'text-emerald-400' : 'text-amber-400'}>{dependency.verified ? 'VERIFIED' : 'REVIEW'}</span><span>{dependency.name}</span><span className="text-muted-foreground">— {dependency.reason}</span></div>)}</section>}
     {findings.length > 0 && <details open className="rounded border border-amber-500/40 bg-amber-500/5 p-3"><summary className="cursor-pointer text-xs uppercase tracking-widest text-amber-300">VALIDATION AND SECURITY FINDINGS ({findings.length})</summary><div className="mt-2 space-y-2">{findings.map((finding: any, index) => <div key={`${finding.name || finding.rule}-${index}`} className="text-xs text-muted-foreground"><span className="mr-2 text-amber-300">[{finding.severity || finding.status || 'warning'}]</span>{finding.line ? `line ${finding.line}: ` : ''}{finding.message}{finding.remediation ? <span className="block pl-4 text-foreground/70">Fix: {finding.remediation}</span> : null}</div>)}</div></details>}
+    <WebSerialFlasher firmwareUrl={archive?.download_url} filename={archive?.filename || 'firmware.bin'} />
   </div>;
 }

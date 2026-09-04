@@ -1,5 +1,7 @@
 import React from 'react';
 import { getAuthHeaders } from '@/lib/auth';
+import { PcbSvgPreview } from '@/components/preview/PcbSvgPreview';
+import { StlViewer } from '@/components/preview/StlViewer';
 
 type Artifact = {
   id: string;
@@ -19,6 +21,20 @@ function formatBytes(value: number) {
 export function MakerMessage({ data }: { data: any }) {
   const job = data?.job_id ? data : data?.job;
   const artifacts: Artifact[] = job?.artifacts || [];
+
+  const handleArtifactDownload = async (artifact: Artifact) => {
+    const response = await fetch(artifact.download_url, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = artifact.filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   if (job) {
     const checks = job.validation?.checks || [];
@@ -53,6 +69,13 @@ export function MakerMessage({ data }: { data: any }) {
             ))}
           </div>
         )}
+        {job.engine === 'maker_pcb' && <PcbSvgPreview jobId={job.job_id} />}
+        {job.engine === 'maker_cad' && (
+          <StlViewer
+            url={artifacts.find((artifact) => artifact.filename.toLowerCase().endsWith('.stl'))?.download_url}
+            label="CAD STL Preview"
+          />
+        )}
         {checks.filter((check: any) => check.status !== 'passed').length > 0 && (
           <div className="border border-border rounded p-3">
             <div className="text-xs text-accent uppercase tracking-widest mb-2">VALIDATION NOTES</div>
@@ -70,20 +93,6 @@ export function MakerMessage({ data }: { data: any }) {
     data?.sch_content ? { filename: `${data.filename || 'trinity_board'}.kicad_sch`, content: data.sch_content } : null,
     data?.pcb_content ? { filename: `${data.filename || 'trinity_board'}.kicad_pcb`, content: data.pcb_content } : null,
   ].filter(Boolean) as { filename: string; content: string }[];
-
-  const handleArtifactDownload = async (artifact: Artifact) => {
-    const response = await fetch(artifact.download_url, { headers: getAuthHeaders() });
-    if (!response.ok) throw new Error(`Download failed (${response.status})`);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = artifact.filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  };
 
   const handleDownload = (artifact: { filename: string; content: string }) => {
     const blob = new Blob([artifact.content], { type: 'text/plain' });

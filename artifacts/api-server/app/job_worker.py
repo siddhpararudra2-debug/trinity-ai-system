@@ -1,9 +1,4 @@
-"""Small database-backed worker for durable jobs.
-
-The worker intentionally handles only bookkeeping/no-op tasks in this repository. CAD,
-PCB, Fusion, firmware, and hardware actions remain explicit integrations requiring
-validated worker hosts and approval rather than being silently executed here.
-"""
+"""Small database-backed worker for durable jobs."""
 from __future__ import annotations
 
 import argparse
@@ -14,6 +9,7 @@ import os
 from app.database import AsyncSessionLocal, init_db
 from app.job_queue import claim, complete
 from app.models import WorkflowRun
+from app.pipeline.executor import PipelineExecutor, plan_from_payload
 
 UNSUPPORTED_AUTOMATION = {"cad", "pcb", "fusion", "kicad", "firmware", "ocr"}
 
@@ -24,19 +20,31 @@ async def run_once(worker_id: str) -> dict | None:
         if job is None:
             return None
         if job.kind == "workflow":
-            payload = job.payload_json
-            approved = '"approved": true' in payload.lower()
+            payload = json.loads(job.payload_json)
+            approved = payload.get("approved") is True
             if not approved:
                 updated = await complete(db, job.id, worker_id, False, "Workflow approval is required before execution")
             else:
                 from sqlalchemy import select
-                run_id = json.loads(payload).get("run_id")
+                run_id = payload.get("run_id")
                 result = await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))
                 run = result.scalar_one_or_none()
-                if run is not None:
-                    run.status = "awaiting_external_worker"
-                    await db.commit()
-                updated = await complete(db, job.id, worker_id, True)
+                try:
+                    plan = plan_from_payload(payload.get("plan") or {})
+                    execution = await PipelineExecutor().execute_plan(
+                        plan,
+                        owner_id=job.owner_id,
+                        context=payload.get("context"),
+                    )
+                    if run is not None:
+                        run.status = "completed"
+                        await db.commit()
+                    updated = await complete(db, job.id, worker_id, True)
+                except Exception as exc:
+                    if run is not None:
+                        run.status = "failed"
+                        await db.commit()
+                    updated = await complete(db, job.id, worker_id, False, str(exc))
         elif job.kind in UNSUPPORTED_AUTOMATION:
             message = (
                 f"No executable handler is installed for '{job.kind}'. "

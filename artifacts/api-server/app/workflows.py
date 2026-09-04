@@ -30,11 +30,13 @@ def build_workflow_plan(query: str) -> WorkflowPlan:
     matches: list[tuple[str, str, int]] = []
     patterns = [
         ("literature", r"\b(paper|papers|research|arxiv|literature)\b", 1, "Find and summarize relevant research."),
-        ("math", r"\b(solve|integrate|differentiate|equation|calculate|symbolic)\b", 2, "Compute or simplify the mathematical request."),
-        ("maker_cad", r"\b(cad|bracket|housing|gear|shaft|3d model|fusion)\b", 3, "Generate and validate the CAD design."),
-        ("maker_pcb", r"\b(pcb|schematic|kicad|circuit board|gerber|bom)\b", 4, "Generate and validate the PCB project."),
-        ("firmware", r"\b(firmware|embedded|microcontroller|mcu|esp32|stm32|rp2040|arduino|px4|ardupilot|betaflight|inav)\b", 5, "Generate a target-specific firmware project."),
-        ("vision", r"\b(image|photo|ocr|handwritten|latex from)\b", 6, "Extract visual text or mathematical notation."),
+        ("paper_to_code", r"\b(equation|formula|paper).*\b(code|sympy|python)\b", 2, "Extract formulas and emit runnable SymPy blocks."),
+        ("math", r"\b(solve|integrate|differentiate|equation|calculate|symbolic)\b", 3, "Compute or simplify the mathematical request."),
+        ("whiteboard_pcb", r"\b(whiteboard|sketch|hand[\s-]?drawn).*\b(circuit|pcb|schematic)\b", 4, "Convert diagram image into PCB intent."),
+        ("maker_cad", r"\b(cad|bracket|housing|gear|shaft|3d model|fusion)\b", 5, "Generate and validate the CAD design."),
+        ("maker_pcb", r"\b(pcb|schematic|kicad|circuit board|gerber|bom)\b", 6, "Generate and validate the PCB project."),
+        ("firmware", r"\b(firmware|embedded|microcontroller|mcu|esp32|stm32|rp2040|arduino|px4|ardupilot|betaflight|inav)\b", 7, "Generate a target-specific firmware project."),
+        ("vision", r"\b(image|photo|ocr|handwritten|latex from)\b", 8, "Extract visual text or mathematical notation."),
     ]
     for engine, pattern, order, objective in patterns:
         if re.search(pattern, lower):

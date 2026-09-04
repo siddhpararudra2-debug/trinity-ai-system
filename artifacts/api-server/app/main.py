@@ -28,6 +28,8 @@ from app.routes.fusion import router as fusion_router
 from app.routes.kicad import router as kicad_router
 from app.routes.workflows import router as workflows_router
 from app.routes.jobs import router as jobs_router
+from app.routes.extensions import router as extensions_router
+from app.routes.mcp import router as mcp_router
 from app.observability import logger, metrics
 from app.security import require_api_key_for_request
 from app.auth import validate_auth_configuration
@@ -116,6 +118,8 @@ app.include_router(fusion_router, prefix=API)
 app.include_router(kicad_router, prefix=API)
 app.include_router(workflows_router, prefix=API)
 app.include_router(jobs_router, prefix=API)
+app.include_router(extensions_router, prefix=API)
+app.include_router(mcp_router, prefix=API)
 
 
 @app.get("/")
@@ -126,6 +130,13 @@ async def root():
         "docs": "/api/docs" if not _disable_docs else "disabled",
         "engines": [
             "math", "quantum", "maker_cad", "maker_pcb",
-            "literature", "vision", "firmware", "collab", "orchestrator",
+            "literature", "vision", "firmware", "general_ai", "collab", "orchestrator",
+            "paper_to_code", "whiteboard_pcb", "bom_sourcing", "mcp",
         ],
+        "features": {
+            "in_browser_preview": True,
+            "webserial_flashing": True,
+            "forkable_projects": True,
+            "multi_engine_pipeline": True,
+        },
     }
