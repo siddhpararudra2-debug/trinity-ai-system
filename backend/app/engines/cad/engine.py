@@ -7,6 +7,7 @@ local fallback (app.engines.cad.primitives) — swapping in CadQuery,
 FreeCAD, or the Onshape adapter means writing a new module that
 satisfies the same four methods; nothing above this layer changes.
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -60,7 +61,9 @@ class CADEngine(BaseEngine):
         unavailable_formats = [f for f in outputs if f in NOT_YET_SUPPORTED_FORMATS]
 
         work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
-        base_name = f"{part_type}_{int(ir.parameters['overall_size'])}mm_{uuid.uuid4().hex[:8]}"
+        base_name = (
+            f"{part_type}_{int(ir.parameters['overall_size'])}mm_{uuid.uuid4().hex[:8]}"
+        )
 
         if "stl" in outputs:
             stl_path = work_dir / f"{base_name}.stl"
@@ -100,12 +103,16 @@ class CADEngine(BaseEngine):
 
     # ------------------------------------------------------------ validate ---
 
-    def validate(self, mesh: Mesh, ir: QuadcopterFrameIR) -> tuple[bool, dict[str, Any]]:
+    def validate(
+        self, mesh: Mesh, ir: QuadcopterFrameIR
+    ) -> tuple[bool, dict[str, Any]]:
         return validate_quadcopter_frame(ir, mesh)
 
     # -------------------------------------------------------------- export ---
 
-    def export(self, mesh: Mesh, formats: list[str], out_dir: Path, base_name: str) -> list[Path]:
+    def export(
+        self, mesh: Mesh, formats: list[str], out_dir: Path, base_name: str
+    ) -> list[Path]:
         paths: list[Path] = []
         if "stl" in formats:
             p = out_dir / f"{base_name}.stl"

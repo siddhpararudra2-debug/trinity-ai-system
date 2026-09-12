@@ -25,7 +25,11 @@ router = APIRouter(prefix="/api")
 
 @router.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": settings.api_title, "version": settings.api_version}
+    return {
+        "status": "ok",
+        "service": settings.api_title,
+        "version": settings.api_version,
+    }
 
 
 @router.get("/engines", response_model=list[EngineCapability])
@@ -35,7 +39,9 @@ def list_engines() -> list[dict]:
 
 @router.post("/execute", response_model=ToolResponse)
 async def execute(req: ExecuteRequest) -> dict:
-    return await asyncio.to_thread(job_manager.run_sync, req.engine, req.operation, req.parameters)
+    return await asyncio.to_thread(
+        job_manager.run_sync, req.engine, req.operation, req.parameters
+    )
 
 
 @router.get("/jobs", response_model=list[JobOut])
@@ -56,12 +62,16 @@ def download_artifact(artifact_id: str) -> FileResponse:
 
 @router.post("/math/solve", response_model=ToolResponse)
 async def math_solve(req: MathSolveRequest) -> dict:
-    return await asyncio.to_thread(job_manager.run_sync, "math", "solve", req.model_dump())
+    return await asyncio.to_thread(
+        job_manager.run_sync, "math", "solve", req.model_dump()
+    )
 
 
 @router.post("/cad/generate", response_model=ToolResponse)
 async def cad_generate(req: CADGenerateRequest) -> dict:
-    return await asyncio.to_thread(job_manager.run_sync, "cad", "generate", req.model_dump())
+    return await asyncio.to_thread(
+        job_manager.run_sync, "cad", "generate", req.model_dump()
+    )
 
 
 @router.post("/requirements/execute", response_model=ToolResponse)
@@ -71,5 +81,9 @@ async def execute_requirement(req: RequirementRequest) -> dict:
         job_manager.run_sync,
         parsed["domain"],
         parsed["operation"],
-        {"type": parsed["object"], "parameters": parsed["parameters"], "outputs": ["stl", "glb", "json"]},
+        {
+            "type": parsed["object"],
+            "parameters": parsed["parameters"],
+            "outputs": ["stl", "glb", "json"],
+        },
     )

@@ -6,6 +6,7 @@ Logs are emitted as single-line JSON so they're trivially parseable by
 whatever ships later (OpenTelemetry / Prometheus / Grafana) without
 changing this module's public surface.
 """
+
 from __future__ import annotations
 
 import json

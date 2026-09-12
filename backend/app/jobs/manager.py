@@ -7,6 +7,7 @@ broker. Every job goes queued -> running -> completed|failed.
 Distributed infra (Redis/Celery) is an explicit non-goal until it's
 actually required.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,9 @@ def _now() -> str:
 
 
 class JobManager:
-    def _insert_job(self, job_id: str, engine: str, operation: str, request: dict[str, Any]) -> None:
+    def _insert_job(
+        self, job_id: str, engine: str, operation: str, request: dict[str, Any]
+    ) -> None:
         now = _now()
         with get_connection() as conn:
             conn.execute(
@@ -51,7 +54,9 @@ class JobManager:
             conn.execute(f"UPDATE jobs SET {set_clause} WHERE job_id = ?", values)
             conn.commit()
 
-    def _insert_validation(self, job_id: str, engine: str, status: str, checks: dict[str, Any]) -> None:
+    def _insert_validation(
+        self, job_id: str, engine: str, status: str, checks: dict[str, Any]
+    ) -> None:
         with get_connection() as conn:
             conn.execute(
                 """INSERT INTO validations (validation_id, job_id, engine, status, checks, created_at)
@@ -60,7 +65,9 @@ class JobManager:
             )
             conn.commit()
 
-    def run_sync(self, engine_name: str, operation: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    def run_sync(
+        self, engine_name: str, operation: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute an engine call as a tracked job and return the ToolResponse dict.
 
         Synchronous by design: V1 engine calls are fast (seconds), so a
@@ -71,24 +78,46 @@ class JobManager:
         job_id = str(uuid.uuid4())
         self._insert_job(job_id, engine_name, operation, parameters)
         self._update_job(job_id, status="running", progress=0.1)
-        log.info("job started", extra={"ctx": {"job_id": job_id, "engine": engine_name, "operation": operation}})
+        log.info(
+            "job started",
+            extra={
+                "ctx": {"job_id": job_id, "engine": engine_name, "operation": operation}
+            },
+        )
 
-        engine = registry.get(engine_name)  # raises EngineNotFoundError -> handled by caller
+        engine = registry.get(
+            engine_name
+        )  # raises EngineNotFoundError -> handled by caller
 
         # Only known pure operations are cacheable. CAD artifacts deliberately
         # are not reused because each artifact must preserve job provenance.
-        deterministic = engine_name == "math" or (engine_name == "cad" and operation == "validate")
+        deterministic = engine_name == "math" or (
+            engine_name == "cad" and operation == "validate"
+        )
         key = cache.cache_key(engine_name, operation, parameters)
         if deterministic and (cached := cache.get(key)) is not None:
-            cached = {**cached, "job_id": job_id, "result": {**cached.get("result", {}), "cache_hit": True}}
-            self._update_job(job_id, status="completed", progress=1.0, result=json.dumps(cached["result"]))
+            cached = {
+                **cached,
+                "job_id": job_id,
+                "result": {**cached.get("result", {}), "cache_hit": True},
+            }
+            self._update_job(
+                job_id,
+                status="completed",
+                progress=1.0,
+                result=json.dumps(cached["result"]),
+            )
             return cached
 
         try:
             engine_result = engine.execute(operation, parameters)
         except TrinityError as exc:
-            self._update_job(job_id, status="failed", progress=1.0, error=json.dumps(exc.to_dict()))
-            log.info("job failed", extra={"ctx": {"job_id": job_id, "error": exc.to_dict()}})
+            self._update_job(
+                job_id, status="failed", progress=1.0, error=json.dumps(exc.to_dict())
+            )
+            log.info(
+                "job failed", extra={"ctx": {"job_id": job_id, "error": exc.to_dict()}}
+            )
             return {
                 "success": False,
                 "engine": engine_name,
@@ -103,7 +132,9 @@ class JobManager:
         # Persist any files the engine wrote to scratch space.
         stored_artifacts = []
         for temp_path_str, artifact_type in engine_result.pending_artifacts:
-            ref = artifact_manager.store_file(Path(temp_path_str), artifact_type=artifact_type, job_id=job_id)
+            ref = artifact_manager.store_file(
+                Path(temp_path_str), artifact_type=artifact_type, job_id=job_id
+            )
             stored_artifacts.append(ref)
         engine_result.artifacts.extend(stored_artifacts)
 
@@ -113,7 +144,10 @@ class JobManager:
 
         if engine_result.validation is not None:
             self._insert_validation(
-                job_id, engine_name, engine_result.validation.status, engine_result.validation.checks
+                job_id,
+                engine_name,
+                engine_result.validation.status,
+                engine_result.validation.checks,
             )
 
         response = {
@@ -132,7 +166,10 @@ class JobManager:
                 for a in engine_result.artifacts
             ],
             "validation": (
-                {"status": engine_result.validation.status, "checks": engine_result.validation.checks}
+                {
+                    "status": engine_result.validation.status,
+                    "checks": engine_result.validation.checks,
+                }
                 if engine_result.validation
                 else None
             ),
@@ -148,12 +185,17 @@ class JobManager:
         )
         if deterministic and response["success"]:
             cache.put(key, engine_name, operation, response)
-        log.info("job finished", extra={"ctx": {"job_id": job_id, "success": engine_result.success}})
+        log.info(
+            "job finished",
+            extra={"ctx": {"job_id": job_id, "success": engine_result.success}},
+        )
         return response
 
     def get(self, job_id: str) -> JobOut:
         with get_connection() as conn:
-            row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
         if row is None:
             raise JobNotFoundError(f"No job with id '{job_id}'")
         return JobOut(

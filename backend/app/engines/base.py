@@ -6,6 +6,7 @@ this contract so the router / workflow engine can treat them
 interchangeably, and so a future LLM tool-caller can discover and
 invoke them uniformly (PRD §24, §31).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -59,11 +60,9 @@ class Engine(Protocol):
     version: str
     capabilities: list[str]
 
-    def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
-        ...
+    def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult: ...
 
-    def describe(self) -> dict[str, Any]:
-        ...
+    def describe(self) -> dict[str, Any]: ...
 
 
 class BaseEngine:
@@ -80,5 +79,7 @@ class BaseEngine:
             "capabilities": list(self.capabilities),
         }
 
-    def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:  # pragma: no cover
+    def execute(
+        self, operation: str, parameters: dict[str, Any]
+    ) -> EngineResult:  # pragma: no cover
         raise NotImplementedError

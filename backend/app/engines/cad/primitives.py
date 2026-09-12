@@ -9,6 +9,7 @@ bosses rather than bored holes. Swapping this module for a CadQuery or
 Onshape adapter behind the same `CADEngine.generate/validate/export`
 interface is exactly the extension point the architecture is built for.
 """
+
 from __future__ import annotations
 
 import math
@@ -45,8 +46,14 @@ def box(center: Vec3, size: Vec3, rotation_z_deg: float = 0.0) -> Mesh:
     hx, hy, hz = sx / 2, sy / 2, sz / 2
 
     local_corners = [
-        (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
-        (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz),
+        (-hx, -hy, -hz),
+        (hx, -hy, -hz),
+        (hx, hy, -hz),
+        (-hx, hy, -hz),
+        (-hx, -hy, hz),
+        (hx, -hy, hz),
+        (hx, hy, hz),
+        (-hx, hy, hz),
     ]
 
     theta = math.radians(rotation_z_deg)
@@ -75,7 +82,7 @@ def write_binary_stl(mesh: Mesh, path: str, name: bytes = b"trinity") -> None:
         header = name.ljust(80, b"\0")[:80]
         f.write(header)
         f.write(struct.pack("<I", len(mesh.triangles)))
-        for (v0, v1, v2) in mesh.triangles:
+        for v0, v1, v2 in mesh.triangles:
             ux, uy, uz = _normal(v0, v1, v2)
             f.write(struct.pack("<3f", ux, uy, uz))
             for v in (v0, v1, v2):

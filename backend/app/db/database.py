@@ -5,6 +5,7 @@ PRD section 8 is explicit: no ORM in V1, and never store large CAD/3D
 files in the database — only their metadata. This module owns the
 schema and gives every other module a plain sqlite3 connection.
 """
+
 from __future__ import annotations
 
 import sqlite3

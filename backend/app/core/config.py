@@ -5,9 +5,10 @@ Single source of truth for paths and runtime settings.
 V1 intentionally avoids env-driven complexity: everything resolves
 relative to the repo root so the system runs with zero setup.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 

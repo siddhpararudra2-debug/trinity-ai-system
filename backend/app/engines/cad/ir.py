@@ -7,6 +7,7 @@ consumes this IR and produces actual geometry. Keeping this layer
 thin is what prevents Trinity from becoming tightly coupled to one
 CAD platform (PRD §12).
 """
+
 from __future__ import annotations
 
 import math
@@ -16,12 +17,12 @@ from typing import Any
 from app.core.errors import RequestValidationError
 
 DEFAULT_QUADCOPTER_PARAMS: dict[str, float] = {
-    "overall_size": 50.0,       # mm, motor-to-motor diagonal span
+    "overall_size": 50.0,  # mm, motor-to-motor diagonal span
     "motor_count": 4,
-    "arm_width": 5.0,           # mm
-    "plate_thickness": 1.5,     # mm
+    "arm_width": 5.0,  # mm
+    "plate_thickness": 1.5,  # mm
     "motor_mount_diameter": 6.0,  # mm
-    "fc_mount_spacing": 25.0,   # mm
+    "fc_mount_spacing": 25.0,  # mm
     "center_plate_size": 26.0,  # mm, square center plate side length
 }
 
@@ -56,17 +57,29 @@ class QuadcopterFrameIR:
                 },
             )
         for key in (
-            "overall_size", "center_plate_size", "arm_width", "plate_thickness",
-            "motor_mount_diameter", "fc_mount_spacing",
+            "overall_size",
+            "center_plate_size",
+            "arm_width",
+            "plate_thickness",
+            "motor_mount_diameter",
+            "fc_mount_spacing",
         ):
             if not math.isfinite(params[key]) or params[key] <= 0:
                 raise RequestValidationError(f"{key} must be a finite positive value")
         if params["overall_size"] > 1000 or params["plate_thickness"] > 50:
-            raise RequestValidationError("Frame dimensions are outside V1's supported engineering range")
+            raise RequestValidationError(
+                "Frame dimensions are outside V1's supported engineering range"
+            )
         if params["fc_mount_spacing"] > params["center_plate_size"]:
-            raise RequestValidationError("fc_mount_spacing must fit within center_plate_size")
+            raise RequestValidationError(
+                "fc_mount_spacing must fit within center_plate_size"
+            )
 
         return cls(units="mm", parameters=params)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"type": "quadcopter_frame", "units": self.units, "parameters": self.parameters}
+        return {
+            "type": "quadcopter_frame",
+            "units": self.units,
+            "parameters": self.parameters,
+        }

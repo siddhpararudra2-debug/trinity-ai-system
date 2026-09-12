@@ -6,6 +6,7 @@ can tell the difference between "your input was bad", "the engine tried
 and failed", and "the system itself broke". This maps directly onto the
 GENERATED / VALIDATED / VERIFIED distinction in PRD section 29.
 """
+
 from __future__ import annotations
 
 

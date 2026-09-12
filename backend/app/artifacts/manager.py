@@ -5,6 +5,7 @@ Large files (STL, STEP, GLB, ...) live on the filesystem; only metadata
 (id, type, path, size, checksum) goes into SQLite. This module is the
 only thing allowed to write into storage/artifacts/.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -32,7 +33,9 @@ def _checksum(path: Path) -> str:
 
 
 class ArtifactManager:
-    def store_file(self, src_path: Path, *, artifact_type: str, job_id: str | None = None) -> ArtifactRef:
+    def store_file(
+        self, src_path: Path, *, artifact_type: str, job_id: str | None = None
+    ) -> ArtifactRef:
         """Move/copy a file produced by an engine into permanent artifact storage."""
         artifact_id = str(uuid.uuid4())
         dest_dir = settings.artifacts_dir / artifact_id
@@ -48,7 +51,15 @@ class ArtifactManager:
                 """INSERT INTO artifacts
                        (artifact_id, job_id, type, path, size_bytes, checksum, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (artifact_id, job_id, artifact_type, str(dest_path), size_bytes, checksum, _now()),
+                (
+                    artifact_id,
+                    job_id,
+                    artifact_type,
+                    str(dest_path),
+                    size_bytes,
+                    checksum,
+                    _now(),
+                ),
             )
             conn.commit()
 
@@ -78,7 +89,8 @@ class ArtifactManager:
     def list_for_job(self, job_id: str) -> list[ArtifactRef]:
         with get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM artifacts WHERE job_id = ? ORDER BY created_at", (job_id,)
+                "SELECT * FROM artifacts WHERE job_id = ? ORDER BY created_at",
+                (job_id,),
             ).fetchall()
         return [
             ArtifactRef(

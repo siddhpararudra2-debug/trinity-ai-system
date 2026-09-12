@@ -7,6 +7,7 @@ Geometry generation step of the CAD workflow (PRD §14):
 This module is the "Geometry Generation" step for the built-in
 quadcopter_frame primitive.
 """
+
 from __future__ import annotations
 
 import math
@@ -35,12 +36,22 @@ def build_quadcopter_frame(ir: QuadcopterFrameIR) -> Mesh:
         theta = math.radians(angle)
         center_r = (start_r + end_r) / 2
         arm_center = (center_r * math.cos(theta), center_r * math.sin(theta), 0.0)
-        mesh.extend(box(center=arm_center, size=(arm_length, arm_width, thickness), rotation_z_deg=angle))
+        mesh.extend(
+            box(
+                center=arm_center,
+                size=(arm_length, arm_width, thickness),
+                rotation_z_deg=angle,
+            )
+        )
 
         motor_center = (end_r * math.cos(theta), end_r * math.sin(theta), 0.0)
         boss_side = mount_d * 1.4
         mesh.extend(
-            box(center=motor_center, size=(boss_side, boss_side, thickness * 1.5), rotation_z_deg=angle)
+            box(
+                center=motor_center,
+                size=(boss_side, boss_side, thickness * 1.5),
+                rotation_z_deg=angle,
+            )
         )
 
     return mesh

@@ -6,6 +6,7 @@ at import time. This is what eventually lets an LLM tool-caller ask
 "what can Trinity do?" and get a structured answer instead of a
 hardcoded prompt.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -48,9 +49,17 @@ def bootstrap_engines() -> None:
 
     registry.register(MathEngine())
     registry.register(CADEngine())
-    registry.register(ScaffoldEngine("pcb", ["inspect", "validate", "generate", "export"]))
-    registry.register(ScaffoldEngine("firmware", ["create", "build", "test", "compile"]))
-    registry.register(ScaffoldEngine("vision", ["image_inspect", "ocr", "document_parse", "geometry_extract"]))
+    registry.register(
+        ScaffoldEngine("pcb", ["inspect", "validate", "generate", "export"])
+    )
+    registry.register(
+        ScaffoldEngine("firmware", ["create", "build", "test", "compile"])
+    )
+    registry.register(
+        ScaffoldEngine(
+            "vision", ["image_inspect", "ocr", "document_parse", "geometry_extract"]
+        )
+    )
     registry.register(ScaffoldEngine("research", ["search"]))
     registry.register(ScaffoldEngine("simulation", ["simulate"]))
     registry.register(ScaffoldEngine("robotics", ["kinematics", "trajectory_plan"]))

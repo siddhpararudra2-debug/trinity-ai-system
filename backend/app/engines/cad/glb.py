@@ -1,4 +1,5 @@
 """Dependency-free GLB 2.0 exporter for Trinity's deterministic triangle mesh."""
+
 from __future__ import annotations
 
 import json
@@ -19,16 +20,42 @@ def write_glb(mesh: Mesh, path: Path) -> None:
     max_v = [max(v[i] for v in vertices) for i in range(3)]
     document = {
         "asset": {"version": "2.0", "generator": "Trinity AI native CAD"},
-        "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],
-        "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "mode": 4}]}],
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [
+            {"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "mode": 4}]}
+        ],
         "buffers": [{"byteLength": len(binary)}],
         "bufferViews": [
-            {"buffer": 0, "byteOffset": 0, "byteLength": len(positions), "target": 34962},
-            {"buffer": 0, "byteOffset": len(positions), "byteLength": len(normal_bytes), "target": 34962},
+            {
+                "buffer": 0,
+                "byteOffset": 0,
+                "byteLength": len(positions),
+                "target": 34962,
+            },
+            {
+                "buffer": 0,
+                "byteOffset": len(positions),
+                "byteLength": len(normal_bytes),
+                "target": 34962,
+            },
         ],
         "accessors": [
-            {"bufferView": 0, "componentType": 5126, "count": len(vertices), "type": "VEC3", "min": min_v, "max": max_v},
-            {"bufferView": 1, "componentType": 5126, "count": len(vertices), "type": "VEC3"},
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": len(vertices),
+                "type": "VEC3",
+                "min": min_v,
+                "max": max_v,
+            },
+            {
+                "bufferView": 1,
+                "componentType": 5126,
+                "count": len(vertices),
+                "type": "VEC3",
+            },
         ],
     }
     encoded = json.dumps(document, separators=(",", ":")).encode()
@@ -37,5 +64,7 @@ def write_glb(mesh: Mesh, path: Path) -> None:
     total = 12 + 8 + len(encoded) + 8 + len(binary)
     with path.open("wb") as handle:
         handle.write(struct.pack("<4sII", b"glTF", 2, total))
-        handle.write(struct.pack("<I4s", len(encoded), b"JSON")); handle.write(encoded)
-        handle.write(struct.pack("<I4s", len(binary), b"BIN\0")); handle.write(binary)
+        handle.write(struct.pack("<I4s", len(encoded), b"JSON"))
+        handle.write(encoded)
+        handle.write(struct.pack("<I4s", len(binary), b"BIN\0"))
+        handle.write(binary)

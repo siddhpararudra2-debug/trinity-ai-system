@@ -8,6 +8,7 @@ topology" reduce to sanity checks (finite coordinates, non-degenerate
 triangles) rather than a full boolean-mesh analysis — that level of
 rigor is exactly what the CadQuery/FreeCAD/Onshape adapters are for.
 """
+
 from __future__ import annotations
 
 import math
@@ -19,7 +20,9 @@ from app.engines.cad.primitives import Mesh
 MIN_PRINTABLE_FEATURE_MM = 1.0  # conservative FDM-printing floor
 
 
-def validate_quadcopter_frame(ir: QuadcopterFrameIR, mesh: Mesh) -> tuple[bool, dict[str, Any]]:
+def validate_quadcopter_frame(
+    ir: QuadcopterFrameIR, mesh: Mesh
+) -> tuple[bool, dict[str, Any]]:
     p = ir.parameters
     checks: dict[str, Any] = {}
     ok = True
@@ -35,7 +38,9 @@ def validate_quadcopter_frame(ir: QuadcopterFrameIR, mesh: Mesh) -> tuple[bool, 
     boss_side = p["motor_mount_diameter"] * 1.4
     expected = math.sqrt(2) * (p["overall_size"] / 2 + boss_side)
     tolerance = expected * 0.15
-    dims_ok = abs(span_x - expected) <= tolerance and abs(span_y - expected) <= tolerance
+    dims_ok = (
+        abs(span_x - expected) <= tolerance and abs(span_y - expected) <= tolerance
+    )
     checks["dimensions_within_tolerance"] = dims_ok
     checks["expected_span_mm"] = round(expected, 3)
     checks["actual_span_mm"] = (round(span_x, 3), round(span_y, 3))

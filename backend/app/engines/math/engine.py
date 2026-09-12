@@ -6,6 +6,7 @@ simplest possible "real" engine and exists to prove the
 Engine -> Validate -> Result pipeline end to end without any LLM,
 matching the "20% of 50 -> Python, no LLM required" example in §44.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -42,7 +43,9 @@ class MathEngine(BaseEngine):
             lhs_str, _, rhs_str = expression.partition("=")
             rhs_str = rhs_str or "0"
 
-            local_syms = {name: sp.Symbol(name) for name in _extract_symbol_names(expression)}
+            local_syms = {
+                name: sp.Symbol(name) for name in _extract_symbol_names(expression)
+            }
             lhs = sp.sympify(lhs_str, locals=local_syms)
             rhs = sp.sympify(rhs_str, locals=local_syms)
             eq = sp.Eq(lhs, rhs)
@@ -74,7 +77,9 @@ class MathEngine(BaseEngine):
                     engine=self.name,
                     operation="solve",
                     result=result,
-                    validation=ValidationResult(status=status, checks={"identity_holds": truth}),
+                    validation=ValidationResult(
+                        status=status, checks={"identity_holds": truth}
+                    ),
                 )
 
             solutions = sp.solve(eq, target)
@@ -105,7 +110,9 @@ class MathEngine(BaseEngine):
             checks[f"root_{i}_satisfies_equation"] = ok
             all_ok = all_ok and ok
 
-        validation = ValidationResult(status="VALIDATED" if all_ok else "FAILED", checks=checks)
+        validation = ValidationResult(
+            status="VALIDATED" if all_ok else "FAILED", checks=checks
+        )
 
         return EngineResult(
             success=all_ok,
@@ -125,7 +132,9 @@ class MathEngine(BaseEngine):
         variables: dict[str, float] = parameters.get("variables") or {}
 
         try:
-            local_syms = {name: sp.Symbol(name) for name in _extract_symbol_names(expression)}
+            local_syms = {
+                name: sp.Symbol(name) for name in _extract_symbol_names(expression)
+            }
             expr = sp.sympify(expression, locals=local_syms)
             subs = {local_syms[k]: v for k, v in variables.items() if k in local_syms}
             value = sp.N(expr.subs(subs))

@@ -22,7 +22,10 @@ async def lifespan(app: FastAPI):
     ensure_storage_layout()
     init_db()
     bootstrap_engines()
-    log.info("trinity started", extra={"ctx": {"engines": [e["name"] for e in registry.list()]}})
+    log.info(
+        "trinity started",
+        extra={"ctx": {"engines": [e["name"] for e in registry.list()]}},
+    )
     yield
 
 
@@ -51,8 +54,12 @@ def trinity_error_handler(request: Request, exc: TrinityError) -> JSONResponse:
         "capability_unavailable": 501,
     }
     status_code = status_map.get(exc.code, 500)
-    log.info("trinity error", extra={"ctx": {"path": str(request.url), **exc.to_dict()}})
-    return JSONResponse(status_code=status_code, content={"success": False, "errors": [exc.to_dict()]})
+    log.info(
+        "trinity error", extra={"ctx": {"path": str(request.url), **exc.to_dict()}}
+    )
+    return JSONResponse(
+        status_code=status_code, content={"success": False, "errors": [exc.to_dict()]}
+    )
 
 
 app.include_router(router)

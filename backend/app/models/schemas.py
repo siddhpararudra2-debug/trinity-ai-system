@@ -5,6 +5,7 @@ Pydantic is used at the edge (PRD section 7); internals prefer
 dataclasses. Every tool response follows the common envelope from
 PRD section 25.
 """
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -16,6 +17,7 @@ ValidationLevel = Literal["GENERATED", "VALIDATED", "VERIFIED", "FAILED"]
 
 
 # ---------------------------------------------------------------- common ---
+
 
 class ArtifactOut(BaseModel):
     artifact_id: str
@@ -63,22 +65,35 @@ class EngineCapability(BaseModel):
 
 # ----------------------------------------------------------------- math ---
 
+
 class MathSolveRequest(BaseModel):
-    expression: str = Field(..., description="Equation or expression, e.g. 'x**2 - 4 = 0'")
-    variables: dict[str, float] = Field(default_factory=dict, description="Known variable substitutions")
-    solve_for: str | None = Field(None, description="Symbol to solve for; inferred if omitted")
-    units: dict[str, str] = Field(default_factory=dict, description="Optional unit tags per variable")
+    expression: str = Field(
+        ..., description="Equation or expression, e.g. 'x**2 - 4 = 0'"
+    )
+    variables: dict[str, float] = Field(
+        default_factory=dict, description="Known variable substitutions"
+    )
+    solve_for: str | None = Field(
+        None, description="Symbol to solve for; inferred if omitted"
+    )
+    units: dict[str, str] = Field(
+        default_factory=dict, description="Optional unit tags per variable"
+    )
 
 
 # ------------------------------------------------------------------ cad ---
 
+
 class CADGenerateRequest(BaseModel):
     type: Literal["quadcopter_frame"] = "quadcopter_frame"
     parameters: dict[str, Any] = Field(default_factory=dict)
-    outputs: list[Literal["stl", "step", "glb", "json"]] = Field(default_factory=lambda: ["stl", "json"])
+    outputs: list[Literal["stl", "step", "glb", "json"]] = Field(
+        default_factory=lambda: ["stl", "json"]
+    )
 
 
 # -------------------------------------------------------------- generic ---
+
 
 class ExecuteRequest(BaseModel):
     """Generic entry point used by the workflow engine / future LLM tool-calls."""
