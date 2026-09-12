@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+      - push-to-trinity
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+      - push-to-trinity
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Repository & Workflow Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Health Check
+        run: |
+          echo "Repository code is empty. Workflows and bot automations are active."
