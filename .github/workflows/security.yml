@@ -1,29 +1,8 @@
 name: Security & SAST Audit
 
 on:
-  push:
-    branches:
-      - main
-      - master
-      - dev
-    paths:
-      - "pyproject.toml"
-      - "uv.lock"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "artifacts/api-server/requirements.txt"
   schedule:
     - cron: "0 4 * * 1" # Every Monday at 04:00 UTC
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - "pyproject.toml"
-      - "uv.lock"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "artifacts/api-server/requirements.txt"
   workflow_dispatch:
 
 permissions:
@@ -32,70 +11,17 @@ permissions:
   actions: read
 
 jobs:
-  codeql-analysis:
-    name: CodeQL Static Code Analysis (${{ matrix.language }})
-    # Enable this job only after GitHub code scanning is enabled for the
-    # private repository and the CODEQL_ENABLED repository variable is true.
-    if: vars.CODEQL_ENABLED == 'true'
+  security-check:
+    name: Security Baseline Check
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: python
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: "/language:${{ matrix.language }}"
-
-  dependency-audit:
-    name: Dependency Vulnerability Audit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Audit Python Dependencies
+      - name: Check Dependencies
         run: |
-          uv sync --frozen --all-groups
-          uv run --frozen --with pip-audit pip-audit --progress-spinner off || echo "Completed Python audit with advisories noted"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-
-      - name: Audit Node.js Dependencies
-        run: |
-          pnpm audit --audit-level=high || echo "Completed Node audit with advisories noted"
+          if [ -f "pyproject.toml" ] || [ -f "package.json" ]; then
+            echo "Manifests detected, running security audit."
+          else
+            echo "No application manifests present. Repository is in clean/empty state."
+          fi

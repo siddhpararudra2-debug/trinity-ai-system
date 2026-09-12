@@ -1,77 +1,14 @@
 version: 2
 updates:
-  # GitHub Actions Workflows
+  # GitHub Actions Workflows - Automatically raises PRs for workflow action updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
+      interval: "weekly"
+    open-pull-requests-limit: 10
     groups:
       github-actions:
         patterns:
           - "*"
     commit-message:
       prefix: "ci"
-
-  # Python Dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
-    groups:
-      python-dependencies:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "chore"
-
-  # Node / pnpm Monorepo Dependencies
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
-    groups:
-      node-dependencies:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "chore"
-
-  # Docker Dependencies
-  - package-ecosystem: "docker"
-    directory: "/deploy"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
-    groups:
-      deploy-images:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "chore"
-
-  - package-ecosystem: "docker"
-    directory: "/artifacts/api-server"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
-    groups:
-      api-server-images:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "chore"
-
-  - package-ecosystem: "docker"
-    directory: "/workers/firmware"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 1
-    groups:
-      firmware-images:
-        patterns:
-          - "*"
-    commit-message:
-      prefix: "chore"
