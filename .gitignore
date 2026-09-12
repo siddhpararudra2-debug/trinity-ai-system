@@ -1,84 +1,41 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
-# compiled output
-dist
-tmp
-out-tsc
-*.tsbuildinfo
-.expo
-.expo-shared
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-node_modules
-.pnpm-store
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# IDEs and editors
-/.idea
-.project
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# testing
+/coverage
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# next.js
+/.next/
+/out/
+
+# production
+/build
 
 # misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
 .DS_Store
-Thumbs.db
+*.pem
 
-# Replit (removed)
-.replit
-.replitignore
-.cache/
-.local/
-attached_assets/
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Environment and secrets
-.env
-.env.local
-.env.*.local
+# env files (can opt-in for committing if needed)
+.env*
 
-# SQLite databases — canonical location is data/trinity.db (see TRINITY_DATABASE_URL)
-*.db
-*.sqlite
-data/
-artifacts/
+# vercel
+.vercel
 
-# Generated Trinity design artifacts
-trinity_artifacts/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.pythonlibs/
-.venv/
-*.egg-info/
-
-# Alembic
-alembic/versions/*.pyc
-
-# Agent memory (internal only)
-.agents/
-
-# Logs
-logs/
-*.log
-
-# Release artifacts
-releases/
+# typescript
+*.tsbuildinfo
+next-env.d.ts
