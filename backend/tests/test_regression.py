@@ -1,9 +1,11 @@
 import struct
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.engines.cad.ir import QuadcopterFrameIR
 from app.engines.cad.builder import build_quadcopter_frame
 from app.engines.cad.glb import write_glb
+from app.workflows.dag import WorkflowNode, ordered
 
 def test_flagship_frame_emits_real_glb(tmp_path):
     mesh = build_quadcopter_frame(QuadcopterFrameIR.from_request({"overall_size": 50}))
@@ -20,3 +22,13 @@ def test_api_flagship_links_checked_artifacts_to_job():
         assert body["validation"]["status"] == "VALIDATED"
         assert {item["type"] for item in body["artifacts"]} == {"stl", "glb", "json"}
         assert client.get(f"/api/jobs/{body['job_id']}").json()["status"] == "completed"
+
+
+def test_workflow_rejects_duplicate_node_ids():
+    with pytest.raises(ValueError, match="duplicate"):
+        ordered([WorkflowNode("build", "cad", "generate", {}), WorkflowNode("build", "cad", "validate", {})])
+
+
+def test_ir_rejects_non_finite_dimensions():
+    with pytest.raises(Exception):
+        QuadcopterFrameIR.from_request({"overall_size": float("nan")})

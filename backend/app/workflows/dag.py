@@ -8,6 +8,8 @@ class WorkflowNode:
     dependencies: list[str] = field(default_factory=list); status: str = "queued"
 
 def ordered(nodes: list[WorkflowNode]) -> list[WorkflowNode]:
+    if len({node.id for node in nodes}) != len(nodes):
+        raise ValueError("Workflow has duplicate node IDs")
     remaining = {node.id: node for node in nodes}; result: list[WorkflowNode] = []
     while remaining:
         ready = [node for node in remaining.values() if all(dep in {n.id for n in result} for dep in node.dependencies)]

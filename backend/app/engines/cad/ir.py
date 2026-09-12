@@ -9,6 +9,7 @@ CAD platform (PRD §12).
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -54,9 +55,12 @@ class QuadcopterFrameIR:
                     "center_plate_size": params["center_plate_size"],
                 },
             )
-        for key in ("arm_width", "plate_thickness", "motor_mount_diameter", "fc_mount_spacing"):
-            if params[key] <= 0:
-                raise RequestValidationError(f"{key} must be positive")
+        for key in (
+            "overall_size", "center_plate_size", "arm_width", "plate_thickness",
+            "motor_mount_diameter", "fc_mount_spacing",
+        ):
+            if not math.isfinite(params[key]) or params[key] <= 0:
+                raise RequestValidationError(f"{key} must be a finite positive value")
         if params["overall_size"] > 1000 or params["plate_thickness"] > 50:
             raise RequestValidationError("Frame dimensions are outside V1's supported engineering range")
         if params["fc_mount_spacing"] > params["center_plate_size"]:

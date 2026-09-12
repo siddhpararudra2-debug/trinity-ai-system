@@ -13,23 +13,19 @@ export const metadata: Metadata = {
     default: 'Trinity AI — Engineering Operating System',
     template: '%s | Trinity AI',
   },
-  description:
-    'TRINITY Systems delivers world-class precision engineering, industrial automation, and manufacturing solutions. 25+ years of engineering excellence serving 12 countries worldwide.',
+  description: 'Trinity AI is an engineering operating system for deterministic, validated artifacts.',
   keywords: [
-    'precision engineering',
-    'industrial automation',
-    'manufacturing solutions',
-    'quality assurance',
-    'R&D consulting',
-    'TRINITY Systems',
+    'engineering operating system',
+    'parametric CAD',
+    'validated engineering artifacts',
+    'Trinity AI',
   ],
   openGraph: {
     type: 'website',
     locale: 'en_IN',
-    siteName: 'TRINITY Systems',
-    title: 'TRINITY Systems — Precision Engineering & Manufacturing Solutions',
-    description:
-      'World-class precision engineering, industrial automation, and manufacturing solutions. 25+ years of engineering excellence.',
+    siteName: 'Trinity AI',
+    title: 'Trinity AI — Engineering Operating System',
+    description: 'Deterministic engineering tools that generate and validate artifacts.',
   },
 };
 
