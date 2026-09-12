@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 
@@ -13,8 +15,10 @@ from app.models.schemas import (
     ExecuteRequest,
     JobOut,
     MathSolveRequest,
+    RequirementRequest,
     ToolResponse,
 )
+from app.intelligence.router import parse_requirement
 
 router = APIRouter(prefix="/api")
 
@@ -30,8 +34,8 @@ def list_engines() -> list[dict]:
 
 
 @router.post("/execute", response_model=ToolResponse)
-def execute(req: ExecuteRequest) -> dict:
-    return job_manager.run_sync(req.engine, req.operation, req.parameters)
+async def execute(req: ExecuteRequest) -> dict:
+    return await asyncio.to_thread(job_manager.run_sync, req.engine, req.operation, req.parameters)
 
 
 @router.get("/jobs", response_model=list[JobOut])
@@ -51,10 +55,21 @@ def download_artifact(artifact_id: str) -> FileResponse:
 
 
 @router.post("/math/solve", response_model=ToolResponse)
-def math_solve(req: MathSolveRequest) -> dict:
-    return job_manager.run_sync("math", "solve", req.model_dump())
+async def math_solve(req: MathSolveRequest) -> dict:
+    return await asyncio.to_thread(job_manager.run_sync, "math", "solve", req.model_dump())
 
 
 @router.post("/cad/generate", response_model=ToolResponse)
-def cad_generate(req: CADGenerateRequest) -> dict:
-    return job_manager.run_sync("cad", "generate", req.model_dump())
+async def cad_generate(req: CADGenerateRequest) -> dict:
+    return await asyncio.to_thread(job_manager.run_sync, "cad", "generate", req.model_dump())
+
+
+@router.post("/requirements/execute", response_model=ToolResponse)
+async def execute_requirement(req: RequirementRequest) -> dict:
+    parsed = parse_requirement(req.text)
+    return await asyncio.to_thread(
+        job_manager.run_sync,
+        parsed["domain"],
+        parsed["operation"],
+        {"type": parsed["object"], "parameters": parsed["parameters"], "outputs": ["stl", "glb", "json"]},
+    )

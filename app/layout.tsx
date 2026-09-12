@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Navbar from '@/components/layout/Navbar';
-import Footer from '@/components/layout/Footer';
 import './globals.css';
 
 const inter = Inter({
@@ -12,8 +10,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'TRINITY Systems — Precision Engineering & Manufacturing Solutions',
-    template: '%s | TRINITY Systems',
+    default: 'Trinity AI — Engineering Operating System',
+    template: '%s | Trinity AI',
   },
   description:
     'TRINITY Systems delivers world-class precision engineering, industrial automation, and manufacturing solutions. 25+ years of engineering excellence serving 12 countries worldwide.',
@@ -42,11 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body style={{ fontFamily: 'var(--font-inter), var(--font-sans)' }}>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
-      </body>
+      <body style={{ fontFamily: 'var(--font-inter), var(--font-sans)' }}>{children}</body>
     </html>
   );
 }

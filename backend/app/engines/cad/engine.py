@@ -19,10 +19,11 @@ from app.engines.base import BaseEngine, EngineResult, ValidationResult
 from app.engines.cad.builder import build_quadcopter_frame
 from app.engines.cad.ir import QuadcopterFrameIR
 from app.engines.cad.primitives import Mesh, write_binary_stl
+from app.engines.cad.glb import write_glb
 from app.engines.cad.validators import validate_quadcopter_frame
 
 SUPPORTED_TYPES = {"quadcopter_frame"}
-NOT_YET_SUPPORTED_FORMATS = {"step", "glb"}  # need a real CAD kernel — see README
+NOT_YET_SUPPORTED_FORMATS = {"step"}
 
 
 class CADEngine(BaseEngine):
@@ -66,6 +67,11 @@ class CADEngine(BaseEngine):
             write_binary_stl(mesh, str(stl_path))
             pending_artifacts.append((str(stl_path), "stl"))
 
+        if "glb" in outputs:
+            glb_path = work_dir / f"{base_name}.glb"
+            write_glb(mesh, glb_path)
+            pending_artifacts.append((str(glb_path), "glb"))
+
         if "json" in outputs:
             json_path = work_dir / f"{base_name}.json"
             json_path.write_text(_ir_json(ir))
@@ -79,8 +85,7 @@ class CADEngine(BaseEngine):
         }
         if unavailable_formats:
             result["unavailable_formats"] = {
-                fmt: "Requires a real CAD kernel (CadQuery/FreeCAD/Onshape adapter) — "
-                "not implemented by the V1 local-fallback backend."
+                fmt: "CAD_KERNEL_UNAVAILABLE: STEP requires CadQuery/OpenCascade or another real CAD kernel."
                 for fmt in unavailable_formats
             }
 

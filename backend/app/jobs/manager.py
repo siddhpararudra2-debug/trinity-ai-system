@@ -18,6 +18,7 @@ from typing import Any
 
 from app.artifacts.manager import artifact_manager
 from app.core.errors import JobNotFoundError, TrinityError
+from app.core import cache
 from app.core.logging_config import get_logger
 from app.db.database import get_connection
 from app.engines.registry import registry
@@ -73,6 +74,15 @@ class JobManager:
         log.info("job started", extra={"ctx": {"job_id": job_id, "engine": engine_name, "operation": operation}})
 
         engine = registry.get(engine_name)  # raises EngineNotFoundError -> handled by caller
+
+        # Only known pure operations are cacheable. CAD artifacts deliberately
+        # are not reused because each artifact must preserve job provenance.
+        deterministic = engine_name == "math" or (engine_name == "cad" and operation == "validate")
+        key = cache.cache_key(engine_name, operation, parameters)
+        if deterministic and (cached := cache.get(key)) is not None:
+            cached = {**cached, "job_id": job_id, "result": {**cached.get("result", {}), "cache_hit": True}}
+            self._update_job(job_id, status="completed", progress=1.0, result=json.dumps(cached["result"]))
+            return cached
 
         try:
             engine_result = engine.execute(operation, parameters)
@@ -136,6 +146,8 @@ class JobManager:
             progress=1.0,
             result=json.dumps(response["result"]),
         )
+        if deterministic and response["success"]:
+            cache.put(key, engine_name, operation, response)
         log.info("job finished", extra={"ctx": {"job_id": job_id, "success": engine_result.success}})
         return response
 

@@ -44,6 +44,13 @@ def bootstrap_engines() -> None:
     """Import + register every built-in engine. Called once at startup."""
     from app.engines.math.engine import MathEngine
     from app.engines.cad.engine import CADEngine
+    from app.engines.scaffold import ScaffoldEngine
 
     registry.register(MathEngine())
     registry.register(CADEngine())
+    registry.register(ScaffoldEngine("pcb", ["inspect", "validate", "generate", "export"]))
+    registry.register(ScaffoldEngine("firmware", ["create", "build", "test", "compile"]))
+    registry.register(ScaffoldEngine("vision", ["image_inspect", "ocr", "document_parse", "geometry_extract"]))
+    registry.register(ScaffoldEngine("research", ["search"]))
+    registry.register(ScaffoldEngine("simulation", ["simulate"]))
+    registry.register(ScaffoldEngine("robotics", ["kinematics", "trajectory_plan"]))

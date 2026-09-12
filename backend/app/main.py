@@ -48,6 +48,7 @@ def trinity_error_handler(request: Request, exc: TrinityError) -> JSONResponse:
         "artifact_not_found": 404,
         "geometry_validation_error": 422,
         "engine_execution_error": 400,
+        "capability_unavailable": 501,
     }
     status_code = status_map.get(exc.code, 500)
     log.info("trinity error", extra={"ctx": {"path": str(request.url), **exc.to_dict()}})

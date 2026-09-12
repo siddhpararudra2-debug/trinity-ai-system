@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS validations (
     created_at    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS cache_entries (
+    cache_key TEXT PRIMARY KEY,
+    engine TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    response TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS projects (
     project_id TEXT PRIMARY KEY,
     name       TEXT NOT NULL,

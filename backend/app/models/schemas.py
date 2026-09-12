@@ -86,3 +86,7 @@ class ExecuteRequest(BaseModel):
     engine: str
     operation: str
     parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class RequirementRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)

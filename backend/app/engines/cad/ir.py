@@ -54,8 +54,13 @@ class QuadcopterFrameIR:
                     "center_plate_size": params["center_plate_size"],
                 },
             )
-        if params["arm_width"] <= 0 or params["plate_thickness"] <= 0:
-            raise RequestValidationError("arm_width and plate_thickness must be positive")
+        for key in ("arm_width", "plate_thickness", "motor_mount_diameter", "fc_mount_spacing"):
+            if params[key] <= 0:
+                raise RequestValidationError(f"{key} must be positive")
+        if params["overall_size"] > 1000 or params["plate_thickness"] > 50:
+            raise RequestValidationError("Frame dimensions are outside V1's supported engineering range")
+        if params["fc_mount_spacing"] > params["center_plate_size"]:
+            raise RequestValidationError("fc_mount_spacing must fit within center_plate_size")
 
         return cls(units="mm", parameters=params)
 

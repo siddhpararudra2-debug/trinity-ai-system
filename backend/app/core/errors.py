@@ -53,3 +53,7 @@ class JobNotFoundError(TrinityError):
 
 class ArtifactNotFoundError(TrinityError):
     code = "artifact_not_found"
+
+
+class CapabilityUnavailableError(TrinityError):
+    code = "capability_unavailable"
