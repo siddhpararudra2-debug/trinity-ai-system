@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime state — regenerated on startup, shouldn't be versioned
+storage/trinity.db
+storage/trinity.db-*
+storage/artifacts/*
+storage/jobs/*
+storage/cad/*
+storage/exports/*
+storage/temp/*
+storage/projects/*
+!storage/**/.gitkeep
+
+.venv/
+venv/
+*.egg-info/
