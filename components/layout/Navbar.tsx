@@ -1,84 +1,83 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/about', label: 'About' },
-  { href: '/services', label: 'Services' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/team', label: 'Team' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/#workspace', label: 'Workspace' },
+  { href: '/#systems', label: 'Systems' },
+  { href: '/#artifacts', label: 'Artifacts' },
+  { href: '/#projects', label: 'Projects' },
+  { href: '/#about', label: 'About' },
 ];
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const closeMenu = () => setMobileOpen(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const isHome = pathname === '/';
-  const navClass = `navbar ${scrolled || !isHome ? 'navbar--scrolled' : ''}`;
-
   return (
-    <nav className={navClass} id="main-nav">
-      <div className="container navbar__inner">
-        <Link href="/" className="navbar__logo" aria-label="TRINITY Systems Home">
-          <span className="navbar__logo-icon">T</span>
-          TRINITY
+    <nav className={`nav-wrap ${scrolled ? 'is-scrolled' : ''}`} id="main-nav" aria-label="Primary navigation">
+      <div className="container nav">
+        <Link href="/" className="brand" aria-label="Trinity AI home">
+          <span className="brand-mark" aria-hidden="true">
+            ◈
+          </span>
+          <span className="brand-text">
+            TRINITY
+            <small>AI ENGINEERING SYSTEM</small>
+          </span>
         </Link>
 
-        <div className="navbar__links">
+        <div className="nav-links">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`navbar__link ${pathname === link.href ? 'navbar__link--active' : ''}`}
+              className={pathname === link.href ? 'is-active' : ''}
             >
               {link.label}
             </Link>
           ))}
-          <Link href="/contact" className="navbar__cta">
-            Get a Quote
+        </div>
+
+        <div className="nav-meta">
+          <span className="system-ready" aria-label="System status">
+            <i aria-hidden="true" />
+            SYSTEM READY
+          </span>
+          <Link href="/#workspace" className="btn btn-primary">
+            OPEN WORKSPACE
           </Link>
         </div>
 
         <button
-          className="navbar__mobile-toggle"
+          className="mobile-toggle"
           onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle navigation menu"
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
-          id="mobile-nav-toggle"
         >
-          <span />
-          <span />
-          <span />
+          {mobileOpen ? '×' : '≡'}
         </button>
       </div>
 
-      <div className={`navbar__mobile-menu ${mobileOpen ? 'navbar__mobile-menu--open' : ''}`}>
+      <div className="mobile-menu" hidden={!mobileOpen}>
         {navLinks.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            onClick={() => setMobileOpen(false)}
-            className={`navbar__link ${pathname === link.href ? 'navbar__link--active' : ''}`}
-          >
+          <Link key={link.href} href={link.href} onClick={closeMenu}>
             {link.label}
           </Link>
         ))}
-        <Link href="/contact" className="btn btn--primary" style={{ textAlign: 'center' }} onClick={() => setMobileOpen(false)}>
-          Get a Quote
+        <Link href="/#workspace" onClick={closeMenu}>
+          Open Workspace
         </Link>
       </div>
     </nav>

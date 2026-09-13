@@ -1,164 +1,163 @@
-'use client';
-
-import { useState } from 'react';
-import Card from '@/components/ui/Card';
-import CTA from '@/components/sections/CTA';
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import Reveal from '@/components/sections/Reveal';
 
-const categories = ['All', 'Industrial Automation', 'Precision Engineering', 'Smart Manufacturing', 'Quality Systems', 'R&D'];
+export const metadata: Metadata = {
+  title: 'Artifacts & Jobs',
+  description:
+    'Trinity AI artifacts: checksummed STL, GLB and JSON outputs with job provenance, validation records and SQLite lineage.',
+};
 
-const allProjects = [
+const artifacts = [
   {
-    title: 'Automated Assembly Line — Tata Motors',
-    description: 'Designed and deployed a fully automated assembly line reducing cycle time by 40% and improving throughput by 3x for automotive component manufacturing.',
-    category: 'Industrial Automation',
-    tag: 'Industrial Automation',
-    imageSrc: '/images/project-1.jpg',
-    metrics: ['40% faster cycles', '3x throughput', '99.2% yield'],
+    type: 'STL',
+    name: 'Binary stereolithography',
+    body: '80-byte header, little-endian float32 triangles with computed normals — written by the native exporter, no third-party writer.',
+    tag: 'MESH',
   },
   {
-    title: 'Precision Turbine Components — BHEL',
-    description: 'Manufactured 2,000+ high-precision turbine blades with ±0.002mm tolerance for power generation applications.',
-    category: 'Precision Engineering',
-    tag: 'Precision Engineering',
-    imageSrc: '/images/project-2.jpg',
-    metrics: ['2,000+ components', '±0.002mm tolerance', 'AS9100 certified'],
+    type: 'GLB',
+    name: 'glTF 2.0 binary',
+    body: 'Dependency-free, standards-compliant exporter with POSITION and NORMAL accessors, min/max bounds and 4-byte alignment.',
+    tag: 'VIEWER-READY',
   },
   {
-    title: 'Smart Factory IoT System — L&T',
-    description: 'Implemented a real-time IoT monitoring system across 12 production lines, achieving 99.7% uptime.',
-    category: 'Smart Manufacturing',
-    tag: 'Smart Manufacturing',
-    imageSrc: '/images/project-3.jpg',
-    metrics: ['12 production lines', '99.7% uptime', '25% energy savings'],
-  },
-  {
-    title: 'CNC Robotic Cell — Mahindra Group',
-    description: 'Integrated a multi-axis robotic CNC cell for high-speed machining of automotive drivetrain components with zero manual intervention.',
-    category: 'Industrial Automation',
-    tag: 'Industrial Automation',
-    imageSrc: '/images/project-4.jpg',
-    metrics: ['6-axis robotic cell', 'Zero manual intervention', '24/7 operation'],
-  },
-  {
-    title: 'Medical Device Components — Medtronic',
-    description: 'Precision-manufactured titanium implant components meeting FDA and CE marking requirements with full traceability documentation.',
-    category: 'Precision Engineering',
-    tag: 'Precision Engineering',
-    imageSrc: '/images/project-5.jpg',
-    metrics: ['FDA compliant', 'Ti-6Al-4V titanium', 'Full traceability'],
-  },
-  {
-    title: 'Quality Lab Modernization — Tata Steel',
-    description: 'Designed and equipped a world-class quality testing laboratory with CMM, optical measurement, and NDT capabilities.',
-    category: 'Quality Systems',
-    tag: 'Quality Systems',
-    imageSrc: '/images/project-6.jpg',
-    metrics: ['State-of-art CMM', 'NDT capabilities', 'ISO 17025'],
-  },
-  {
-    title: 'EV Battery Pack Design — Ather Energy',
-    description: 'R&D partnership for next-generation electric vehicle battery pack thermal management system, from concept through validation.',
-    category: 'R&D',
-    tag: 'R&D',
-    imageSrc: '/images/project-7.jpg',
-    metrics: ['30% better cooling', 'Patent filed', '6-month timeline'],
-  },
-  {
-    title: 'Aerospace Bracket Manufacturing — HAL',
-    description: 'High-precision aerospace structural brackets from Inconel 718, machined to AS9100D standards for defense aircraft applications.',
-    category: 'Precision Engineering',
-    tag: 'Precision Engineering',
-    imageSrc: '/images/project-8.jpg',
-    metrics: ['Inconel 718', 'Defense grade', 'Zero defects'],
-  },
-  {
-    title: 'Warehouse Automation — Flipkart',
-    description: 'End-to-end automated warehouse sortation system with conveyor networks, barcode scanners, and real-time tracking dashboards.',
-    category: 'Smart Manufacturing',
-    tag: 'Smart Manufacturing',
-    imageSrc: '/images/project-9.jpg',
-    metrics: ['500K packages/day', 'Real-time tracking', '50% faster sorting'],
+    type: 'JSON',
+    name: 'CAD IR spec',
+    body: 'The exact intermediate representation behind the mesh: every parameter, unit and default that produced the geometry.',
+    tag: 'PROVENANCE',
   },
 ];
 
+const lifecycle = [
+  { n: '01', name: 'QUEUED', detail: 'Request validated at the Pydantic edge, job row inserted' },
+  { n: '02', name: 'RUNNING', detail: 'Engine executes off the event loop in scratch space' },
+  { n: '03', name: 'VALIDATED', detail: 'Independent checks recorded in the validations table' },
+  { n: '04', name: 'STORED', detail: 'Artifacts copied into managed storage with SHA-256 checksums' },
+  { n: '05', name: 'COMPLETED', detail: 'Result envelope returned; lineage queryable forever' },
+];
+
 export default function ProjectsPage() {
-  const [activeFilter, setActiveFilter] = useState('All');
-
-  const filteredProjects = activeFilter === 'All'
-    ? allProjects
-    : allProjects.filter((p) => p.category === activeFilter);
-
   return (
-    <>
-      {/* Page Header */}
-      <section className="page-header">
+    <main>
+      <section className="page-hero">
         <div className="container">
-          <div className="page-header__breadcrumb">
-            <Link href="/">Home</Link>
-            <span>/</span>
-            <span>Projects</span>
-          </div>
-          <h1 className="page-header__title">Our Projects</h1>
-          <p className="page-header__subtitle">
-            A showcase of engineering excellence across industries and continents.
+          <p className="eyebrow">Artifacts &amp; jobs</p>
+          <h1>
+            Every output carries <span className="accent-word">its own receipt.</span>
+          </h1>
+          <p className="lede">
+            Files live on the filesystem; only metadata goes into SQLite — artifact ID, type, size
+            and SHA-256 checksum, tied to the job that produced them. CAD results are never cached
+            or reused: provenance beats performance.
           </p>
         </div>
       </section>
 
-      {/* Projects Grid */}
-      <section className="section">
+      <section className="section-sm" aria-label="Artifact formats">
         <div className="container">
-          <div className="filters filters--center">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                className={`filter-btn ${activeFilter === cat ? 'filter-btn--active' : ''}`}
-                onClick={() => setActiveFilter(cat)}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid--3">
-            {filteredProjects.map((project) => (
-              <Card
-                key={project.title}
-                title={project.title}
-                description={project.description}
-                tag={project.tag}
-                imageSrc={project.imageSrc}
-              >
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 'var(--space-2)',
-                  marginTop: 'var(--space-4)',
-                }}>
-                  {project.metrics.map((metric) => (
-                    <span
-                      key={metric}
-                      style={{
-                        padding: 'var(--space-1) var(--space-3)',
-                        background: 'var(--color-slate-100)',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-slate-600)',
-                        fontWeight: 'var(--font-weight-medium)',
-                      }}
-                    >
-                      {metric}
-                    </span>
-                  ))}
-                </div>
-              </Card>
+          <div className="showcase-grid">
+            {artifacts.map((artifact, i) => (
+              <Reveal key={artifact.type} delay={i * 80}>
+                <article className="showcase-card">
+                  <div className="telemetry">
+                    <span>ARTIFACT / {artifact.type}</span>
+                    <span className="status-pill is-live">{artifact.tag}</span>
+                  </div>
+                  <h3>{artifact.name}</h3>
+                  <p>{artifact.body}</p>
+                </article>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      <CTA />
-    </>
+      <section className="section" aria-labelledby="flagship-title">
+        <div className="container">
+          <div className="section-head">
+            <Reveal>
+              <div>
+                <p className="eyebrow">Flagship request</p>
+                <h2 id="flagship-title">The 50 mm quadcopter frame.</h2>
+              </div>
+            </Reveal>
+            <Reveal>
+              <p className="lede">
+                One POST produces a validated frame plus three artifacts. The response envelope
+                carries the spec, triangle count, bounding box and every check that passed.
+              </p>
+            </Reveal>
+          </div>
+
+          <Reveal>
+            <div className="compare">
+              <div className="compare-row compare-head">
+                <div>Field</div>
+                <div>Value</div>
+                <div>Notes</div>
+              </div>
+              {[
+                ['overall_size', '50 mm', 'Motor-to-motor diagonal, X configuration'],
+                ['arm_width · plate_thickness', '5 · 1.5 mm', 'FDM manufacturability floor: ≥ 1 mm'],
+                ['validation', 'VALIDATED', 'dimensions · topology · clearances · manufacturability'],
+                ['artifacts', 'STL + GLB + JSON', 'Checksummed, job-linked, downloadable'],
+                ['unavailable_formats', 'STEP → 501', 'CAD_KERNEL_UNAVAILABLE, reported honestly'],
+              ].map(([field, value, notes]) => (
+                <div className="compare-row" key={field}>
+                  <div style={{ color: 'var(--text)' }}>{field}</div>
+                  <div className="yes">{value}</div>
+                  <div className="partial">{notes}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="section-sm" aria-labelledby="lifecycle-title">
+        <div className="container">
+          <div className="section-head">
+            <Reveal>
+              <div>
+                <p className="eyebrow">Job lifecycle</p>
+                <h2 id="lifecycle-title">Queued → running → completed.</h2>
+              </div>
+            </Reveal>
+            <Reveal>
+              <p className="lede">
+                Engine-time failures come back as tracked failed jobs — HTTP 200 with success:false
+                and classified errors. Lookups that miss return real 404s.
+              </p>
+            </Reveal>
+          </div>
+
+          <div className="process-grid">
+            {lifecycle.map((step, i) => (
+              <Reveal key={step.n} delay={i * 70}>
+                <article className="process-step">
+                  <div className="step-num">
+                    <span>{step.n}</span>
+                    <span>{step.name}</span>
+                  </div>
+                  <p>{step.detail}</p>
+                </article>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal>
+            <div style={{ marginTop: 40, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Link className="btn btn-primary" href="/#workspace">
+                Generate one now <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="btn btn-ghost" href="/services">
+                Browse engines
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+    </main>
   );
 }

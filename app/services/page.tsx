@@ -1,256 +1,167 @@
 import type { Metadata } from 'next';
-import CTA from '@/components/sections/CTA';
-import Link from 'next/link';
+import Reveal from '@/components/sections/Reveal';
 
 export const metadata: Metadata = {
-  title: 'Services',
+  title: 'Engines',
   description:
-    'Explore TRINITY Systems comprehensive engineering services: Precision Engineering, Industrial Automation, Quality Assurance, R&D Consulting, Manufacturing Solutions, and Project Management.',
+    'The Trinity engine registry: a live CAD engine and math engine, plus truthful scaffolds for PCB, firmware, vision, research, simulation and robotics.',
 };
 
-const services = [
+const engines = [
   {
-    id: 'precision',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
-      </svg>
-    ),
-    title: 'Precision Engineering',
-    subtitle: 'Ultra-precise manufacturing at the micro level',
-    description: 'Our precision engineering services deliver components with tolerances down to ±0.001mm. From CNC machining and EDM to grinding and lapping, we handle the most demanding specifications across aerospace, defense, medical, and automotive industries.',
-    capabilities: [
-      '5-axis CNC machining centers',
-      'Wire & sinker EDM',
-      'Precision grinding & lapping',
-      'Micro-machining capabilities',
-      'Rapid prototyping to mass production',
-      'Multi-material expertise (titanium, inconel, ceramics)',
-    ],
+    id: 'cad',
+    name: 'CAD',
+    status: 'LIVE',
+    version: 'v1.0',
+    capabilities: ['generate', 'validate', 'export', 'preview'],
+    body: 'Parametric quadcopter-frame generation through a library-independent IR, a deterministic native mesh builder and an independent validator. Binary STL and glTF 2.0 GLB exporters ship in the core; STEP is an explicit capability limit until CadQuery/OpenCascade is configured.',
+    facts: ['QuadcopterFrameIR · X configuration', 'Binary STL · GLB · JSON', '4 independent geometry checks'],
   },
   {
-    id: 'automation',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/>
-      </svg>
-    ),
-    title: 'Industrial Automation',
-    subtitle: 'Smart factory systems for maximum efficiency',
-    description: 'We design and implement end-to-end industrial automation solutions that transform manufacturing floors into intelligent, connected ecosystems. Our expertise spans PLC/SCADA programming, robotic integration, and IoT-enabled smart factory systems.',
-    capabilities: [
-      'PLC/SCADA system design & programming',
-      'Robotic arm integration (ABB, FANUC, KUKA)',
-      'Conveyor & material handling systems',
-      'IoT sensor networks & real-time monitoring',
-      'Digital twin implementation',
-      'Predictive maintenance systems',
-    ],
+    id: 'math',
+    name: 'MATH',
+    status: 'LIVE',
+    version: 'v1.0',
+    capabilities: ['solve', 'evaluate'],
+    body: 'SymPy-backed symbolic solving and numeric evaluation. Roots are re-substituted into the original expression and verified to numerical precision before the result is marked VALIDATED — the "20% of 50, no LLM required" example, end to end.',
+    facts: ['Deterministic SymPy core', 'Residual check < 1e-9', 'Identity + multi-symbol solve'],
   },
   {
-    id: 'quality',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
-      </svg>
-    ),
-    title: 'Quality Assurance',
-    subtitle: 'Zero-defect manufacturing, every time',
-    description: 'Our ISO 9001:2015 and AS9100D certified quality management systems ensure every component meets the highest industry standards. We employ advanced metrology, CMM inspections, and statistical process control to guarantee precision and reliability.',
-    capabilities: [
-      'Coordinate Measuring Machine (CMM) inspections',
-      'Optical & laser measurement systems',
-      'Surface roughness analysis',
-      'Non-destructive testing (NDT)',
-      'Statistical Process Control (SPC)',
-      'First Article Inspection (FAI) reports',
-    ],
+    id: 'pcb',
+    name: 'PCB',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['inspect', 'validate', 'generate', 'export'],
+    body: 'Registered with real capabilities. Raises CapabilityUnavailableError instead of producing placeholder boards — a KiCad-backed implementation slots in behind the same interface.',
+    facts: ['Truthful 501 responses', 'No fake artifacts'],
   },
   {
-    id: 'consulting',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-      </svg>
-    ),
-    title: 'R&D Consulting',
-    subtitle: 'From concept to commercialization',
-    description: 'Our R&D consulting team bridges the gap between innovative ideas and market-ready products. We provide strategic guidance, feasibility studies, and hands-on development support to accelerate your innovation pipeline.',
-    capabilities: [
-      'Feasibility studies & concept validation',
-      'Design for Manufacturing (DFM) analysis',
-      'Material selection & testing',
-      'Prototype development & iteration',
-      'Technology scouting & evaluation',
-      'Patent landscape analysis',
-    ],
+    id: 'firmware',
+    name: 'FIRMWARE',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['create', 'build', 'test', 'compile'],
+    body: 'Generated firmware code will only ever run in a restricted subprocess. Until that sandbox exists, the scaffold refuses.',
+    facts: ['Sandbox-first design', 'No code execution yet'],
   },
   {
-    id: 'manufacturing',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
-      </svg>
-    ),
-    title: 'Manufacturing Solutions',
-    subtitle: 'Scalable production for any volume',
-    description: 'Whether you need a single prototype or a production run of 100,000 units, our flexible manufacturing capabilities scale seamlessly to meet your needs. We optimize for cost, quality, and lead time at every production volume.',
-    capabilities: [
-      'Low to high-volume production',
-      'Sheet metal fabrication & welding',
-      'Casting & forging services',
-      'Surface treatment & finishing',
-      'Assembly & sub-assembly services',
-      'Just-in-time (JIT) delivery programs',
-    ],
+    id: 'vision',
+    name: 'VISION',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['image_inspect', 'ocr', 'document_parse', 'geometry_extract'],
+    body: 'Document and geometry extraction slot for the intelligence boundary — deterministic adapters first, models later, never instead.',
+    facts: ['Adapter-shaped', 'Registry-discoverable'],
   },
   {
-    id: 'management',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect x="2" y="10" width="6" height="12" rx="1"/><rect x="16" y="6" width="6" height="16" rx="1"/>
-      </svg>
-    ),
-    title: 'Project Management',
-    subtitle: 'End-to-end engineering project delivery',
-    description: 'Our experienced project managers lead complex engineering initiatives from inception through commissioning. We use proven methodologies and tools to ensure on-time, on-budget delivery while managing risks proactively.',
-    capabilities: [
-      'Turnkey project delivery',
-      'PMBOK/PRINCE2 methodologies',
-      'Risk assessment & mitigation',
-      'Vendor management & procurement',
-      'Progress tracking & reporting',
-      'Commissioning & handover support',
-    ],
+    id: 'research',
+    name: 'RESEARCH',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['search'],
+    body: 'A minimal search capability stub. Structured, cacheable and provenance-preserving when implemented.',
+    facts: ['Capability stub'],
+  },
+  {
+    id: 'simulation',
+    name: 'SIMULATION',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['simulate'],
+    body: 'Simulation hook for the DAG workflow primitives — the ordered() topology already supports dependency-graph execution.',
+    facts: ['DAG-ready'],
+  },
+  {
+    id: 'robotics',
+    name: 'ROBOTICS',
+    status: 'SCAFFOLD',
+    version: 'registered',
+    capabilities: ['kinematics', 'trajectory_plan'],
+    body: 'Kinematics and trajectory planning reserved behind the same four-method engine interface.',
+    facts: ['Same engine contract'],
   },
 ];
 
 export default function ServicesPage() {
   return (
-    <>
-      {/* Page Header */}
-      <section className="page-header">
+    <main>
+      <section className="page-hero">
         <div className="container">
-          <div className="page-header__breadcrumb">
-            <Link href="/">Home</Link>
-            <span>/</span>
-            <span>Services</span>
-          </div>
-          <h1 className="page-header__title">Our Services</h1>
-          <p className="page-header__subtitle">
-            Comprehensive engineering and manufacturing services tailored to your industry&apos;s unique challenges.
+          <p className="eyebrow">Engine registry</p>
+          <h1>
+            What Trinity <span className="accent-word">can do</span> — and what it refuses to fake.
+          </h1>
+          <p className="lede">
+            GET /api/engines returns every registered capability as structured data. Two engines are
+            live; six are honest scaffolds that raise capability errors rather than pretending.
           </p>
         </div>
       </section>
 
-      {/* Services List */}
-      {services.map((service, index) => (
-        <section
-          key={service.id}
-          id={service.id}
-          className={`section ${index % 2 === 1 ? 'section--alt' : ''}`}
-        >
-          <div className="container">
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 'var(--space-16)',
-              alignItems: 'center',
-            }}>
-              <div style={{ order: index % 2 === 1 ? 2 : 1 }}>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: 'var(--radius-xl)',
-                  background: 'var(--color-primary-50)',
-                  color: 'var(--color-primary)',
-                  marginBottom: 'var(--space-6)',
-                }}>
-                  {service.icon}
-                </div>
-                <h2 style={{
-                  fontSize: 'var(--text-3xl)',
-                  fontWeight: 'var(--font-weight-bold)',
-                  color: 'var(--color-slate-900)',
-                  marginBottom: 'var(--space-2)',
-                }}>
-                  {service.title}
-                </h2>
-                <p style={{
-                  fontSize: 'var(--text-lg)',
-                  color: 'var(--color-primary)',
-                  fontWeight: 'var(--font-weight-medium)',
-                  marginBottom: 'var(--space-6)',
-                }}>
-                  {service.subtitle}
-                </p>
-                <p style={{
-                  color: 'var(--color-slate-600)',
-                  lineHeight: 1.8,
-                  marginBottom: 'var(--space-8)',
-                }}>
-                  {service.description}
-                </p>
-              </div>
-
-              <div style={{ order: index % 2 === 1 ? 1 : 2 }}>
-                <div style={{
-                  background: 'var(--color-white)',
-                  borderRadius: 'var(--radius-xl)',
-                  padding: 'var(--space-8)',
-                  border: '1px solid var(--color-slate-200)',
-                }}>
-                  <h4 style={{
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 'var(--font-weight-semibold)',
-                    color: 'var(--color-slate-900)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    marginBottom: 'var(--space-5)',
-                  }}>
-                    Key Capabilities
-                  </h4>
-                  <ul style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                    {service.capabilities.map((cap) => (
-                      <li
-                        key={cap}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 'var(--space-3)',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--color-slate-600)',
-                        }}
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="var(--color-primary)"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ minWidth: '18px', marginTop: '2px' }}
-                        >
-                          <path d="m9 12 2 2 4-4" />
-                          <circle cx="12" cy="12" r="10" />
-                        </svg>
-                        {cap}
+      <section className="section-sm" aria-label="Engine details">
+        <div className="container">
+          <div className="workspace-grid">
+            {engines.map((engine, i) => (
+              <Reveal key={engine.id} delay={(i % 2) * 70}>
+                <article className="ws-panel" id={engine.id} style={{ height: '100%' }}>
+                  <h2>
+                    {engine.name} · {engine.version}
+                  </h2>
+                  <p className="ws-empty">{engine.body}</p>
+                  <ul className="ws-checks" style={{ marginTop: 16 }}>
+                    {engine.facts.map((fact) => (
+                      <li key={fact}>
+                        <b>▸</b> {fact}
                       </li>
                     ))}
                   </ul>
-                </div>
-              </div>
-            </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
+                    <span className={`status-pill ${engine.status === 'LIVE' ? 'is-live' : 'is-scaffold'}`}>
+                      {engine.status}
+                    </span>
+                    {engine.capabilities.map((cap) => (
+                      <span className="status-pill" key={cap}>
+                        {cap}
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              </Reveal>
+            ))}
           </div>
-        </section>
-      ))}
+        </div>
+      </section>
 
-      <CTA />
-    </>
+      <section className="section-sm" aria-labelledby="adapter-title">
+        <div className="container">
+          <div className="section-head">
+            <Reveal>
+              <div>
+                <p className="eyebrow">Extension points</p>
+                <h2 id="adapter-title">Adapters, not rewrites.</h2>
+              </div>
+            </Reveal>
+            <Reveal>
+              <p className="lede">
+                CadQuery, FreeCAD and Onshape adapters satisfy the same four methods — nothing above
+                the engine layer changes when a real kernel drops in.
+              </p>
+            </Reveal>
+          </div>
+
+          <Reveal>
+            <div className="code-block">
+              <code>
+                <span className="cmt"># POST /api/cad/generate — the flagship request</span>
+                {'\n'}curl -X POST localhost:8000/api/cad/generate \
+                  -H &apos;Content-Type: application/json&apos; \
+                  -d &apos;{'{'}&quot;parameters&quot;: {'{'}&quot;overall_size&quot;: 50{'}'},
+                &quot;outputs&quot;: [&quot;stl&quot;, &quot;glb&quot;, &quot;json&quot;]{'}'}&apos;
+              </code>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+    </main>
   );
 }
