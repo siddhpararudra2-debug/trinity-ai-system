@@ -3,3 +3,4 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 sympy>=1.12
 numpy>=1.26
+httpx2>=2.0
