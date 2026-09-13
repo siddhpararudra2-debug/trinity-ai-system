@@ -9,6 +9,7 @@ invoke them uniformly (PRD §24, §31).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -58,7 +59,7 @@ class Engine(Protocol):
 
     name: str
     version: str
-    capabilities: list[str]
+    capabilities: Sequence[str]
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult: ...
 
@@ -70,7 +71,7 @@ class BaseEngine:
 
     name: str = "base"
     version: str = "0.0"
-    capabilities: list[str] = []
+    capabilities: Sequence[str] = ()
 
     def describe(self) -> dict[str, Any]:
         return {

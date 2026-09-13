@@ -30,7 +30,7 @@ NOT_YET_SUPPORTED_FORMATS = {"step"}
 class CADEngine(BaseEngine):
     name = "cad"
     version = "1.0"
-    capabilities = ["generate", "validate", "export", "preview"]
+    capabilities = ("generate", "validate", "export", "preview")
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "generate":

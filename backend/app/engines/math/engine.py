@@ -20,7 +20,7 @@ from app.engines.base import BaseEngine, EngineResult, ValidationResult
 class MathEngine(BaseEngine):
     name = "math"
     version = "1.0"
-    capabilities = ["solve", "evaluate"]
+    capabilities = ("solve", "evaluate")
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "solve":
