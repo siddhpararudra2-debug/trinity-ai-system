@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
-import { Grid, OrbitControls, useGLTF } from '@react-three/drei';
+import { Grid, OrbitControls, useGLTF, ContactShadows, RoundedBox } from '@react-three/drei';
 import type { TrinityResult } from '@/lib/api/trinity';
 import { getArtifactUrl } from '@/lib/api/trinity';
 
@@ -16,24 +16,36 @@ function ProceduralPreview({
 }) {
   return (
     <group>
-      <mesh>
-        <boxGeometry args={[21, 21, 3.4]} />
-        <meshStandardMaterial color={wireframe ? '#EDEDE8' : '#FFFFFF'} wireframe={wireframe} roughness={0.8} />
-      </mesh>
+      <RoundedBox args={[21, 21, 3.0]} radius={1.1} smoothness={3}>
+        <meshStandardMaterial color={wireframe ? '#EDEDE8' : '#F4F4F1'} wireframe={wireframe} roughness={0.42} metalness={0.14} />
+      </RoundedBox>
       {[45, 135, 225, 315].map((deg) => {
         const r = 32 * Math.SQRT2;
         const x = (r / 2) * Math.cos((deg * Math.PI) / 180);
         const y = (r / 2) * Math.sin((deg * Math.PI) / 180);
         return (
           <group key={deg} position={[x, y, 0]} rotation={[0, 0, (deg * Math.PI) / 180]}>
-            <mesh>
-              <boxGeometry args={[22, 4.6, 3.4]} />
-              <meshStandardMaterial color="#EDEDE8" wireframe={wireframe} />
+            <RoundedBox args={[20, 4.6, 3.0]} radius={0.6} smoothness={3}>
+              <meshStandardMaterial color="#E9E9E4" wireframe={wireframe} roughness={0.45} />
+            </RoundedBox>
+          </group>
+        );
+      })}
+      {/* tiny graphite mounts to match hero */}
+      {[45, 135, 225, 315].map((deg) => {
+        const endR = 25;
+        const x = endR * Math.cos((deg * Math.PI) / 180);
+        const y = endR * Math.sin((deg * Math.PI) / 180);
+        return (
+          <group key={`m-${deg}`} position={[x, y, 1.35]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[4.2, 4.2, 4.0, 20]} />
+              <meshStandardMaterial color="#2A2E2B" wireframe={wireframe} roughness={0.55} metalness={0.32} />
             </mesh>
           </group>
         );
       })}
-      {showAxes && <axesHelper args={[18]} />}
+      {showAxes && <axesHelper args={[16]} />}
     </group>
   );
 }
@@ -44,8 +56,13 @@ function GLBModel({ url, wireframe }: { url: string; wireframe: boolean }) {
     gltf.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if ((mesh as unknown as { isMesh: boolean }).isMesh) {
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat) mat.wireframe = wireframe;
+        const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
+        const apply = (m: THREE.MeshStandardMaterial) => {
+          m.wireframe = wireframe;
+          m.needsUpdate = true;
+        };
+        if (Array.isArray(mat)) mat.forEach(apply);
+        else if (mat) apply(mat);
       }
     });
   }, [gltf, wireframe]);
@@ -63,24 +80,34 @@ function ViewerScene({
 }) {
   return (
     <>
-      <ambientLight intensity={1.0} />
-      <directionalLight position={[10, 10, 10]} intensity={1.1} />
-      <directionalLight position={[-8, -8, 6]} intensity={0.35} />
+      <ambientLight intensity={0.95} />
+      <directionalLight position={[12, 14, 14]} intensity={1.05} />
+      <directionalLight position={[-10, -8, 8]} intensity={0.30} color="#DDE8F0" />
       {glbUrl ? <GLBModel url={glbUrl} wireframe={wireframe} /> : <ProceduralPreview wireframe={wireframe} showAxes={showAxes} />}
       <Grid
-        position={[0, 0, -1.8]}
+        position={[0, 0, -1.85]}
         args={[100, 100]}
         cellSize={5}
-        cellThickness={0.5}
+        cellThickness={0.45}
         sectionSize={20}
         sectionThickness={1}
-        sectionColor="rgba(17,17,17,0.12)"
-        cellColor="rgba(17,17,17,0.06)"
-        fadeDistance={36}
+        sectionColor="rgba(255,255,255,0.09)"
+        cellColor="rgba(255,255,255,0.04)"
+        fadeDistance={38}
         infiniteGrid
       />
-      {showAxes && <axesHelper args={[20]} />}
-      <OrbitControls enableDamping dampingFactor={0.08} minDistance={18} maxDistance={120} />
+      <ContactShadows position={[0, 0, -1.82]} opacity={0.28} scale={56} blur={2.4} far={9} color="#000000" />
+      {showAxes && <axesHelper args={[18]} />}
+      <OrbitControls
+        enablePan={false}
+        enableZoom
+        zoomSpeed={0.6}
+        minDistance={18}
+        maxDistance={88}
+        enableDamping
+        dampingFactor={0.08}
+        rotateSpeed={0.55}
+      />
     </>
   );
 }
@@ -93,7 +120,6 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
     return glb ? getArtifactUrl(glb.artifact_id) : null;
   }, [result]);
 
-  const resetKey = `${wireframe}-${showAxes}-${glbUrl ?? 'preview'}`;
   const triangleCount = result?.result.triangle_count as number | undefined;
   const overall = (result?.result.spec?.parameters as Record<string, number> | undefined)?.overall_size ?? 50;
 
@@ -106,10 +132,10 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
 
       <div className="viewer-canvas-wrap">
         <Canvas
-          key={resetKey}
           camera={{ position: [42, -40, 30], fov: 32 }}
-          dpr={[1, 1.8]}
-          gl={{ antialias: true, alpha: true }}
+          dpr={[1, 1.25]}
+          gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+          frameloop="demand"
           style={{ background: '#0E0F0E' }}
           onCreated={({ gl }) => gl.setClearColor('#0E0F0E', 1)}
         >
@@ -119,14 +145,14 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
         </Canvas>
       </div>
 
-      <div className="viewer-controls">
-        <button className={`ctrl-btn ${!wireframe ? 'is-active' : ''}`} onClick={() => setWireframe(false)} type="button">
+      <div className="viewer-controls" role="toolbar" aria-label="Viewer controls">
+        <button className={`ctrl-btn ${!wireframe ? 'is-active' : ''}`} onClick={() => setWireframe(false)} type="button" aria-pressed={!wireframe}>
           ◉ SOLID
         </button>
-        <button className={`ctrl-btn ${wireframe ? 'is-active' : ''}`} onClick={() => setWireframe(true)} type="button">
+        <button className={`ctrl-btn ${wireframe ? 'is-active' : ''}`} onClick={() => setWireframe(true)} type="button" aria-pressed={wireframe}>
           ◇ WIREFRAME
         </button>
-        <button className={`ctrl-btn ${showAxes ? 'is-active' : ''}`} onClick={() => setShowAxes(!showAxes)} type="button">
+        <button className={`ctrl-btn ${showAxes ? 'is-active' : ''}`} onClick={() => setShowAxes(!showAxes)} type="button" aria-pressed={showAxes}>
           ⊙ AXES
         </button>
         <button
@@ -136,6 +162,7 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
             setShowAxes(true);
           }}
           type="button"
+          aria-label="Reset viewer"
         >
           ↻ RESET
         </button>
@@ -145,9 +172,7 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
         <span>
           {overall.toFixed(2)} × {overall.toFixed(2)} MM
         </span>
-        <span>
-          TRIANGLES: {triangleCount ? triangleCount.toLocaleString() : '—'}
-        </span>
+        <span>TRIANGLES: {triangleCount ? triangleCount.toLocaleString() : '—'}</span>
         <strong>{result?.validation?.status ?? 'AWAITING'}</strong>
       </div>
     </section>

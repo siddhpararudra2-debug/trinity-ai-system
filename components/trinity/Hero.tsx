@@ -32,9 +32,8 @@ export default function Hero() {
         <div className="hero-copy">
           <div className="hero-meta">
             <p className="eyebrow" style={{ margin: 0 }}>
-              TRINITY / ENGINEERING INTELLIGENCE
+              TRINITY / ENGINEERING INTELLIGENCE — V1 OPERATING SYSTEM
             </p>
-            <span className="hero-index">V1 — OPERATING SYSTEM</span>
           </div>
 
           <h1>
@@ -44,7 +43,7 @@ export default function Hero() {
             <br />
             <span className="accent-word">Validate.</span>
             <br />
-            <span style={{ fontWeight: 400, color: '#707070' }}>With intelligence.</span>
+            <span style={{ fontWeight: 400, color: '#5A5A56' }}>With intelligence.</span>
           </h1>
 
           <div className="hero-copy-bottom">
@@ -58,8 +57,8 @@ export default function Hero() {
                 <Link href="#workspace" className="btn btn-primary">
                   START ENGINEERING <span aria-hidden="true">→</span>
                 </Link>
-                <Link href="#systems" className="btn btn-ghost">
-                  EXPLORE SYSTEM
+                <Link href="#systems" className="text-link" style={{ marginTop: 0, padding: '12px 0' }}>
+                  Explore system <span aria-hidden="true">→</span>
                 </Link>
               </div>
               <div className="proof-line">

@@ -89,7 +89,7 @@ export default function EngineeringCommand({ onResult, onStageChange }: Props) {
           </p>
         </div>
 
-        <div className="command-console">
+        <div className="command-console" aria-busy={busy}>
           <div className="command-top">
             <strong>REQUIREMENT</strong>
             <span>TRINITY ENGINE · NATURAL LANGUAGE → ENGINEERING SPEC</span>
@@ -109,16 +109,16 @@ export default function EngineeringCommand({ onResult, onStageChange }: Props) {
               rows={3}
               maxLength={1000}
               spellCheck={false}
-              aria-describedby="char-count"
+              aria-describedby="char-count command-hint"
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: '#707070', letterSpacing: '0.06em' }}>
-              <span>{charCount} / 1000</span>
-              <span style={{ opacity: 0.6 }}>⌘ + ENTER to generate</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: '#5A5A56', letterSpacing: '0.06em' }}>
+              <span id="char-count">{charCount} / 1000</span>
+              <span id="command-hint" style={{ opacity: busy ? 0.35 : 0.6 }}>⌘ + ENTER to generate</span>
             </div>
 
             <div className="command-history" aria-label="Example requirements">
               {EXAMPLES.map((ex) => (
-                <button key={ex} className="history-chip" onClick={() => setText(ex)} type="button">
+                <button key={ex} className="history-chip" onClick={() => setText(ex)} type="button" disabled={busy}>
                   {ex}
                 </button>
               ))}
@@ -146,8 +146,8 @@ export default function EngineeringCommand({ onResult, onStageChange }: Props) {
               <span style={{ opacity: 0.5 }}>DETERMINISTIC CORE</span>
             </div>
             <div className="command-actions">
-              <span className="kbd-hint">⌘ ENTER</span>
-              <button className="btn-generate" onClick={run} disabled={busy} type="button" aria-live="polite">
+              <span className="kbd-hint" aria-hidden="true">⌘ ENTER</span>
+              <button className="btn-generate" onClick={run} disabled={busy} type="button" aria-busy={busy} aria-live="polite">
                 {busy ? STAGE_LABELS[stage] : 'GENERATE →'}
               </button>
             </div>

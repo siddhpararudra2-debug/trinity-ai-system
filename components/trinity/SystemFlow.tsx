@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -13,11 +14,36 @@ const NODES = [
 
 export default function SystemFlow() {
   const [active, setActive] = useState(2);
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    const id = setInterval(() => setActive((a) => (a + 1) % NODES.length), 1800);
-    return () => clearInterval(id);
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
   }, []);
+
+  useEffect(() => {
+    if (reduced) return;
+    const id = setInterval(() => setActive((a) => (a + 1) % NODES.length), 2200);
+    return () => clearInterval(id);
+  }, [reduced]);
+
+  const onKey = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setActive(idx);
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setActive((a) => Math.min(NODES.length - 1, a + 1));
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setActive((a) => Math.max(0, a - 1));
+    }
+  };
 
   return (
     <section className="flow-section" id="system-flow" aria-labelledby="flow-title">
@@ -28,8 +54,7 @@ export default function SystemFlow() {
             <h2 id="flow-title">From intent to geometry.</h2>
           </div>
           <p className="lede">
-            Requirement → IR → geometry → validation → artifact. Each node is
-            inspectable; hover to reveal its contract.
+            Requirement → IR → geometry → validation → artifact. Each node is inspectable; hover to reveal its contract.
           </p>
         </div>
 
@@ -39,9 +64,10 @@ export default function SystemFlow() {
               key={n.id}
               className={`flow-node ${i === active ? 'is-active' : i < active ? 'is-done' : ''}`}
               role="listitem"
-              onMouseEnter={() => setActive(i)}
               tabIndex={0}
+              onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}
+              onKeyDown={(e) => onKey(e, i)}
               aria-current={i === active ? 'step' : undefined}
             >
               <span>{String(i + 1).padStart(2, '0')}</span>
@@ -68,7 +94,7 @@ export default function SystemFlow() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#707070', marginBottom: 8 }}>
+            <div style={{ fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5A5A56', marginBottom: 8 }}>
               CONTRACT
             </div>
             <code style={{ display: 'block', padding: 12, background: '#FFFFFF', border: '1px solid #D0D0CA', fontSize: '0.72rem', lineHeight: 1.6 }}>

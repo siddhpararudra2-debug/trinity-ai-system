@@ -5,6 +5,7 @@ import TrinityWorkspace from '@/components/trinity/TrinityWorkspace';
 import EngineeringSystems from '@/components/trinity/EngineeringSystems';
 import Projects from '@/components/trinity/Projects';
 import Philosophy from '@/components/trinity/Philosophy';
+import Reveal from '@/components/sections/Reveal';
 
 export const metadata: Metadata = {
   title: 'Trinity AI — Engineering Operating System',
@@ -17,10 +18,18 @@ export default function Home() {
     <main>
       <Hero />
       <TrinityWorkspace />
-      <SystemFlow />
-      <EngineeringSystems />
-      <Projects />
-      <Philosophy />
+      <Reveal>
+        <SystemFlow />
+      </Reveal>
+      <Reveal delay={80}>
+        <EngineeringSystems />
+      </Reveal>
+      <Reveal delay={80}>
+        <Projects />
+      </Reveal>
+      <Reveal delay={80}>
+        <Philosophy />
+      </Reveal>
 
       {/* Engine registry strip — honest secondary band */}
       <section className="engine-strip" aria-label="Registered engines">
