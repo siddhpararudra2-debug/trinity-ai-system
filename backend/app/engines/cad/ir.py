@@ -33,7 +33,7 @@ class QuadcopterFrameIR:
     parameters: dict[str, float] = field(default_factory=dict)
 
     @classmethod
-    def from_request(cls, raw_parameters: dict[str, Any]) -> "QuadcopterFrameIR":
+    def from_request(cls, raw_parameters: dict[str, Any]) -> QuadcopterFrameIR:
         params = dict(DEFAULT_QUADCOPTER_PARAMS)
         for key, value in (raw_parameters or {}).items():
             if key not in params:

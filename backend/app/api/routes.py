@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from app.artifacts.manager import artifact_manager
 from app.core.config import settings
 from app.engines.registry import registry
+from app.intelligence.router import parse_requirement
 from app.jobs.manager import job_manager
 from app.models.schemas import (
     CADGenerateRequest,
@@ -18,7 +19,6 @@ from app.models.schemas import (
     RequirementRequest,
     ToolResponse,
 )
-from app.intelligence.router import parse_requirement
 
 router = APIRouter(prefix="/api")
 

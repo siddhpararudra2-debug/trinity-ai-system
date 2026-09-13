@@ -8,7 +8,7 @@ class CadQueryAdapter:
 
     def export_step(self, model, output_path: str) -> None:
         try:
-            import cadquery as cq  # noqa: F401
+            import cadquery as cq  # noqa: F401 — availability probe
         except ImportError as exc:
             raise CapabilityUnavailableError(
                 "CadQuery/OpenCascade is not installed",

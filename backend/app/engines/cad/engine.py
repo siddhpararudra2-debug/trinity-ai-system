@@ -18,9 +18,9 @@ from typing import Any
 from app.core.errors import GeometryValidationError, RequestValidationError
 from app.engines.base import BaseEngine, EngineResult, ValidationResult
 from app.engines.cad.builder import build_quadcopter_frame
+from app.engines.cad.glb import write_glb
 from app.engines.cad.ir import QuadcopterFrameIR
 from app.engines.cad.primitives import Mesh, write_binary_stl
-from app.engines.cad.glb import write_glb
 from app.engines.cad.validators import validate_quadcopter_frame
 
 SUPPORTED_TYPES = {"quadcopter_frame"}

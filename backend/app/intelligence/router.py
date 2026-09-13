@@ -1,7 +1,9 @@
 """Deterministic V1 natural-language router; intentionally no model calls."""
 
 from __future__ import annotations
+
 import re
+
 from app.core.errors import RequestValidationError
 
 
@@ -9,7 +11,7 @@ def parse_requirement(text: str) -> dict:
     match = re.search(
         r"(?:create|generate)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*mm\s+(?:quad(?:copter|rotor)|drone)\s+frame",
         text,
-        re.I,
+        re.IGNORECASE,
     )
     if match:
         return {

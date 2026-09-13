@@ -1,7 +1,9 @@
 """Truthful placeholders for planned engines; they do not simulate execution."""
 
 from __future__ import annotations
+
 from typing import Any
+
 from app.core.errors import CapabilityUnavailableError
 from app.engines.base import BaseEngine, EngineResult
 

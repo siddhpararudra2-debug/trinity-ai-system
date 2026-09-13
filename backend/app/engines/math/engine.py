@@ -85,7 +85,7 @@ class MathEngine(BaseEngine):
             solutions = sp.solve(eq, target)
         except RequestValidationError:
             raise
-        except Exception as exc:  # noqa: BLE001 — surface as a classified engine error
+        except Exception as exc:
             raise EngineExecutionError(f"Could not solve expression: {exc}") from exc
 
         numeric_solutions = [
@@ -138,7 +138,7 @@ class MathEngine(BaseEngine):
             expr = sp.sympify(expression, locals=local_syms)
             subs = {local_syms[k]: v for k, v in variables.items() if k in local_syms}
             value = sp.N(expr.subs(subs))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise EngineExecutionError(f"Could not evaluate expression: {exc}") from exc
 
         numeric = float(value) if value.is_real else str(value)

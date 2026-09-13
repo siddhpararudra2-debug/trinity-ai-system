@@ -9,9 +9,9 @@ schema and gives every other module a plain sqlite3 connection.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from app.core.config import settings
 

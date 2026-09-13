@@ -30,7 +30,7 @@ class Mesh:
         zs = [v[2] for t in self.triangles for v in t]
         return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
 
-    def extend(self, other: "Mesh") -> None:
+    def extend(self, other: Mesh) -> None:
         self.triangles.extend(other.triangles)
 
 
@@ -85,8 +85,7 @@ def write_binary_stl(mesh: Mesh, path: str, name: bytes = b"trinity") -> None:
         for v0, v1, v2 in mesh.triangles:
             ux, uy, uz = _normal(v0, v1, v2)
             f.write(struct.pack("<3f", ux, uy, uz))
-            for v in (v0, v1, v2):
-                f.write(struct.pack("<3f", *v))
+            f.writelines(struct.pack("<3f", *v) for v in (v0, v1, v2))
             f.write(struct.pack("<H", 0))
 
 

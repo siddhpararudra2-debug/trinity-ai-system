@@ -43,8 +43,8 @@ registry = EngineRegistry()
 
 def bootstrap_engines() -> None:
     """Import + register every built-in engine. Called once at startup."""
-    from app.engines.math.engine import MathEngine
     from app.engines.cad.engine import CADEngine
+    from app.engines.math.engine import MathEngine
     from app.engines.scaffold import ScaffoldEngine
 
     registry.register(MathEngine())
