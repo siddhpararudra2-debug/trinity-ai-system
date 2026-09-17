@@ -18,16 +18,16 @@ export default function Home() {
     <main>
       <Hero />
       <TrinityWorkspace />
-      <Reveal>
+      <Reveal variant="up">
         <SystemFlow />
       </Reveal>
-      <Reveal delay={80}>
+      <Reveal variant="fade" delay={60}>
         <EngineeringSystems />
       </Reveal>
-      <Reveal delay={80}>
+      <Reveal variant="up" delay={60}>
         <Projects />
       </Reveal>
-      <Reveal delay={80}>
+      <Reveal variant="fade" delay={60}>
         <Philosophy />
       </Reveal>
 

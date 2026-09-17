@@ -2,13 +2,34 @@
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
+export type RevealVariant = 'up' | 'down' | 'left' | 'right' | 'scale' | 'fade';
+
 type RevealProps = {
   children: ReactNode;
   delay?: number;
   className?: string;
+  /** motion style — defaults to 'up' (previous behaviour) */
+  variant?: RevealVariant;
+  /** travel distance in px for directional variants */
+  distance?: number;
 };
 
-export default function Reveal({ children, delay = 0, className = '' }: RevealProps) {
+const HIDDEN: Record<RevealVariant, string> = {
+  up: 'reveal--up',
+  down: 'reveal--down',
+  left: 'reveal--left',
+  right: 'reveal--right',
+  scale: 'reveal--scale',
+  fade: 'reveal--fade',
+};
+
+export default function Reveal({
+  children,
+  delay = 0,
+  className = '',
+  variant = 'up',
+  distance,
+}: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,18 +51,19 @@ export default function Reveal({ children, delay = 0, className = '' }: RevealPr
           }
         });
       },
-      { threshold: 0.1, rootMargin: '0px 0px -5% 0px' },
+      { threshold: 0.12, rootMargin: '0px 0px -6% 0px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
-  const style = delay
-    ? ({ '--reveal-delay': `${delay}ms` } as CSSProperties)
-    : undefined;
+  const style = {
+    '--reveal-delay': `${delay}ms`,
+    ...(distance !== undefined ? { '--reveal-distance': `${distance}px` } : {}),
+  } as CSSProperties;
 
   return (
-    <div ref={ref} className={`reveal ${className}`} style={style}>
+    <div ref={ref} className={`reveal ${HIDDEN[variant]} ${className}`} style={style}>
       {children}
     </div>
   );

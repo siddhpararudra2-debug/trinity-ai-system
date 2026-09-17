@@ -15,14 +15,24 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [progress, setProgress] = useState(0);
   const pathname = usePathname();
   const closeMenu = () => setMobileOpen(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 12);
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - window.innerHeight;
+      setProgress(max > 0 ? Math.min(1, window.scrollY / max) : 0);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, []);
 
   return (
@@ -79,6 +89,11 @@ export default function Navbar() {
         <Link href="/#workspace" onClick={closeMenu}>
           Open Workspace
         </Link>
+      </div>
+
+      {/* scroll progress */}
+      <div className="nav-progress" aria-hidden="true">
+        <span style={{ transform: `scaleX(${progress})` }} />
       </div>
     </nav>
   );
