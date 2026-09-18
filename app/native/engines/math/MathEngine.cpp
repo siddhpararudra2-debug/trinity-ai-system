@@ -424,7 +424,9 @@ ExecutionOutput MathEngine::execute(const std::string& capability, const core::J
             core::Json free_symbols = core::Json::array();
             for (const std::string& s : symbols) free_symbols.push_back(core::Json(s));
             details["free_symbols"] = free_symbols;
-            fail("Multiple free symbols remain; specify 'solve_for'", details);
+            throw core::TrinityException(core::Error(
+                core::ErrorCode::RequestValidationError,
+                "Multiple free symbols remain; specify 'solve_for'", details));
         }
     }
 

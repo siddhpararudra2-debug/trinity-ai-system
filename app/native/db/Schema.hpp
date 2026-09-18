@@ -4,6 +4,7 @@
 // with real version tracking.
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "Database.hpp"

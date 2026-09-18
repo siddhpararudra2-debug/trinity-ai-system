@@ -1,5 +1,8 @@
 // Trinity — math engine + job system + validation lifecycle tests.
+#include <algorithm>
+#include <chrono>
 #include <filesystem>
+#include <thread>
 
 #include <doctest/doctest.h>
 

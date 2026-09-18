@@ -1,6 +1,7 @@
 #include "Mesh.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 

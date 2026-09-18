@@ -1,5 +1,6 @@
 // Trinity — database layer tests.
 #include <filesystem>
+#include <string>
 
 #include <doctest/doctest.h>
 

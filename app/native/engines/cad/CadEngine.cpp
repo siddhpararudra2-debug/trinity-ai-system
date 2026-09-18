@@ -1,9 +1,11 @@
 #include "CadEngine.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 
 #include "../../core/FileSystem.hpp"
+#include "../../core/Paths.hpp"
 #include "../../core/Uuid.hpp"
 
 namespace trinity::engines::cad {
