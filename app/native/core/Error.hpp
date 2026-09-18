@@ -66,6 +66,13 @@ private:
     Json details_ = Json::object();
 };
 
+// NOTE: this include sits at the *end* of the file on purpose. Every module
+// header includes core/Error.hpp and then returns core::Result / core::Status,
+// so the two types must travel together. Result.hpp includes Error.hpp, and
+// because this file's include guard is already defined by the time the include
+// runs, the cycle resolves cleanly in both include orders. Including it here (at
+// the top) would not compile.
+
 // Exception type carrying a Trinity Error. Thrown only inside a module; every
 // public C++ API returns Result-style values instead of throwing.
 class TrinityException : public std::exception {
@@ -79,3 +86,5 @@ private:
 };
 
 }  // namespace trinity::core
+
+#include "Result.hpp"
