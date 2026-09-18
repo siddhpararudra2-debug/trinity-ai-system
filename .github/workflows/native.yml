@@ -1,0 +1,94 @@
+name: Native Desktop Core
+
+# Builds and tests the native C++ core (app/native) with no UI toolkit, guarding
+# the brief's central requirement: the core must compile independently of any
+# UI, and the existing Python engines must keep working through the IPC bridge.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/native/**"
+      - ".github/workflows/native.yml"
+  pull_request:
+    paths:
+      - "app/native/**"
+      - ".github/workflows/native.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-core:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows core (MSVC)
+            os: windows-latest
+            generator: -G "Visual Studio 17 2022" -A x64
+            build_dir: build/msvc
+          - name: Linux core (GCC)
+            os: ubuntu-latest
+            generator: -G "Unix Makefiles"
+            build_dir: build/gcc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (Qt off — core must build without any UI toolkit)
+        run: >
+          cmake -S app/native -B ${{ matrix.build_dir }} ${{ matrix.generator }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DTRINITY_WITH_QT=OFF
+          -DTRINITY_BUILD_TESTS=ON
+          -DTRINITY_WARNINGS_AS_ERRORS=OFF
+
+      - name: Build
+        run: cmake --build ${{ matrix.build_dir }} --config Release --parallel
+
+      - name: Core unit tests
+        run: ctest --test-dir ${{ matrix.build_dir }} -C Release --output-on-failure
+
+      - name: Python engine host still works (existing engines untouched)
+        run: python app/native/python/services/engine_host.py --selftest
+
+  native-installer:
+    name: Windows installer (ZIP + NSIS setup)
+    runs-on: windows-latest
+    needs: native-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Configure
+        run: >
+          cmake -S app/native -B build/installer -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DTRINITY_WITH_QT=OFF
+          -DTRINITY_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build/installer --config Release --parallel
+
+      - name: Package (portable ZIP)
+        working-directory: build/installer
+        run: cpack -C Release -G ZIP
+
+      - name: Package (NSIS installer)
+        working-directory: build/installer
+        run: cpack -C Release -G NSIS
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: trinity-windows-installer
+          if-no-files-found: error
+          path: |
+            build/installer/*.zip
+            build/installer/*.exe
