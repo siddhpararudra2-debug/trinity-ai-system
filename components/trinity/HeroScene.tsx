@@ -165,7 +165,7 @@ function Drone({
     if (yawRef.current) yawRef.current.rotation.y += delta * 0.11;
   });
 
-  const arms = useMemo(armLayout, []);
+  const arms = useMemo(() => armLayout(), []);
   const propSpeed = 26;
 
   return (
