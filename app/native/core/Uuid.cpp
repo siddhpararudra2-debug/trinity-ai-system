@@ -40,8 +40,9 @@ std::string new_uuid() {
     std::uint64_t b = 0;
     {
         std::lock_guard<std::mutex> lock(rng_mutex());
-        a = rng();
-        b = rng();
+        std::mt19937_64& engine = rng();
+        a = engine();
+        b = engine();
     }
 
     unsigned char bytes[16];

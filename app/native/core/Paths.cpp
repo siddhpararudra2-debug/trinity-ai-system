@@ -16,7 +16,9 @@ std::string join_path(const std::string& base, const std::string& child) {
 
 std::optional<std::string> env_value(const std::string& name) {
 #if defined(_WIN32)
-    const std::size_t required = 0;
+    // getenv_s writes the required buffer size through this pointer, so it must
+    // not be const (MSVC rejects a const size_t*).
+    std::size_t required = 0;
     if (::getenv_s(&required, nullptr, 0, name.c_str()) != 0 || required == 0) {
         return std::nullopt;
     }
