@@ -1,6 +1,7 @@
 #include "ResourceMonitor.hpp"
 
 #include <chrono>
+#include <cstdint>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -10,6 +11,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <psapi.h>
 #else
 #include <ctime>
 #include <unistd.h>
@@ -36,11 +38,16 @@ void get_process_cpu_times(std::int64_t& kernel_100ns, std::int64_t& user_100ns)
 }
 #else
 void get_process_cpu_times(std::int64_t& kernel_100ns, std::int64_t& user_100ns) {
-    struct timespec kernel_ts{}, user_ts{};
-    clock_t id = CLOCK_PROCESS_CPUTIME_ID;
-    clock_getcpuclockid(0, &id);
-    clock_gettime(id, &user_ts);
-    (void)kernel_ts;
+    struct timespec user_ts{};
+    // clockid_t (not clock_t) is what the clock_* family expects; the POSIX
+    // macro CLOCK_PROCESS_CPUTIME_ID is a valid clockid_t already.
+    clockid_t id = CLOCK_PROCESS_CPUTIME_ID;
+    if (clock_getcpuclockid(0, &id) != 0) id = CLOCK_PROCESS_CPUTIME_ID;
+    if (clock_gettime(id, &user_ts) != 0) {
+        kernel_100ns = 0;
+        user_100ns = 0;
+        return;
+    }
     user_100ns = static_cast<std::int64_t>(user_ts.tv_sec) * 10'000'000LL +
                  user_ts.tv_nsec / 100;
     kernel_100ns = 0;

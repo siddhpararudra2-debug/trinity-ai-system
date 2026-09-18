@@ -77,6 +77,7 @@ set(TRINITY_CORE_SOURCES
     process/ProcessRunner.cpp
     monitoring/ResourceMonitor.cpp
     settings/Settings.cpp
+    rendering/3d/GeometryLoader.cpp
 )
 set(TRINITY_CORE_HEADERS
     core/Json.hpp
@@ -115,12 +116,16 @@ set(TRINITY_CORE_HEADERS
     process/ProcessRunner.hpp
     monitoring/ResourceMonitor.hpp
     settings/Settings.hpp
+    rendering/3d/GeometryLoader.hpp
 )
 
 find_package(Threads REQUIRED)
 add_library(trinity_core STATIC ${TRINITY_CORE_SOURCES} ${TRINITY_CORE_HEADERS})
 target_include_directories(trinity_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(trinity_core PUBLIC trinity_sqlite Threads::Threads)
+if(WIN32)
+    target_link_libraries(trinity_core PRIVATE psapi)
+endif()
 
 # --------------------------------------------------------------- shell apps
 add_executable(trinity-shell shell/trinity_shell.cpp)
@@ -138,6 +143,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_platform_storage.cpp
         tests/test_events_plugins.cpp
         tests/test_application.cpp
+        tests/test_rendering.cpp
     )
     target_link_libraries(trinity_tests PRIVATE trinity_core doctest_doctest)
     add_test(NAME trinity_native_tests COMMAND trinity_tests)
@@ -146,23 +152,61 @@ endif()
 
 # ------------------------------------------------------------- optional Qt
 if(TRINITY_WITH_QT)
-    message(STATUS "Trinity: building Qt 6 desktop shell")
+    message(STATUS "Trinity: building Qt 6 desktop shell (engineering workstation)")
     find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
+    if (Qt6_VERSION VERSION_GREATER_EQUAL 6.4)
+        find_package(Qt6 OPTIONAL_COMPONENTS Quick3D)
+    endif()
     qt_standard_project_setup()
-    qt_add_executable(trinity shell/trinity_qt_main.cpp shell/TrinityBridge.cpp)
+    qt_add_executable(trinity
+        shell/trinity_qt_main.cpp
+        shell/TrinityBridge.cpp
+        shell/models/ProjectModel.cpp
+        shell/models/JobModel.cpp
+        shell/models/ArtifactModel.cpp
+        shell/models/EngineModel.cpp
+        shell/models/LogModel.cpp
+        shell/models/CommandModel.cpp
+        shell/controllers/WorkspaceController.cpp
+        shell/controllers/LayoutController.cpp
+        shell/controllers/ViewportController.cpp
+        shell/controllers/SettingsController.cpp
+    )
     target_link_libraries(trinity PRIVATE trinity_core Qt6::Quick Qt6::QuickControls2)
+    if (TARGET Qt6::Quick3D)
+        target_link_libraries(trinity PRIVATE Qt6::Quick3D)
+        target_compile_definitions(trinity PRIVATE TRINITY_HAS_QUICK3D=1)
+    endif()
     qt_add_qml_module(trinity
         URI Trinity.Shell
         VERSION 1.0
         QML_FILES
             qml/Main.qml
-            qml/Viewport3D.qml
-            qml/CommandConsole.qml
-            qml/ProjectTree.qml
-            qml/PropertiesPanel.qml
-            qml/JobMonitor.qml
             qml/CommandPalette.qml
-            qml/SettingsDialog.qml
+            qml/theme/TrinityTheme.qml
+            qml/shell/MainWindow.qml
+            qml/shell/AppMenuBar.qml
+            qml/shell/AppToolBar.qml
+            qml/panels/LeftPanel.qml
+            qml/panels/RightPanel.qml
+            qml/panels/BottomDock.qml
+            qml/viewport/View3D.qml
+            qml/components/StatusPill.qml
+            qml/components/ScaffoldBanner.qml
+            qml/components/SectionHeader.qml
+            qml/workspaces/HomeWorkspace.qml
+            qml/workspaces/ProjectsWorkspace.qml
+            qml/workspaces/CadWorkspace.qml
+            qml/workspaces/PcbWorkspace.qml
+            qml/workspaces/MathWorkspace.qml
+            qml/workspaces/SimulationWorkspace.qml
+            qml/workspaces/VisionWorkspace.qml
+            qml/workspaces/FirmwareWorkspace.qml
+            qml/workspaces/ResearchWorkspace.qml
+            qml/workspaces/ArtifactsWorkspace.qml
+            qml/workspaces/JobsWorkspace.qml
+            qml/workspaces/SettingsWorkspace.qml
+            # legacy stubs kept out of module (reference only)
     )
 else()
     message(STATUS "Trinity: Qt shell disabled (TRINITY_WITH_QT=OFF) — console shell only")
@@ -170,10 +214,18 @@ endif()
 
 # ------------------------------------------------------------- installation
 # Layout produced by the installer (see installer/README.md):
-#   bin/trinity-shell.exe
+#   bin/trinity-shell.exe            console shell (always)
+#   bin/trinity.exe                  Qt desktop shell (when TRINITY_WITH_QT=ON)
 #   bin/python/services/engine_host.py   (bridge to the existing Python engines)
+#   bin/python/runtime/              embedded python (release, see installer/README.md)
 install(TARGETS trinity-shell RUNTIME DESTINATION bin)
+if(TRINITY_WITH_QT)
+    install(TARGETS trinity RUNTIME DESTINATION bin)
+    # Qt runtime is collected at packaging time via windeployqt (scripts/collect_qt_runtime.ps1)
+endif()
 install(DIRECTORY python/ DESTINATION bin/python)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../README.md" DESTINATION . OPTIONAL)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../docs/ARCHITECTURE.md" DESTINATION docs OPTIONAL)
 
 set(CPACK_PACKAGE_NAME "Trinity")
 set(CPACK_PACKAGE_VENDOR "Trinity Engineering")

@@ -1,6 +1,8 @@
 #include "ProcessRunner.hpp"
 
+#include <cerrno>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 
@@ -13,10 +15,11 @@
 #endif
 #include <windows.h>
 #else
-#include <sys/wait.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 #include "../core/Logging.hpp"
@@ -24,8 +27,13 @@
 namespace trinity::process {
 namespace {
 core::ComponentLog log_("process");
+}  // namespace
 
-struct ProcessHandles {
+// One child process: platform handles plus live status, shared with the
+// detached reader/watcher threads so they never touch the runner itself.
+struct ProcessState {
+    std::atomic<bool> running{false};
+    std::atomic<int> exit_code{-1};
 #if defined(_WIN32)
     HANDLE child = nullptr;
     HANDLE stdin_write = nullptr;
@@ -38,32 +46,34 @@ struct ProcessHandles {
     int stderr_read = -1;
 #endif
 };
-}  // namespace
 
 ProcessRunner::~ProcessRunner() { terminate(1000); }
 
 core::Status ProcessRunner::launch(const ProcessConfig& config, OutputFn on_stdout,
                                    OutputFn on_stderr, ExitFn on_exit) {
-    if (running_.load()) {
+    if (state_ && state_->running.load()) {
         return core::Status::fail(
             core::Error(core::ErrorCode::ProcessError, "process already running"));
     }
 
-    handles_ = std::make_unique<ProcessHandles>();
-
+    auto state = std::make_shared<ProcessState>();
 #if defined(_WIN32)
     SECURITY_ATTRIBUTES inherit{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
     HANDLE stdin_read = nullptr, stdout_write = nullptr, stderr_write = nullptr;
-    if (!CreatePipe(&stdin_read, &handles_->stdin_write, &inherit, 0) ||
-        !CreatePipe(&handles_->stdout_read, &stdout_write, &inherit, 0) ||
-        !CreatePipe(&handles_->stderr_read, &stderr_write, &inherit, 0)) {
+    if (!CreatePipe(&stdin_read, &state->stdin_write, &inherit, 0) ||
+        !CreatePipe(&state->stdout_read, &stdout_write, &inherit, 0) ||
+        !CreatePipe(&state->stderr_read, &stderr_write, &inherit, 0)) {
+        for (HANDLE handle : {stdin_read, state->stdin_write, state->stdout_read, stdout_write,
+                              state->stderr_read, stderr_write}) {
+            if (handle != nullptr) CloseHandle(handle);
+        }
         return core::Status::fail(
             core::Error(core::ErrorCode::ProcessError, "pipe creation failed"));
     }
     // Our ends must NOT be inherited by the child.
-    SetHandleInformation(handles_->stdin_write, HANDLE_FLAG_INHERIT, 0);
-    SetHandleInformation(handles_->stdout_read, HANDLE_FLAG_INHERIT, 0);
-    SetHandleInformation(handles_->stderr_read, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(state->stdin_write, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(state->stdout_read, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(state->stderr_read, HANDLE_FLAG_INHERIT, 0);
 
     STARTUPINFOA startup{};
     startup.cb = sizeof(startup);
@@ -72,10 +82,21 @@ core::Status ProcessRunner::launch(const ProcessConfig& config, OutputFn on_stdo
     startup.hStdOutput = stdout_write;
     startup.hStdError = stderr_write;
 
-    // Sanitised command line: quoted argv join, no shell interpretation.
-    std::string command_line = "\"" + config.executable + "\"";
-    for (const std::string& argument : config.arguments) {
-        command_line += " \"" + argument + "\"";
+    // Sanitised command line: quoted argv join, never a shell string.
+    // Quotes inside an argument are rejected rather than escaped so no caller
+    // can break out of the quoting (no arbitrary command execution).
+    std::vector<std::string> argv_all;
+    argv_all.reserve(config.arguments.size() + 1);
+    argv_all.push_back(config.executable);
+    argv_all.insert(argv_all.end(), config.arguments.begin(), config.arguments.end());
+
+    std::string command_line;
+    for (const std::string& argument : argv_all) {
+        if (argument.find('"') != std::string::npos) {
+            return core::Status::fail(core::Error(core::ErrorCode::ProcessError,
+                                                  "argument contains a quote character"));
+        }
+        command_line += "\"" + argument + "\" ";
     }
 
     // Environment block: allow-list essentials + caller-provided extras.
@@ -90,12 +111,14 @@ core::Status ProcessRunner::launch(const ProcessConfig& config, OutputFn on_stdo
     }
     env_block += "\0";
 
+    // CreateProcessA takes an ANSI environment block, so the
+    // CREATE_UNICODE_ENVIRONMENT flag must stay off (that flag is for W calls).
     PROCESS_INFORMATION info{};
     const BOOL created = CreateProcessA(
-        nullptr, command_line.data(), nullptr, nullptr, TRUE,
-        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, env_block.data(),
-        config.working_directory.empty() ? nullptr : config.working_directory.c_str(), &startup,
-        &info);
+        nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+        env_block.data(), config.working_directory.empty() ? nullptr
+                                                           : config.working_directory.c_str(),
+        &startup, &info);
     CloseHandle(stdin_read);
     CloseHandle(stdout_write);
     CloseHandle(stderr_write);
@@ -106,84 +129,100 @@ core::Status ProcessRunner::launch(const ProcessConfig& config, OutputFn on_stdo
                 std::to_string(GetLastError()) + ")"));
     }
     CloseHandle(info.hThread);
-    handles_->child = info.hProcess;
+    state->child = info.hProcess;
 #else
-    int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
+    int stdin_pipe[2] = {-1, -1}, stdout_pipe[2] = {-1, -1}, stderr_pipe[2] = {-1, -1};
     if (pipe(stdin_pipe) != 0 || pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+        for (int fd : {stdin_pipe[0], stdin_pipe[1], stdout_pipe[0], stdout_pipe[1],
+                       stderr_pipe[0], stderr_pipe[1]}) {
+            if (fd >= 0) ::close(fd);
+        }
         return core::Status::fail(
             core::Error(core::ErrorCode::ProcessError, "pipe creation failed"));
     }
     const pid_t pid = fork();
     if (pid < 0) {
-        return core::Status::fail(
-            core::Error(core::ErrorCode::ProcessError, "fork failed"));
+        return core::Status::fail(core::Error(core::ErrorCode::ProcessError, "fork failed"));
     }
     if (pid == 0) {
+        // Child: wire the pipes, apply the sanitised environment, then exec.
         dup2(stdin_pipe[0], STDIN_FILENO);
         dup2(stdout_pipe[1], STDOUT_FILENO);
         dup2(stderr_pipe[1], STDERR_FILENO);
-        close(stdin_pipe[0]); close(stdin_pipe[1]);
-        close(stdout_pipe[0]); close(stdout_pipe[1]);
-        close(stderr_pipe[0]); close(stderr_pipe[1]);
+        for (int fd : {stdin_pipe[0], stdin_pipe[1], stdout_pipe[0], stdout_pipe[1],
+                       stderr_pipe[0], stderr_pipe[1]}) {
+            if (fd > STDERR_FILENO) ::close(fd);
+        }
+        if (!config.working_directory.empty()) {
+            if (chdir(config.working_directory.c_str()) != 0) _exit(126);
+        }
+        for (const auto& [key, value] : config.environment) {
+            setenv(key.c_str(), value.c_str(), 1);
+        }
         std::vector<char*> argv;
         argv.push_back(const_cast<char*>(config.executable.c_str()));
-        for (const std::string& a : config.arguments) {
-            argv.push_back(const_cast<char*>(a.c_str()));
+        for (const std::string& argument : config.arguments) {
+            argv.push_back(const_cast<char*>(argument.c_str()));
         }
         argv.push_back(nullptr);
         execv(config.executable.c_str(), argv.data());
         _exit(127);
     }
-    close(stdin_pipe[0]);
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
-    handles_->child = pid;
-    handles_->stdin_write = stdin_pipe[1];
-    handles_->stdout_read = stdout_pipe[0];
-    handles_->stderr_read = stderr_pipe[0];
+    ::close(stdin_pipe[0]);
+    ::close(stdout_pipe[1]);
+    ::close(stderr_pipe[1]);
+    state->child = pid;
+    state->stdin_write = stdin_pipe[1];
+    state->stdout_read = stdout_pipe[0];
+    state->stderr_read = stderr_pipe[0];
 #endif
 
-    running_.store(true);
-    exit_code_.store(-1);
+    state->running.store(true);
+    state->exit_code.store(-1);
+    state_ = state;
     log_.info("child process started", [&] {
         core::Json ctx = core::Json::object();
         ctx["executable"] = config.executable;
         return ctx;
     }());
 
-    // Reader threads: pump stdout/stderr to the callbacks.
-    auto pump = [this](auto read_handle, OutputFn callback) {
+    // Reader threads: pump stdout/stderr into the callbacks. They hold the
+    // shared state, not the runner, so they cannot dangle.
+    auto pump = [](std::shared_ptr<ProcessState> state, auto read_handle, OutputFn callback) {
         char buffer[4096];
         while (true) {
 #if defined(_WIN32)
             DWORD read = 0;
             if (!ReadFile(read_handle, buffer, sizeof(buffer), &read, nullptr) || read == 0) break;
+            const std::size_t count = static_cast<std::size_t>(read);
 #else
             const ssize_t read = ::read(read_handle, buffer, sizeof(buffer));
             if (read <= 0) break;
+            const std::size_t count = static_cast<std::size_t>(read);
 #endif
-            if (callback) callback(buffer, static_cast<std::size_t>(read));
+            if (callback) callback(buffer, count);
+            if (!state->running.load()) break;
         }
     };
-    std::thread stdout_thread(pump, handles_->stdout_read, std::move(on_stdout));
-    std::thread stderr_thread(pump, handles_->stderr_read, std::move(on_stderr));
+    std::thread stdout_thread(pump, state, state->stdout_read, std::move(on_stdout));
+    std::thread stderr_thread(pump, state, state->stderr_read, std::move(on_stderr));
     stdout_thread.detach();
     stderr_thread.detach();
 
     // Exit watcher.
-    std::thread watcher([this, on_exit = std::move(on_exit)] {
+    std::thread watcher([state, on_exit = std::move(on_exit)] {
 #if defined(_WIN32)
-        WaitForSingleObject(handles_->child, INFINITE);
+        WaitForSingleObject(state->child, INFINITE);
         DWORD code = 0;
-        GetExitCodeProcess(handles_->child, &code);
-        exit_code_.store(static_cast<int>(code));
+        GetExitCodeProcess(state->child, &code);
+        state->exit_code.store(static_cast<int>(code));
 #else
         int status = 0;
-        waitpid(handles_->child, &status, 0);
-        exit_code_.store(WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+        waitpid(state->child, &status, 0);
+        state->exit_code.store(WIFEXITED(status) ? WEXITSTATUS(status) : -1);
 #endif
-        running_.store(false);
-        if (on_exit) on_exit(exit_code_.load());
+        state->running.store(false);
+        if (on_exit) on_exit(state->exit_code.load());
     });
     watcher.detach();
 
@@ -191,62 +230,84 @@ core::Status ProcessRunner::launch(const ProcessConfig& config, OutputFn on_stdo
 }
 
 core::Status ProcessRunner::write_stdin(const std::string& data) {
-    if (!running_.load() || handles_ == nullptr) {
+    if (!state_ || !state_->running.load()) {
         return core::Status::fail(
             core::Error(core::ErrorCode::ProcessError, "process not running"));
     }
 #if defined(_WIN32)
     DWORD written = 0;
-    if (!WriteFile(handles_->stdin_write, data.data(), static_cast<DWORD>(data.size()),
-                   &written, nullptr)) {
+    if (!WriteFile(state_->stdin_write, data.data(), static_cast<DWORD>(data.size()), &written,
+                   nullptr)) {
         return core::Status::fail(
             core::Error(core::ErrorCode::ProcessError, "stdin write failed"));
     }
 #else
-    ssize_t written = ::write(handles_->stdin_write, data.data(), data.size());
-    if (written < 0) {
-        return core::Status::fail(
-            core::Error(core::ErrorCode::ProcessError, "stdin write failed"));
+    std::size_t offset = 0;
+    while (offset < data.size()) {
+        const ssize_t written = ::write(state_->stdin_write, data.data() + offset,
+                                        data.size() - offset);
+        if (written < 0) {
+            if (errno == EINTR) continue;
+            return core::Status::fail(
+                core::Error(core::ErrorCode::ProcessError, "stdin write failed"));
+        }
+        offset += static_cast<std::size_t>(written);
     }
 #endif
     return core::Status::ok();
 }
 
 void ProcessRunner::close_stdin() {
-    if (handles_ == nullptr) return;
+    if (!state_) return;
 #if defined(_WIN32)
-    if (handles_->stdin_write != nullptr) {
-        CloseHandle(handles_->stdin_write);
-        handles_->stdin_write = nullptr;
+    if (state_->stdin_write != nullptr) {
+        CloseHandle(state_->stdin_write);
+        state_->stdin_write = nullptr;
     }
 #else
-    if (handles_->stdin_write >= 0) {
-        ::close(handles_->stdin_write);
-        handles_->stdin_write = -1;
+    if (state_->stdin_write >= 0) {
+        ::close(state_->stdin_write);
+        state_->stdin_write = -1;
     }
 #endif
 }
 
 void ProcessRunner::terminate(int timeout_ms) {
-    if (handles_ == nullptr || !running_.load()) return;
+    if (!state_ || !state_->running.load()) {
+        // Still release handles we own, even when the child already exited.
+        if (state_) {
 #if defined(_WIN32)
-    TerminateProcess(handles_->child, 1);
-    WaitForSingleObject(handles_->child, static_cast<DWORD>(timeout_ms));
-    if (handles_->child) CloseHandle(handles_->child);
+            if (state_->child != nullptr) {
+                CloseHandle(state_->child);
+                state_->child = nullptr;
+            }
+#endif
+            close_stdin();
+        }
+        return;
+    }
+#if defined(_WIN32)
+    TerminateProcess(state_->child, 1);
+    WaitForSingleObject(state_->child, static_cast<DWORD>(timeout_ms));
+    if (state_->child != nullptr) {
+        CloseHandle(state_->child);
+        state_->child = nullptr;
+    }
 #else
-    kill(handles_->child, SIGTERM);
-    const auto deadline = std::chrono::steady_clock::now() +
-                          std::chrono::milliseconds(timeout_ms);
-    while (running_.load() && std::chrono::steady_clock::now() < deadline) {
+    kill(state_->child, SIGTERM);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (state_->running.load() && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
-    if (running_.load()) kill(handles_->child, SIGKILL);
+    if (state_->running.load()) kill(state_->child, SIGKILL);
 #endif
-    running_.store(false);
+    state_->running.store(false);
+    close_stdin();
 }
 
-bool ProcessRunner::is_running() const { return running_.load(); }
+bool ProcessRunner::is_running() const { return state_ && state_->running.load(); }
 
-int ProcessRunner::exit_code() const { return exit_code_.load(); }
+int ProcessRunner::exit_code() const { return state_ ? state_->exit_code.load() : -1; }
 
 }  // namespace trinity::process

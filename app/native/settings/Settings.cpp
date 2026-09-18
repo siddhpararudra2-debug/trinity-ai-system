@@ -61,7 +61,7 @@ core::Status SettingsStore::seed_defaults() {
                 {core::Json(descriptor.key), core::Json(descriptor.default_value),
                  core::Json(now)});
             insert.is_error()) {
-            return insert;
+            return core::status_of(std::move(insert));
         }
     }
     return core::Status::ok();
@@ -93,11 +93,13 @@ core::Status SettingsStore::set(const std::string& key, const std::string& value
     auto existing = db_->query_one("SELECT value FROM settings WHERE key = ?;", {core::Json(key)});
     if (existing.is_error()) return core::Status::fail(existing.take_error());
     if (existing.value().has_value()) {
-        return db_->run("UPDATE settings SET value = ?, updated_at = ? WHERE key = ?;",
-                        {core::Json(value), core::Json(core::iso_utc_now()), core::Json(key)});
+        return core::status_of(
+            db_->run("UPDATE settings SET value = ?, updated_at = ? WHERE key = ?;",
+                     {core::Json(value), core::Json(core::iso_utc_now()), core::Json(key)}));
     }
-    return db_->run("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?);",
-                    {core::Json(key), core::Json(value), core::Json(core::iso_utc_now())});
+    return core::status_of(db_->run(
+        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?);",
+        {core::Json(key), core::Json(value), core::Json(core::iso_utc_now())}));
 }
 
 core::Result<std::string> SettingsStore::workspace_root() const { return get("workspace.root"); }

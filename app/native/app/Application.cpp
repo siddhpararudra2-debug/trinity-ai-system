@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <system_error>
 #include <utility>
+
+#include "../core/FileSystem.hpp"
 
 #include "../artifacts/Artifact.hpp"
 #include "../commands/BuiltinCommands.hpp"
@@ -127,7 +130,37 @@ core::Status Application::initialize(const ApplicationConfig& config) {
         }
     }
 
-    // 4. Database (open + migrate).
+    // 4. Database (open + migrate) — with legacy backend/storage fallback (D8 inversion).
+    // If native DB does not exist but a legacy backend/storage/trinity.db does, copy it
+    // before open_and_migrate so existing V1 data is preserved (single writer after).
+    {
+        std::error_code fs_ec;
+        if (!std::filesystem::exists(impl_->layout.database_file, fs_ec) || fs_ec) {
+            // Candidate legacy locations (relative to exe dir or cwd)
+            std::vector<std::string> candidates;
+            std::string exeDir = platform::executable_directory();
+            if (!exeDir.empty()) {
+                candidates.push_back(exeDir + "/../backend/storage/trinity.db");
+                candidates.push_back(exeDir + "/../../backend/storage/trinity.db");
+                candidates.push_back(exeDir + "/../../trinity-ai-system/backend/storage/trinity.db");
+            }
+            candidates.push_back("backend/storage/trinity.db");
+            candidates.push_back("../backend/storage/trinity.db");
+            candidates.push_back("storage/trinity.db");
+            for (auto& cand : candidates) {
+                std::error_code ec2;
+                auto norm = core::FileSystem::normalise(cand).string();
+                if (std::filesystem::exists(norm, ec2) && !ec2 && std::filesystem::file_size(norm, ec2) > 0 && !ec2) {
+                    // Copy legacy DB into native location (best-effort, never overwrite native)
+                    std::filesystem::copy_file(norm, impl_->layout.database_file, std::filesystem::copy_options::overwrite_existing, ec2);
+                    if (!ec2) {
+                        log_.info("migrated legacy backend DB", [&]{ core::Json c=core::Json::object(); c["from"]=norm; c["to"]=impl_->layout.database_file; return c; }());
+                    }
+                    break;
+                }
+            }
+        }
+    }
     auto opened = db::open_and_migrate(impl_->layout.database_file);
     if (opened.is_error()) return core::Status::fail(opened.take_error());
     impl_->database = std::make_unique<db::Database>(opened.take_value());

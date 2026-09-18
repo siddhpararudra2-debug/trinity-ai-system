@@ -6,14 +6,17 @@
 //   - streamed stdout/stderr through the IPC LineSplitter
 //   - graceful terminate then kill after a timeout
 //
-// Implementation uses std::system-free popen-free pipes; on Windows the
-// CreateProcess path is isolated in the .cpp so the interface stays portable.
+// Lifetimes: the reader/watcher threads are detached but hold a shared_ptr to
+// the process state, never a pointer to the ProcessRunner, so destroying the
+// runner mid-run cannot turn into a use-after-free.
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../core/Error.hpp"
@@ -27,7 +30,9 @@ struct ProcessConfig {
     std::string working_directory;
 };
 
-struct ProcessHandles;
+// Platform handles + live status for one child process. Defined in the .cpp so
+// <windows.h> stays out of this header; shared with the worker threads.
+struct ProcessState;
 
 class ProcessRunner {
 public:
@@ -37,8 +42,11 @@ public:
     ProcessRunner() = default;
     ~ProcessRunner();
 
-    // Launches the child. Returns false with an error when the executable
-    // cannot be started. Output callbacks fire on this thread.
+    ProcessRunner(const ProcessRunner&) = delete;
+    ProcessRunner& operator=(const ProcessRunner&) = delete;
+
+    // Launches the child. Returns an error when the executable cannot be
+    // started. Output callbacks fire on background reader threads.
     core::Status launch(const ProcessConfig& config, OutputFn on_stdout, OutputFn on_stderr,
                         ExitFn on_exit);
 
@@ -55,9 +63,7 @@ public:
     int exit_code() const;
 
 private:
-    std::unique_ptr<ProcessHandles> handles_;
-    std::atomic<int> exit_code_{-1};
-    std::atomic<bool> running_{false};
+    std::shared_ptr<ProcessState> state_;
 };
 
 }  // namespace trinity::process

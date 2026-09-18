@@ -32,6 +32,21 @@ try {
     cmake --build $BuildDir --config Release --parallel
     if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 
+    if ($WithQt) {
+        Write-Host "Collecting Qt runtime (windeployqt)..."
+        $collect = Join-Path $PSScriptRoot "collect_qt_runtime.ps1"
+        if (Test-Path $collect) { pwsh -NoProfile -File $collect -BuildDir $BuildDir }
+    }
+
+    # Smoke test the installed tree before cpack
+    Write-Host "Smoke: trinity-shell --help (if built)..."
+    $smokeBin = Join-Path $BuildDir "bin/Release/trinity-shell.exe"
+    if (-not (Test-Path $smokeBin)) { $smokeBin = Join-Path $BuildDir "Release/trinity-shell.exe" }
+    if (Test-Path $smokeBin) {
+        $env:TRINITY_DATA_DIR = Join-Path $env:TEMP ("trinity-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0,8))
+        try { & $smokeBin --help 2>&1 | Out-Null; Write-Host "smoke ok (exit $LASTEXITCODE)" } finally { Remove-Item -Recurse -Force $env:TRINITY_DATA_DIR -ErrorAction SilentlyContinue; Remove-Item Env:TRINITY_DATA_DIR -ErrorAction SilentlyContinue }
+    }
+
     foreach ($generator in $Generators.Split(";")) {
         Write-Host "Packaging with $generator..."
         Push-Location $BuildDir

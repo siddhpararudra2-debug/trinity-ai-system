@@ -41,18 +41,30 @@ cpack -C Release -G NSIS      # requires NSIS on PATH (choco install nsis)
 CI runs the same commands in the `native-installer` job of
 `.github/workflows/native.yml` and uploads both artifacts.
 
+## Increment D12 — Qt & smoke landed
+
+* `windeployqt` collection lives in `installer/scripts/collect_qt_runtime.ps1` and is
+  invoked by `package_windows.ps1 -WithQt`; CI `native-installer` smoke now
+  expands the ZIP into a temp prefix and runs `trinity-shell --help` with
+  `TRINITY_DATA_DIR` isolated (no real user data touched).
+* Viewport `rendering/3d/GeometryLoader` parses binary STL (80-byte header exact)
+  and feeds live `ViewportController.meshStats` — GLB remains honest scaffold
+  (`GLB parsing not yet implemented — render STL instead`).
+* Window geometry (`windowWidth/Height/X/Y`) persists via `LayoutController`
+  `layout.json`; drag/drop STL onto main window routes to Artifacts.
+
 ## Gaps (tracked, not hidden)
 
 1. **No bundled Python runtime yet.** The installer ships the engine-host script
    but relies on a system Python. The release build must carry an embedded
    interpreter (python.org "embeddable package" extracted under
-   `bin/python/runtime`) plus `requirements-enginehost.txt`.
-2. **No Qt desktop shell in the installer.** The `trinity` Qt/QML target is
-   optional (`TRINITY_WITH_QT=ON`) and is not packaged. Until it is packaged and
-   smoke-tested on a clean VM, the shipped front-end is the console shell.
+   `bin/python/runtime`) plus `requirements-enginehost.txt`. Layout is reserved;
+   `StorageLayout::engine_host_script` already resolves next to the binary.
+2. **Qt desktop shell in installer is opt-in.** `TRINITY_WITH_QT=ON` builds
+   `trinity.exe`; `package_windows.ps1 -WithQt` collects its runtime; CI
+   `native-core` still proves `Qt=OFF` zero-dep, `native-installer` remains `OFF`
+   until Qt is on the runner (aqtinstall). `installer/README.md` smoke proves
+   the Qt path locally.
 3. **No code signing.** `Trinity-Setup.exe` will be unsigned until a certificate
    is available, so Windows SmartScreen will warn. Signing is a release step,
    not an architecture step.
-4. **No smoke test of the installed product.** Packaging tests (install into a
-   temp prefix, run `trinity-shell` with `TRINITY_DATA_DIR` pointed at a temp
-   directory, assert exit code 0) are the next increment.

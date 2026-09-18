@@ -53,4 +53,12 @@ private:
     std::optional<Error> error_;
 };
 
+// Collapses a Result<T> into a Status for call sites that only report success
+// or failure (e.g. a database write whose affected-row count is irrelevant).
+template <typename T>
+Status status_of(Result<T>&& outcome) {
+    if (outcome.is_ok()) return Status::ok();
+    return Status::fail(outcome.take_error());
+}
+
 }  // namespace trinity::core

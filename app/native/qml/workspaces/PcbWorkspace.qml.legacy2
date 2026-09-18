@@ -1,0 +1,53 @@
+// Trinity — PCB workspace (scaffolded, honest)
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "../theme"
+import "../components"
+
+ScrollView {
+    clip: true
+    ColumnLayout {
+        width: parent.width
+        spacing: 16
+        anchors.margins: 16
+        SectionHeader { number: "04"; label: "PCB — LAYOUT"; Layout.fillWidth: true }
+        ScaffoldBanner { Layout.fillWidth: true; engineId: "pcb"; detail: Trinity.workspace.availabilityDetail("pcb") }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 320
+            radius: TrinityTheme.radiusM
+            color: TrinityTheme.panel
+            border.color: TrinityTheme.border
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 12
+                width: 420
+                Label { Layout.alignment: Qt.AlignHCenter; text: "▭"; color: TrinityTheme.textDim; font.pixelSize: 42 }
+                Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: "PCB generation is not implemented in this build."; color: TrinityTheme.textMuted; font.pixelSize: 13; wrapMode: Text.Wrap }
+                Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: "Netlist import, placement, routing and Gerber export are scaffolded. The engine correctly returns capability_unavailable and the registry reports health: scaffolded."; color: TrinityTheme.textFaint; font.pixelSize: 11; wrapMode: Text.Wrap }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    Button { text: "View Registry"; onClicked: Trinity.workspace.switchTo("cad") }
+                    Button { text: "Generate (disabled)"; enabled: false; ToolTip.text: "SCAFFOLD — 501"; ToolTip.visible: hovered }
+                }
+            }
+        }
+        GroupBox {
+            Layout.fillWidth: true
+            title: "Planned capabilities"
+            background: Rectangle { color: "transparent"; border.color: TrinityTheme.borderSoft; radius: TrinityTheme.radiusM }
+            label: Label { text: parent.title; color: TrinityTheme.textFaint; font.family: TrinityTheme.fontMono; font.pixelSize: 10; leftPadding: 6 }
+            Flow {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 6
+                Repeater {
+                    model: ["netlist import","placement","routing","DRC","Gerber","BOM"]
+                    Label { required property string modelData; text: modelData; color: TrinityTheme.textFaint; font.family: TrinityTheme.fontMono; font.pixelSize: 10; padding: 6; background: Rectangle{color: TrinityTheme.surface; border.color: TrinityTheme.borderSoft; radius: 3} }
+                }
+            }
+        }
+    }
+}

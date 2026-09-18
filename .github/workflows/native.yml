@@ -98,6 +98,21 @@ jobs:
         working-directory: build/installer
         run: cpack -C Release -G NSIS
 
+      - name: Smoke — install to temp prefix and run trinity-shell
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:TEMP ("trinity-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0,8))
+          New-Item -ItemType Directory -Path $tmp | Out-Null
+          $env:TRINITY_DATA_DIR = Join-Path $tmp "data"
+          $env:TRINITY_PROJECTS_DIR = Join-Path $tmp "projects"
+          7z x build/installer/Trinity-*.zip -o"$tmp/Trinity" | Out-Null
+          $exe = Get-ChildItem -Path "$tmp/Trinity" -Recurse -Filter "trinity-shell.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "trinity-shell.exe not found in ZIP"; exit 1 }
+          & $exe.FullName --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Error "smoke failed exit $LASTEXITCODE"; exit 1 }
+          Write-Host "smoke ok"
+          Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:

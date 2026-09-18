@@ -1,0 +1,39 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "../theme"
+import "../components"
+
+ColumnLayout {
+    spacing: 12
+    anchors.fill: parent
+    anchors.margins: 14
+
+    SectionHeader { number: "08"; label: "RESEARCH — KNOWLEDGE"; Layout.fillWidth: true }
+    ScaffoldBanner { Layout.fillWidth: true; engineId: "research"; detail: Trinity.workspace.availabilityDetail("research"); badge: "SCAFFOLD · VECTOR STORE N/A" }
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+        TextField { id: query; Layout.fillWidth: true; placeholderText: "Search knowledge base… (scaffolded)"; font.pixelSize: 12 }
+        Button { text: "Search"; enabled: false; ToolTip.text: "Research scaffolded"; ToolTip.visible: hovered }
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        radius: TrinityTheme.radiusM
+        color: TrinityTheme.panel
+        border.color: TrinityTheme.border
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 10
+            Label { text: "No index is shipped. Model provider is NullModelProvider (always unavailable) per brief §Critical Rule."; color: TrinityTheme.textDim; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            Rectangle { Layout.fillWidth: true; height: 1; color: TrinityTheme.borderSoft }
+            Label { text: "Future: ModelHub (IModelProvider/ICADGenerator/IPCBGenerator/IEngineeringReasoner) is the replaceable boundary. Today mocks emit deterministic plans for testing."; color: TrinityTheme.textFaint; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            Item { Layout.fillHeight: true }
+            RowLayout { Button{ text:"Open Artifacts"; onClicked: Trinity.workspace.switchTo("artifacts")} Button{ text:"View Pipeline"; enabled:false } }
+        }
+    }
+}
