@@ -71,7 +71,7 @@ function ProceduralPreview({
           <meshStandardMaterial color={wireframe ? '#B8B8B2' : '#1B1B1B'} wireframe={wireframe} roughness={0.38} metalness={0.28} />
         </RoundedBox>
       </group>
-      {[45, 135, 225, 315].map((deg) => {
+      {ARM_DEGS.map((deg) => {
         const r = 32 * Math.SQRT2;
         const x = (r / 2) * Math.cos((deg * Math.PI) / 180);
         const y = (r / 2) * Math.sin((deg * Math.PI) / 180);
@@ -84,7 +84,7 @@ function ProceduralPreview({
         );
       })}
       {/* motor mounts + LEDs */}
-      {[45, 135, 225, 315].map((deg, i) => {
+      {ARM_DEGS.map((deg, i) => {
         const endR = 25;
         const x = endR * Math.cos((deg * Math.PI) / 180);
         const y = endR * Math.sin((deg * Math.PI) / 180);
@@ -103,7 +103,7 @@ function ProceduralPreview({
         );
       })}
       {/* propellers */}
-      {[45, 135, 225, 315].map((deg, i) => {
+      {ARM_DEGS.map((deg, i) => {
         const x = 25 * Math.cos((deg * Math.PI) / 180);
         const y = 25 * Math.sin((deg * Math.PI) / 180);
         return <ViewerPropeller key={`p-${deg}`} x={x} y={y} dir={i % 2 === 0 ? 1 : -1} spin={spin} wireframe={wireframe} />;
