@@ -3,6 +3,8 @@
 // all business logic stays in trinity_core (no UI/business mixing).
 #pragma once
 
+#include <memory>
+
 #include <QObject>
 #include <QString>
 #include <QStringList>

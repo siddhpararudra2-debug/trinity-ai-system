@@ -67,9 +67,6 @@ core::Result<std::vector<WorkflowNode>> topological_order(
     return core::Result<std::vector<WorkflowNode>>::ok(std::move(ordered));
 }
 
-WorkflowRunner::WorkflowRunner(jobs::JobSystem& job_system, db::Database& db)
-    : job_system_(&job_system), db_(&db) {}
-
 core::Result<WorkflowRunResult> WorkflowRunner::run(const std::string& project_id,
                                                     const std::string& name,
                                                     const std::vector<WorkflowNode>& nodes) {

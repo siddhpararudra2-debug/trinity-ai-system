@@ -11,6 +11,7 @@
 // behind the same interfaces — no application code changes required.
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>

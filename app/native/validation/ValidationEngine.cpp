@@ -57,12 +57,14 @@ core::Status ValidationEngine::record(const std::string& artifact_id, const std:
                                       const std::string& engine, const std::string& status,
                                       const core::Json& checks) {
     const std::string validation_id = core::new_uuid();
-    return db_->run(
+    core::Result<std::int64_t> inserted = db_->run(
         "INSERT INTO validations (validation_id, artifact_id, job_id, engine, status, checks, "
         "created_at) VALUES (?, ?, ?, ?, ?, ?, ?);",
         {core::Json(validation_id), core::Json(artifact_id), core::Json(job_id),
          core::Json(engine), core::Json(status), core::Json(checks.dump()),
          core::Json(core::iso_utc_now())});
+    if (inserted.is_error()) return core::Status::fail(inserted.take_error());
+    return core::Status::ok();
 }
 
 core::Result<std::vector<ValidationRecord>> ValidationEngine::history_for_artifact(

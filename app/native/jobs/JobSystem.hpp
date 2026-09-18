@@ -19,6 +19,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <map>
@@ -156,7 +157,9 @@ public:
     std::string operation() const override { return snapshot().operation; }
     JobState state() const override { return snapshot().status; }
     bool terminal() const override { return job_state_is_terminal(snapshot().status); }
-    core::Result<JobRecord> record() const override { return snapshot(); }
+    core::Result<JobRecord> record() const override {
+        return core::Result<JobRecord>::ok(snapshot());
+    }
 
     core::Status pause() override { return manager_ == nullptr
                                                 ? core::Status::fail(no_manager())
