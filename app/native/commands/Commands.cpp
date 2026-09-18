@@ -63,20 +63,21 @@ Command parse_command(const std::string& text) {
 
     // -- CREATE ... quadcopter frame with size (V1 router port) -------------
     static const std::regex kFrameRegex(
-        R"(create|generate)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*mm\s+(?:quad(?:copter|rotor)|drone)\s+frame",
+        R"(create|generate)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*mm\s+(?:quad(?:copter|rotor)|drone)\s+frame)",
         std::regex::icase);
     std::smatch match;
     if (std::regex_search(lower, match, kFrameRegex)) {
         command.verb = lower.rfind("generate", 0) == 0 ? CommandVerb::Generate
                                                         : CommandVerb::Create;
         command.object = "quadcopter_frame";
-        command.parameters["overall_size"] = std::stod(match[2].str());
+        // Group 1 is the size (the verb alternation is non-capturing).
+        command.parameters["overall_size"] = std::stod(match[1].str());
         command.matched = true;
         return command;
     }
 
     // -- CALCULATE / evaluate an expression ---------------------------------
-    static const std::regex kCalcRegex(R"(calculate|evaluate|compute)\s+(.+)", std::regex::icase);
+    static const std::regex kCalcRegex(R"(calculate|evaluate|compute)\s+(.+))", std::regex::icase);
     if (std::regex_match(lower, match, kCalcRegex)) {
         command.verb = CommandVerb::Calculate;
         command.object = "expression";
@@ -134,7 +135,7 @@ core::Json Plan::to_json() const {
     return out;
 }
 
-Plan ScriptedPlanner::plan(const Command& command) {
+Plan ScriptedPlanner::plan(const Command& command) const {
     Plan plan;
     if (!command.matched) {
         plan.valid = false;

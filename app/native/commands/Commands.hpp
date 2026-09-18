@@ -64,7 +64,7 @@ class ICommandPlanner {
 public:
     virtual ~ICommandPlanner() = default;
     virtual std::string planner_id() const = 0;
-    virtual Plan plan(const Command& command) = 0;
+    virtual Plan plan(const Command& command) const = 0;
 };
 
 // Deterministic planner shipping now. Produces real engine plans for the
@@ -72,7 +72,7 @@ public:
 class ScriptedPlanner : public ICommandPlanner {
 public:
     std::string planner_id() const override { return "scripted"; }
-    Plan plan(const Command& command) override;
+    Plan plan(const Command& command) const override;
 };
 
 // ---------------------------------------------------------------- executor
