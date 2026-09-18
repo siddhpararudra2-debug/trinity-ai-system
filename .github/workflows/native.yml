@@ -1,0 +1,108 @@
+name: Native Desktop Core
+
+# Builds and tests the native C++ core (app/native) with no UI toolkit, guarding
+# the brief's central requirement: the core must compile independently of any
+# UI, and the existing Python engines must keep working through the IPC bridge.
+#
+# Ninja is used instead of a Visual Studio generator so the build does not depend
+# on which VS version a runner image happens to expose (the "could not find any
+# instance of Visual Studio" configure failure).
+
+on:
+  # Path-scoped rather than branch-scoped: the core is a library, so any branch
+  # that changes app/native must prove it still builds with the UI disabled.
+  push:
+    paths:
+      - "app/native/**"
+      - ".github/workflows/native.yml"
+  pull_request:
+    paths:
+      - "app/native/**"
+      - ".github/workflows/native.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-core:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows core (MSVC)
+            os: windows-latest
+            build_dir: build/msvc
+          - name: Linux core (GCC)
+            os: ubuntu-latest
+            build_dir: build/gcc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure (Qt off — core must build without any UI toolkit)
+        run: >
+          cmake -S app/native -B ${{ matrix.build_dir }} -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DTRINITY_WITH_QT=OFF
+          -DTRINITY_BUILD_TESTS=ON
+          -DTRINITY_WARNINGS_AS_ERRORS=OFF
+
+      - name: Build
+        run: cmake --build ${{ matrix.build_dir }} --parallel
+
+      - name: Core unit tests
+        run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+
+      - name: Python engine host still works (existing engines untouched)
+        run: python app/native/python/services/engine_host.py --selftest
+
+  native-installer:
+    name: Windows installer (ZIP + NSIS setup)
+    runs-on: windows-latest
+    needs: native-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Configure
+        run: >
+          cmake -S app/native -B build/installer -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DTRINITY_WITH_QT=OFF
+          -DTRINITY_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build/installer --parallel
+
+      - name: Package (portable ZIP)
+        working-directory: build/installer
+        run: cpack -C Release -G ZIP
+
+      - name: Package (NSIS installer)
+        working-directory: build/installer
+        run: cpack -C Release -G NSIS
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: trinity-windows-installer
+          if-no-files-found: error
+          path: |
+            build/installer/*.zip
+            build/installer/*.exe
