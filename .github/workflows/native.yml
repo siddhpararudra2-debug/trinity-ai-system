@@ -5,8 +5,9 @@ name: Native Desktop Core
 # UI, and the existing Python engines must keep working through the IPC bridge.
 
 on:
+  # Path-scoped rather than branch-scoped: the core is a library, so any branch
+  # that changes app/native must prove it still builds with the UI disabled.
   push:
-    branches: [main]
     paths:
       - "app/native/**"
       - ".github/workflows/native.yml"
