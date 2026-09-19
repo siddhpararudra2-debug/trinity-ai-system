@@ -50,3 +50,9 @@ POST /api/cad/generate
 ```
 
 Every engine call returns `{success, engine, operation, result, artifacts, validation, errors, job_id}`. See `docs/ARCHITECTURE.md`.
+
+## Native Windows app
+
+`app/native/` hosts the native C++20 / CMake / Qt 6 / MSVC foundation
+(`Trinity.exe`). See `app/native/README.md` for architecture, build
+requirements, and launch instructions.

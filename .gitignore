@@ -19,6 +19,16 @@
 # production
 /build
 
+# native C++ (CMake/MSVC/Qt)
+app/native/build/
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/CTestTestfile.cmake
+**/Testing/
+*.obj
+Trinity.exe
+
 # python
 __pycache__/
 *.pyc

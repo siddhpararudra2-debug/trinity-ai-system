@@ -1,0 +1,64 @@
+name: Native Windows
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+    paths:
+      - 'app/native/**'
+      - '.github/workflows/native-windows.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+    paths:
+      - 'app/native/**'
+      - '.github/workflows/native-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test (MSVC + Qt 6)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Configure
+        working-directory: app/native
+        run: cmake --preset windows-debug -DCMAKE_PREFIX_PATH="$env:Qt6_Dir"
+
+      - name: Build
+        working-directory: app/native
+        run: cmake --build --preset windows-debug
+
+      - name: Test
+        working-directory: app/native
+        run: ctest --preset windows-debug
+
+      - name: Selftest
+        working-directory: app/native/build/debug/Debug
+        env:
+          TRINITY_STORAGE_ROOT: ${{ runner.temp }}/trinity-data
+        run: ./Trinity.exe --selftest
