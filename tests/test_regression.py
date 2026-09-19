@@ -1,10 +1,13 @@
 import struct
+
 import pytest
 from fastapi.testclient import TestClient
-from src.main import app
-from src.engines.cad.ir import QuadcopterFrameIR
+
+from src.core.errors import TrinityError
 from src.engines.cad.builder import build_quadcopter_frame
 from src.engines.cad.glb import write_glb
+from src.engines.cad.ir import QuadcopterFrameIR
+from src.main import app
 from src.workflows.dag import WorkflowNode, ordered
 
 def test_flagship_frame_emits_real_glb(tmp_path):
@@ -31,5 +34,5 @@ def test_workflow_rejects_duplicate_node_ids():
 
 
 def test_ir_rejects_non_finite_dimensions():
-    with pytest.raises(Exception):
+    with pytest.raises(TrinityError):
         QuadcopterFrameIR.from_request({"overall_size": float("nan")})

@@ -5,6 +5,7 @@ import pytest
 
 from src.agents.coder import CoderAgent
 from src.agents.researcher import ResearcherAgent
+from src.core.errors import TrinityError
 from src.core.model_config import load_model_config, load_prompt_templates
 from src.intelligence.router import parse_requirement
 from src.llm.claude_client import ClaudeClient
@@ -38,7 +39,7 @@ def test_chain_and_few_shot():
     out = run_chain("Create a 50 mm quadcopter frame")
     assert out["plan"] == ["n1"]
     assert out["toolcall"]["engine"] == "cad"
-    with pytest.raises(Exception):
+    with pytest.raises(TrinityError):
         run_chain("do something unparseable xyz")
     assert "Create a 50" in inject_examples("hi")
 

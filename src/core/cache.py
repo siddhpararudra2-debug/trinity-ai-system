@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.db.database import get_connection
@@ -24,7 +24,7 @@ def get(key: str) -> dict[str, Any] | None:
         ).fetchone()
     if not row or (
         row["expires_at"]
-        and row["expires_at"] <= datetime.now(timezone.utc).isoformat()
+        and row["expires_at"] <= datetime.now(UTC).isoformat()
     ):
         return None
     return json.loads(row["response"])
@@ -39,7 +39,7 @@ def put(key: str, engine: str, operation: str, response: dict[str, Any]) -> None
                 engine,
                 operation,
                 json.dumps(response),
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
             ),
         )
         conn.commit()

@@ -2,4 +2,4 @@
 from src.agents.coder import CoderAgent
 from src.agents.researcher import ResearcherAgent
 
-__all__ = ["ResearcherAgent", "CoderAgent"]
+__all__ = ["CoderAgent", "ResearcherAgent"]

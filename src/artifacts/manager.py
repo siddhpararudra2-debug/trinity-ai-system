@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.core.config import settings
@@ -21,7 +21,7 @@ from src.engines.base import ArtifactRef
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _checksum(path: Path) -> str:

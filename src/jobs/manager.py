@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ log = get_logger("jobs")
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class JobManager:
@@ -132,10 +132,10 @@ class JobManager:
                 "errors": [exc.to_dict()],
                 "job_id": job_id,
             }
-        except Exception as exc:  # never leave a job stuck in running
+        except Exception as exc:  # noqa: BLE001 — intentional catch-all: mark failed, never stuck running
             err = {"code": "engine_execution_error", "message": str(exc), "details": {}}
             self._update_job(job_id, status="failed", progress=1.0, error=json.dumps(err))
-            log.info("job failed", extra={"ctx": {"job_id": job_id, "error": err}})
+            log.exception("job failed unexpectedly", extra={"ctx": {"job_id": job_id}})
             return {
                 "success": False,
                 "engine": engine_name,
