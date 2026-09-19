@@ -1,5 +1,8 @@
-# Trinity architecture
+# Trinity AI — Architecture (consolidated)
 
-`API → structured request → job manager → engine registry → engine → validation → artifact manager → SQLite lineage`.
+`API -> structured request -> job manager -> engine registry -> engine -> validation -> artifact manager -> SQLite lineage`
 
-The built-in CAD engine uses a library-independent IR, deterministic native mesh builder, independent validator, and binary STL/GLB exporters. A future model provider can emit structured tool calls but never executes engines itself.
+- LLM-independent: models emit structured tool-calls only, never execute engines.
+- Deterministic engines: `math` (SymPy), `cad` (native mesh + STL/GLB), scaffolds for pcb/firmware/vision/research/simulation/robotics return `capability_unavailable`.
+- Every call returns `{success, engine, operation, result, artifacts, validation, errors, job_id}`. Tracked failures are HTTP 200 `success:false`; unknown engine/job/artifact are real 404s.
+- Frontend lives in `frontend/` (Next.js). Python core lives in `src/`. Runtime state lives in `data/` (gitignored except `.gitkeep`).

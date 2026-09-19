@@ -1,0 +1,1 @@
+{"description": "Golden CAD evaluation set", "cases": [{"input": "Create a 50 mm quadcopter frame", "expected": {"engine": "cad", "operation": "generate", "parameters": {"overall_size": 50}}}]}

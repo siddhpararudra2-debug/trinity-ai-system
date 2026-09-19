@@ -1,0 +1,1 @@
+{"description": "Golden math evaluation set", "cases": [{"input": "x**2 - 4 = 0", "expected_solutions": [2, -2]}]}

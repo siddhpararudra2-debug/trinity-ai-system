@@ -1,0 +1,29 @@
+# LLM temperature, top_p, model IDs — Trinity emits structured tool-calls only.
+# Engines never run inside the model; job manager executes deterministically.
+default_provider: "openai"
+
+providers:
+  openai:
+    model_id: "gpt-4o-mini"
+    temperature: 0.2
+    top_p: 0.9
+    max_tokens: 2048
+  anthropic:
+    model_id: "claude-3-5-sonnet-20241022"
+    temperature: 0.2
+    top_p: 0.9
+    max_tokens: 2048
+
+routing:
+  # Deterministic V1 router patterns (mirrors src/intelligence/router.py)
+  cad_quadcopter_frame: "(create|generate)\\s+(a\\s+)?(?P<size>\\d+(\\.\\d+)?)\\s*mm\\s+(quad(copter|rotor)|drone)\\s+frame"
+
+engines:
+  - math
+  - cad
+  - pcb
+  - firmware
+  - vision
+  - research
+  - simulation
+  - robotics

@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -14,11 +14,34 @@
 /coverage
 
 # next.js
-/.next/
-/out/
-
+/frontend/.next/
+/frontend/out/
 # production
 /build
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# runtime state — regenerated on startup, shouldn't be versioned
+data/*.db
+data/*.db-*
+data/**/*.db
+data/trinity.db
+data/trinity.db-*
+data/artifacts/*
+data/jobs/*
+data/cad/*
+data/exports/*
+data/temp/*
+data/projects/*
+!data/**/.gitkeep
+!data/evaluation/*.json
 
 # misc
 .DS_Store

@@ -1,99 +1,52 @@
 # Trinity AI
 
-An LLM-independent engineering operating system designed for deterministic execution, independent checks, and robust verification. 
+LLM-independent engineering OS: models reason and emit structured tool-calls, deterministic engines execute, independent checks validate.
 
-Trinity AI splits reasoning and execution: large language models (LLMs) may perform reasoning at a higher level, while a rigid suite of deterministic tools handles the execution and mathematically verifiable checks validate the outputs.
+`API -> structured request -> job manager -> engine registry -> engine -> validation -> artifact manager -> SQLite lineage`
 
-## 🚀 Features
+## Layout
 
-* **LLM-Independent Execution**: Executes engineering tasks reliably without relying on probabilistic model outputs during the critical execution phase.
-* **Deterministic Tools**: Uses structured requests, job managers, and engine registries for predictable results.
-* **Independent Verification**: Incorporates validation checks separated from the generation step to ensure integrity.
-* **Built-in CAD Engine**: Utilizes a library-independent IR, deterministic native mesh builder, and outputs to binary STL/GLB. 
-* **Full-Stack Application**: Comes with a Next.js 16/React 19 Frontend and a Python Backend.
+```
+trinity-ai-system/
+├── config/model_config.yaml, prompt_templates.yaml, logging_config.yaml
+├── src/llm/base.py, openai_client.py, claude_client.py
+├── src/agents/researcher.py, coder.py
+├── src/prompt_engineering/few_shot.py, chain.py
+├── src/utils/token_counter.py, rate_limiter.py, vector_store.py
+├── src/engines/, src/api/, src/core/, src/jobs/, src/artifacts/, src/db/, src/models/
+├── frontend/ (Next.js 16 / React 19)
+├── data/cache, embeddings, evaluation/
+├── notebooks/prompt_experimentation.ipynb
+└── tests/
+```
 
-## 🏗️ Architecture Overview
-
-The system architecture flows as follows:
-
-`API → structured request → job manager → engine registry → engine → validation → artifact manager → SQLite lineage`
-
-A model provider can emit structured tool calls but will never execute engines itself, maintaining strict bounds between logic and engineering execution.
-
-For detailed information, refer to [ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## 💻 Tech Stack
-
-* **Frontend**: Next.js 16, React 19, TypeScript
-* **Backend**: Python, Uvicorn
-* **Storage/Lineage**: SQLite Artifact Manager
-* **CAD Processing**: Custom engine with deterministic mesh building
-
-## 🛠️ Getting Started
-
-### Prerequisites
-
-* Node.js
-* Python 3.9+
-* npm or yarn
-
-### Running the Backend
-
-The backend is built with Python. To start the local server:
+## Backend
 
 ```bash
-cd backend
 python -m pip install -e .
-uvicorn app.main:app --reload
+uvicorn src.main:app --reload
 ```
-The backend API should now be running locally.
 
-### Running the Frontend
-
-The frontend is a modern Next.js application.
+## Frontend
 
 ```bash
-# In the project root
-npm install
-npm run dev
+npm --prefix frontend install
+npm --prefix frontend run dev
 ```
-The frontend should be accessible at `http://localhost:3000`.
 
-## 🌐 API Endpoints
+Frontend calls `http://localhost:8000/api` via `NEXT_PUBLIC_TRINITY_API_URL`.
 
-The API is structured to handle execution, artifact management, and specialized tasks like math solving and CAD generation.
+## API
 
-**Core Endpoints:**
-* `GET /api/health` - Check system health
-* `GET /api/engines` - List available deterministic engines
-* `POST /api/execute` - Execute a generic job
-* `POST /api/math/solve` - Solve a mathematical equation/problem
-* `POST /api/cad/generate` - Generate a CAD model
+- `GET /api/health`, `GET /api/engines`
+- `POST /api/execute`, `POST /api/math/solve`, `POST /api/cad/generate`, `POST /api/requirements/execute`
+- `GET /api/jobs`, `GET /api/jobs/{job_id}`, `GET /api/artifacts/{artifact_id}`
 
-**Job & Artifact Management:**
-* `GET /api/jobs` - List all jobs
-* `GET /api/jobs/{job_id}` - Retrieve details of a specific job
-* `GET /api/artifacts/{artifact_id}` - Retrieve a generated artifact
+Example:
 
-**Flagship Example (CAD Generation):**
 ```json
 POST /api/cad/generate
-
-{
-  "parameters": {
-    "overall_size": 50
-  },
-  "outputs": ["stl", "glb", "json"]
-}
+{"type": "quadcopter_frame", "parameters": {"overall_size": 50}, "outputs": ["stl", "glb", "json"]}
 ```
-This generates a validated 50 mm quadcopter frame and returns persisted, checksummed artifacts. 
-*(Note: STEP output is currently restricted until CadQuery/OpenCascade is fully configured.)*
 
-For more comprehensive API details, see [API Reference](docs/API.md).
-
-## 📖 Documentation
-
-More comprehensive guides and documentation can be found in the `docs/` directory:
-* [Architecture](docs/ARCHITECTURE.md)
-* [API Reference](docs/API.md)
-* [CAD Details](docs/CAD.md)
+Every engine call returns `{success, engine, operation, result, artifacts, validation, errors, job_id}`. See `docs/ARCHITECTURE.md`.

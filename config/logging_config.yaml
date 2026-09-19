@@ -1,0 +1,18 @@
+# Debugging and telemetry settings (mirrors src/core/logging_config.py JSON logs)
+version: 1
+formatters:
+  json:
+    class: "src.core.logging_config.JSONFormatter"
+handlers:
+  stdout:
+    class: "logging.StreamHandler"
+    formatter: "json"
+    stream: "ext://sys.stdout"
+loggers:
+  trinity:
+    level: "INFO"
+    handlers: ["stdout"]
+    propagate: false
+root:
+  level: "INFO"
+  handlers: ["stdout"]
