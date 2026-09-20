@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "../artifacts/Artifact.hpp"
 #include "../core/Config.hpp"
@@ -21,9 +22,17 @@
 
 namespace trinity::core {
 
+struct EngineListEntry {
+    std::string name;
+    std::string version;
+    std::vector<std::string> capabilities;
+    bool implemented = false;  // true when the engine can do real work
+};
+
 struct InitSummary {
     std::string dbPath;
     size_t engineCount = 0;
+    std::vector<EngineListEntry> engines;
     std::string modelProvider;
     bool coreOk = false;
     std::string error;

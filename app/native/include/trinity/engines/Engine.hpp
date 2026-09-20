@@ -53,6 +53,7 @@ struct EngineResult {
     std::vector<std::pair<std::string, std::string>> pendingArtifacts;
     std::optional<validation::ValidationResult> validation;
     std::vector<core::Json> errors;  // each entry is an ErrorInfo JSON envelope
+    core::Json metadata = core::Json::object();
 
     bool failed() const noexcept { return !success; }
     void addError(const core::ErrorInfo& error) { errors.push_back(error.toJson()); }
@@ -70,34 +71,60 @@ struct EngineCapability {
     static EngineCapability fromJson(const core::Json& json);
 };
 
+/// Main engine abstraction (§1). Independent from specific engines.
+/// New canonical API: name()/capabilities()/execute(request)/validate().
+/// Legacy helpers (version/describe/execute(op,params)) remain as
+/// non-pure compat wrappers so existing callers keep compiling while
+/// new engines override only the canonical methods.
 class IEngine {
 public:
     virtual ~IEngine() = default;
 
-    virtual const std::string& name() const noexcept = 0;
-    virtual const std::string& version() const noexcept = 0;
-    virtual const std::vector<std::string>& capabilities() const noexcept = 0;
+    virtual std::string name() const = 0;
+    virtual std::vector<std::string> capabilities() const = 0;
+    virtual EngineResult execute(const EngineRequest& request) = 0;
+    virtual validation::ValidationResult validate(const EngineResult& result) const = 0;
 
+    // ---- compat (defaulted, override only if needed) ----
+    virtual std::string version() const { return "0.0"; }
+    virtual EngineCapability describe() const;
     virtual EngineResult execute(const std::string& operation,
-                                 const core::Json& parameters) = 0;
-    virtual EngineCapability describe() const = 0;
+                                 const core::Json& parameters);
 };
 
+/// Reusable base with request validation, capability checking,
+/// structured errors, timing, logging, metadata and validation
+/// handling. Engines may inherit or compose these helpers.
 class EngineBase : public IEngine {
 public:
+    using IEngine::execute;
     EngineCapability describe() const override;
+    EngineResult execute(const std::string& operation,
+                         const core::Json& parameters) override;
+    validation::ValidationResult validate(const EngineResult& result) const override;
 
 protected:
     std::string name_ = "base";
     std::string version_ = "0.0";
     std::vector<std::string> capabilities_;
 
+    bool hasCapability(const std::string& operation) const noexcept;
+    void requireCapability(const EngineRequest& request) const;
+    void requireParams(const EngineRequest& request,
+                       const std::vector<std::string>& keys) const;
+    EngineResult capabilityUnavailable(const EngineRequest& request,
+                                       const std::string& detail = "") const;
+    EngineResult invalidRequest(const std::string& message,
+                                const core::Json& details = core::Json::object()) const;
+    EngineResult failureResult(const EngineRequest& request, const std::string& message,
+                               const core::Json& details = core::Json::object()) const;
+    EngineResult successResult(const EngineRequest& request,
+                               const core::Json& data = core::Json::object()) const;
+
 public:
-    const std::string& name() const noexcept override { return name_; }
-    const std::string& version() const noexcept override { return version_; }
-    const std::vector<std::string>& capabilities() const noexcept override {
-        return capabilities_;
-    }
+    std::string name() const override { return name_; }
+    std::vector<std::string> capabilities() const override { return capabilities_; }
+    std::string version() const override { return version_; }
 };
 
 }  // namespace trinity::engines

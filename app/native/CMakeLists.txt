@@ -60,6 +60,9 @@ set(TRINITY_CORE_SOURCES
     src/validation/ValidationResult.cpp
     src/engines/Engine.cpp
     src/engines/EngineRegistry.cpp
+    src/engines/MathEngine.cpp
+    src/engines/CadEngine.cpp
+    src/engines/StubEngines.cpp
     src/workflows/Workflow.cpp
     src/storage/Database.cpp
     src/storage/Repositories.cpp
@@ -111,6 +114,9 @@ if(TRINITY_BUILD_TESTS)
         tests/test_filesystem.cpp
         tests/test_repositories.cpp
         tests/test_logging_config.cpp
+        tests/test_math_engine.cpp
+        tests/test_cad_stubs.cpp
+        tests/test_validation.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

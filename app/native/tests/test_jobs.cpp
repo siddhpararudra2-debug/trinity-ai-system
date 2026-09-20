@@ -18,17 +18,24 @@ public:
         capabilities_ = {"run"};
     }
 
-    trinity::engines::EngineResult execute(const std::string& operation,
-                                           const trinity::core::Json& params) override {
-        trinity::engines::EngineResult result;
-        result.success = true;
-        result.engine = name_;
-        result.operation = operation;
-        result.result = params;
+    trinity::engines::EngineResult execute(
+        const trinity::engines::EngineRequest& request) override {
+        requireCapability(request);
+        trinity::engines::EngineResult result = successResult(request, request.parameters);
         trinity::validation::ValidationResult validation;
         validation.status = trinity::validation::ValidationStatus::Validated;
+        validation.operation = request.operation;
         result.validation = validation;
         return result;
+    }
+
+    trinity::validation::ValidationResult validate(
+        const trinity::engines::EngineResult& result) const override {
+        trinity::validation::ValidationResult validation;
+        validation.status = trinity::validation::ValidationStatus::Validated;
+        validation.operation = result.operation;
+        validation.jobId = result.jobId;
+        return validation;
     }
 };
 

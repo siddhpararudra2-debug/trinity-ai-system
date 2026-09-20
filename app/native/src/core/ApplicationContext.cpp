@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "trinity/core/Paths.hpp"
+#include "trinity/engines/StubEngines.hpp"
 
 namespace trinity::core {
 
@@ -34,10 +35,16 @@ Status ApplicationContext::initialize() {
         log.info("app", "database initialized", Json{{"db_path", settings_.dbPath}});
 
         registry_ = std::make_shared<engines::EngineRegistry>();
-        // Later phases register math/cad/pcb/firmware/vision/research/
-        // simulation/robotics here. Nothing ships yet by design.
-        log.info("app", "engine registry ready",
-                 Json{{"engines", registry_->list().size()}});
+        // Application -> Core init -> Engine Registry -> Register engines -> UI.
+        engines::registerAllEngines(*registry_);
+        {
+            core::Json names = core::Json::array();
+            for (const auto& cap : registry_->list()) {
+                names.push_back(cap.name);
+            }
+            log.info("app", "engine registry ready",
+                     Json{{"engines", registry_->list().size()}, {"names", names}});
+        }
 
         artifacts_ = std::make_shared<artifacts::ArtifactManager>(db_,
                                                                   settings_.artifactsDir);
@@ -88,6 +95,18 @@ InitSummary ApplicationContext::summary() const {
     InitSummary out;
     out.dbPath = settings_.dbPath;
     out.engineCount = registry_ ? registry_->list().size() : 0;
+    if (registry_) {
+        for (const auto& cap : registry_->list()) {
+            EngineListEntry entry;
+            entry.name = cap.name;
+            entry.version = cap.version;
+            entry.capabilities = cap.capabilities;
+            // Only math does real deterministic work in this phase; cad
+            // exposes describe only; the rest are scaffolded stubs.
+            entry.implemented = (cap.name == "math");
+            out.engines.push_back(std::move(entry));
+        }
+    }
     out.modelProvider = model_ ? model_->info().displayName : std::string("none");
     out.coreOk = ready_ && initError_.empty();
     out.error = initError_;

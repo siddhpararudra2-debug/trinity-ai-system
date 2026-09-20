@@ -134,6 +134,7 @@ core::Json JobManager::runSync(const std::string& engineName, const std::string&
     std::shared_ptr<engines::IEngine> engine;
     try {
         engine = registry_->get(engineName);
+        (void)engine;
     } catch (const core::TrinityError& exc) {
         db_->execute(
             "UPDATE jobs SET status = 'failed', progress = 1.0, error = ?, updated_at = "
@@ -144,7 +145,15 @@ core::Json JobManager::runSync(const std::string& engineName, const std::string&
 
     engines::EngineResult engineResult;
     try {
-        engineResult = engine->execute(operation, parameters);
+        // Internal flow: EngineRequest -> Registry -> capability check ->
+        // execute -> validate -> EngineResult (no LLM involved).
+        engines::EngineRequest request;
+        request.requestId = core::newUuid();
+        request.engine = engineName;
+        request.operation = operation;
+        request.parameters = parameters;
+        engineResult = registry_->execute(request);
+        engineResult.jobId = jobId;
     } catch (const core::TrinityError& exc) {
         db_->execute(
             "UPDATE jobs SET status = 'failed', progress = 1.0, error = ?, updated_at = "

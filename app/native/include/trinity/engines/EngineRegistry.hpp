@@ -19,9 +19,16 @@ namespace trinity::engines {
 class EngineRegistry {
 public:
     void registerEngine(std::shared_ptr<IEngine> engine);
+    bool unregisterEngine(const std::string& name);
     std::shared_ptr<IEngine> get(const std::string& name) const;
     bool has(const std::string& name) const noexcept;
     std::vector<EngineCapability> list() const;
+    std::vector<std::string> listCapabilities(const std::string& name) const;
+
+    /// Full routing flow (§10): lookup -> capability check -> execute ->
+    /// validate -> EngineResult. Throws structured errors for unknown
+    /// engine / unsupported operation / invalid request.
+    EngineResult execute(const EngineRequest& request) const;
 
     // Names of engines planned for later phases. No implementations
     // ship yet; kept here so UI and tests share one catalogue.

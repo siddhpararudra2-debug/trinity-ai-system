@@ -58,6 +58,32 @@ MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
     dbLabel->setWordWrap(true);
     layout->addWidget(dbLabel);
 
+    auto* enginesTitle = new QLabel(QStringLiteral("Engines (from Registry)"), central);
+    enginesTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+    enginesTitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(enginesTitle);
+
+    if (summary_.engines.empty()) {
+        auto* none = new QLabel(QStringLiteral("No engines registered"), central);
+        none->setAlignment(Qt::AlignCenter);
+        layout->addWidget(none);
+    } else {
+        for (const auto& engine : summary_.engines) {
+            const QString line =
+                QStringLiteral("%1  •  %2  •  %3")
+                    .arg(QString::fromStdString(engine.name).toUpper())
+                    .arg(QString::fromStdString(engine.version))
+                    .arg(engine.implemented ? QStringLiteral("implemented")
+                                            : QStringLiteral("scaffolded/unavailable"));
+            auto* row = new QLabel(line, central);
+            row->setStyleSheet(engine.implemented
+                                   ? QStringLiteral("font-size: 13px; color: #1a7f37;")
+                                   : QStringLiteral("font-size: 13px; color: #888;"));
+            row->setAlignment(Qt::AlignCenter);
+            layout->addWidget(row);
+        }
+    }
+
     layout->addStretch(1);
     setCentralWidget(central);
 }

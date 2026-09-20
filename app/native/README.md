@@ -42,7 +42,7 @@ app/native/
   include/trinity/
     core/{Error,Result,Config,Logger,Paths,Uuid,Time,Json,ApplicationContext}.hpp
     fs/Filesystem.hpp
-    engines/{Engine,EngineRegistry}.hpp
+    engines/{Engine,EngineRegistry,MathEngine,CadEngine,StubEngines}.hpp
     jobs/Job.hpp
     workflows/Workflow.hpp
     validation/ValidationResult.hpp
@@ -52,7 +52,8 @@ app/native/
   src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,storage}/...
   ui/MainWindow.{hpp,cpp}
   tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
-             jobs,uuid,serialization,filesystem,repositories,logging_config}.cpp
+             jobs,uuid,serialization,filesystem,repositories,logging_config,
+             math_engine,cad_stubs,validation}.cpp
   third_party/{sqlite,json,doctest}/
   build/{debug,release}/ (gitignored)
 ```
@@ -123,12 +124,14 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (34 cases, GUI-independent): error envelope + source/timestamp,
-engine registry, workflow ordering, SQLite schema + transactions +
-prepared statements, null model provider (`generate` + `generatePlan`),
-paths/config (Windows dirs), jobs + artifact checksums, UUID, model
-serialization round-trips, filesystem ops + safeJoin, repositories CRUD,
-logging file + buffer.
+Suites (47 cases, GUI-independent): error envelope + source/timestamp,
+engine registry (register/dup-reject/unregister/listCaps/routing +
+unknown/unsupported/invalid handling), math evaluation, cad skeleton +
+domain stubs, validation states + severity messages, workflow ordering,
+SQLite schema + transactions + prepared statements, null model provider
+(`generate` + `generatePlan`), paths/config (Windows dirs), jobs +
+artifact checksums, UUID, model serialization round-trips, filesystem
+ops + safeJoin, repositories CRUD, logging file + buffer.
 
 ## Implemented in this phase
 
@@ -152,14 +155,27 @@ logging file + buffer.
   (`main.cpp` is a thin shell)
 - `IModelProvider::generate` seam + `NullModelProvider` (app runs fully
   without an LLM)
-- `Trinity.exe` (+ `--selftest`), `trinity_tests` via CTest
+- Engine architecture: `IEngine::{name,capabilities,execute,validate}` +
+  `EngineBase` helpers (capability check, structured errors, timing,
+  logging, metadata) + `EngineRegistry::{register,unregister,get,has,
+  list,listCapabilities,execute}` with duplicate rejection and
+  Request→Registry→Capability-check→Execute→Validate→Result routing
+- `MathEngine::evaluate_expression` deterministic (`2 + 3 * 4` → `14`);
+  `CADEngine` skeleton (describe + truthful `CAPABILITY_UNAVAILABLE`);
+  PCB/Firmware/Vision/Research/Simulation/Robotics stubs registering
+  metadata and refusing without fake results
+- Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
+  `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
+- Qt `MainWindow` engine list (MATH implemented vs scaffolded/unavailable)
+- `Trinity.exe` (+ `--selftest`: 8 engines, math check, refusal check),
+  `trinity_tests` via CTest
 
 ## Intentionally left for later phases
 
-- Math / CAD / PCB / Firmware / Research / Simulation / Vision /
-  Robotics engines (registry names reserved only)
+- Full Math (symbolic/numeric beyond `evaluate_expression`)
+- Full CAD quadcopter geometry, mesh builders, exporters
+- Real PCB/Firmware/Vision/Research/Simulation/Robotics implementations
 - Real `IModelProvider` implementations (OpenAI, Anthropic, local,
   custom Trinity model)
-- CAD mesh builders, validators beyond the status enum, exporters
 - Installer/packaging (CPack/NSIS), code signing, update channel
 - QML workspace, 3D viewport, project tree, settings dialogs

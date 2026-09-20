@@ -14,14 +14,10 @@ public:
         capabilities_ = std::move(caps);
     }
 
-    trinity::engines::EngineResult execute(const std::string& operation,
-                                           const trinity::core::Json& params) override {
-        trinity::engines::EngineResult result;
-        result.success = true;
-        result.engine = name_;
-        result.operation = operation;
-        result.result = params;
-        return result;
+    trinity::engines::EngineResult execute(
+        const trinity::engines::EngineRequest& request) override {
+        requireCapability(request);
+        return successResult(request, request.parameters);
     }
 };
 
@@ -62,4 +58,57 @@ TEST_CASE("planned engine catalogue covers the eight future engines") {
     const auto& names = trinity::engines::EngineRegistry::plannedEngineNames();
     CHECK(names.size() == 8);
     CHECK(std::find(names.begin(), names.end(), "cad") != names.end());
+}
+
+TEST_CASE("registry rejects duplicate registration") {
+    trinity::engines::EngineRegistry registry;
+    registry.registerEngine(std::make_shared<StubEngine>("math", std::vector<std::string>{"solve"}));
+    CHECK_THROWS_AS(
+        registry.registerEngine(
+            std::make_shared<StubEngine>("math", std::vector<std::string>{"solve"})),
+        trinity::core::RequestValidationError);
+}
+
+TEST_CASE("registry unregister removes engines") {
+    trinity::engines::EngineRegistry registry;
+    registry.registerEngine(std::make_shared<StubEngine>("math", std::vector<std::string>{"solve"}));
+    CHECK(registry.unregisterEngine("math"));
+    CHECK_FALSE(registry.has("math"));
+    CHECK_FALSE(registry.unregisterEngine("math"));
+}
+
+TEST_CASE("registry lists capabilities per engine") {
+    trinity::engines::EngineRegistry registry;
+    registry.registerEngine(std::make_shared<StubEngine>(
+        "math", std::vector<std::string>{"evaluate_expression", "describe"}));
+    CHECK(registry.listCapabilities("math") ==
+          std::vector<std::string>{"evaluate_expression", "describe"});
+    CHECK_THROWS_AS(registry.listCapabilities("ghost"), trinity::core::EngineNotFoundError);
+}
+
+TEST_CASE("registry routes requests through capability check and validate") {
+    trinity::engines::EngineRegistry registry;
+    registry.registerEngine(std::make_shared<StubEngine>("math", std::vector<std::string>{"solve"}));
+    trinity::engines::EngineRequest ok;
+    ok.engine = "math";
+    ok.operation = "solve";
+    const auto result = registry.execute(ok);
+    CHECK(result.success);
+    CHECK(result.operation == "solve");
+    CHECK(result.metadata.contains("duration_ms"));
+
+    trinity::engines::EngineRequest badOp;
+    badOp.engine = "math";
+    badOp.operation = "fly";
+    CHECK_THROWS_AS(registry.execute(badOp), trinity::core::CapabilityUnavailableError);
+
+    trinity::engines::EngineRequest unknown;
+    unknown.engine = "ghost";
+    unknown.operation = "run";
+    CHECK_THROWS_AS(registry.execute(unknown), trinity::core::EngineNotFoundError);
+
+    trinity::engines::EngineRequest invalid;
+    invalid.engine = "math";
+    invalid.operation = "";
+    CHECK_THROWS_AS(registry.execute(invalid), trinity::core::RequestValidationError);
 }
