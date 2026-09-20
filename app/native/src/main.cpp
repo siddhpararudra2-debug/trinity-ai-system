@@ -19,6 +19,8 @@
 #include "trinity/core/ApplicationContext.hpp"
 #include "trinity/core/Logger.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
+#include "trinity/intelligence/ModelProviderFactory.hpp"
+#include "trinity/intelligence/Planner.hpp"
 
 #ifdef TRINITY_WITH_QT
 #include <QApplication>
@@ -97,7 +99,24 @@ int runSelftest() {
     const auto response = context.model().generate(request);
     const bool modelOk = !response.success && !response.error.is_null();
     std::cout << (modelOk ? "[PASS] " : "[FAIL] ") << "model_refuses_without_llm\n";
-    allOk = allOk && missOk && mathOk && refuseOk && modelOk;
+    // Planner with no model must execute nothing (default Null path).
+    bool plannerOk = false;
+    try {
+        trinity::intelligence::Planner planner(context.model(), context.jobs(),
+                                               context.engines());
+        const auto plan = planner.planAndExecute(request);
+        plannerOk = !plan.success && plan.steps.empty() && !plan.error.is_null();
+    } catch (...) {
+        plannerOk = false;
+    }
+    std::cout << (plannerOk ? "[PASS] " : "[FAIL] ") << "planner_runs_nothing_without_llm\n";
+    // Provider selection honors env with safe fallback to null.
+    const bool providerOk =
+        !context.config().model.providerId.empty() &&
+        trinity::intelligence::ModelProviderFactory::instance().has(
+            context.model().info().providerId);
+    std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
+    allOk = allOk && missOk && mathOk && refuseOk && modelOk && plannerOk && providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;
@@ -132,6 +151,7 @@ int main(int argc, char* argv[]) {
         uiSummary.engines.push_back(std::move(out));
     }
     uiSummary.modelProvider = summary.modelProvider;
+    uiSummary.modelAvailable = context.model().info().available;
     uiSummary.coreOk = status.isOk();
 
     trinity::ui::MainWindow window(uiSummary);

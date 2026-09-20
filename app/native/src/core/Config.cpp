@@ -44,7 +44,23 @@ std::string lowerCopy(std::string value) {
     return value;
 }
 
+int getenvIntOr(const char* name, int fallback) {
+    const std::string raw = getenvOr(name, "");
+    if (raw.empty()) {
+        return fallback;
+    }
+    try {
+        return std::stoi(raw);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 }  // namespace
+
+std::string modelApiKeyFromEnv() {
+    return getenvOr("TRINITY_MODEL_API_KEY", "");
+}
 
 std::string defaultUserStorageRoot() {
 #ifdef _WIN32
@@ -112,6 +128,11 @@ Settings loadSettings() {
     settings.buildMode = (mode == "release" || mode == "prod" || mode == "production")
                              ? "release"
                              : "development";
+
+    settings.model.providerId = getenvOr("TRINITY_MODEL_PROVIDER", "null");
+    settings.model.endpoint = getenvOr("TRINITY_MODEL_ENDPOINT", "");
+    settings.model.modelName = getenvOr("TRINITY_MODEL_NAME", "");
+    settings.model.timeoutMs = getenvIntOr("TRINITY_MODEL_TIMEOUT_MS", 30000);
     return settings;
 }
 
@@ -125,6 +146,14 @@ std::string Settings::logFilePath() const {
     return logDir + (windowsSep ? "\\trinity.log" : "/trinity.log");
 }
 
+Json ModelSettings::toJson() const {
+    // NOTE: no api_key member exists by design — see modelApiKeyFromEnv().
+    return Json{{"provider", providerId},
+                {"endpoint", endpoint},
+                {"model", modelName},
+                {"timeout_ms", timeoutMs}};
+}
+
 Json Settings::toJson() const {
     return Json{{"app_name", appName},
                 {"app_version", appVersion},
@@ -134,7 +163,8 @@ Json Settings::toJson() const {
                 {"db_path", dbPath},
                 {"artifacts_dir", artifactsDir},
                 {"log_dir", logDir},
-                {"log_file", logFilePath()}};
+                {"log_file", logFilePath()},
+                {"model", model.toJson()}};
 }
 
 }  // namespace trinity::core

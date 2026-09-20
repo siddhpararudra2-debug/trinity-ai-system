@@ -57,6 +57,9 @@ set(TRINITY_CORE_SOURCES
     src/intelligence/ModelRequest.cpp
     src/intelligence/ModelResponse.cpp
     src/intelligence/ModelProvider.cpp
+    src/intelligence/ModelProviderFactory.cpp
+    src/intelligence/ExampleProvider.cpp
+    src/intelligence/Planner.cpp
     src/validation/ValidationResult.cpp
     src/engines/Engine.cpp
     src/engines/EngineRegistry.cpp
@@ -117,6 +120,8 @@ if(TRINITY_BUILD_TESTS)
         tests/test_math_engine.cpp
         tests/test_cad_stubs.cpp
         tests/test_validation.cpp
+        tests/test_provider_factory.cpp
+        tests/test_planner.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

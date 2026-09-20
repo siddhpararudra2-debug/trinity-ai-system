@@ -23,6 +23,7 @@ struct InitSummary {
     std::size_t engineCount = 0;
     std::vector<EngineEntry> engines;
     std::string modelProvider = "none";
+    bool modelAvailable = false;  // true once another dev plugs a real LLM in
     bool coreOk = false;
 };
 

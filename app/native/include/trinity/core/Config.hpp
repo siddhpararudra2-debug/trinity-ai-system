@@ -14,6 +14,23 @@
 
 namespace trinity::core {
 
+/// Model provider selection. The API key is deliberately NOT a member:
+/// secrets come only from the TRINITY_MODEL_API_KEY environment variable,
+/// read at configure() time, and are never stored, logged, or persisted.
+struct ModelSettings {
+    std::string providerId = "null";  // TRINITY_MODEL_PROVIDER
+    std::string endpoint;             // TRINITY_MODEL_ENDPOINT
+    std::string modelName;            // TRINITY_MODEL_NAME
+    int timeoutMs = 30000;            // TRINITY_MODEL_TIMEOUT_MS
+
+    /// Config handed to the provider factory. Never contains secrets.
+    Json toJson() const;
+};
+
+/// Reads the API key from the environment. Returns empty when unset.
+/// The key must never be written to logs, JSON, or the database.
+std::string modelApiKeyFromEnv();
+
 struct Settings {
     std::string appName = "Trinity";
     std::string appVersion = "0.1.0";
@@ -37,6 +54,8 @@ struct Settings {
 
     std::string apiTitle = "Trinity AI — Engineering Operating System";
     std::string apiVersion = "1.0.0";
+
+    ModelSettings model;
 
     bool isRelease() const noexcept { return buildMode == "release"; }
 

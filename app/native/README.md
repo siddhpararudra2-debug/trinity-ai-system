@@ -47,13 +47,14 @@ app/native/
     workflows/Workflow.hpp
     validation/ValidationResult.hpp
     artifacts/Artifact.hpp
-    intelligence/{ToolCall,Intent,ModelRequest,ModelResponse,IModelProvider}.hpp
+    intelligence/{ToolCall,Intent,ModelRequest,ModelResponse,IModelProvider,
+                   ModelProviderFactory,ExampleProvider,Planner}.hpp
     storage/{Database,Repositories}.hpp
   src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,storage}/...
   ui/MainWindow.{hpp,cpp}
   tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
              jobs,uuid,serialization,filesystem,repositories,logging_config,
-             math_engine,cad_stubs,validation}.cpp
+             math_engine,cad_stubs,validation,provider_factory,planner}.cpp
   third_party/{sqlite,json,doctest}/
   build/{debug,release}/ (gitignored)
 ```
@@ -124,14 +125,45 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (47 cases, GUI-independent): error envelope + source/timestamp,
+Suites (56 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
 unknown/unsupported/invalid handling), math evaluation, cad skeleton +
-domain stubs, validation states + severity messages, workflow ordering,
-SQLite schema + transactions + prepared statements, null model provider
-(`generate` + `generatePlan`), paths/config (Windows dirs), jobs +
-artifact checksums, UUID, model serialization round-trips, filesystem
-ops + safeJoin, repositories CRUD, logging file + buffer.
+domain stubs, validation states + severity messages, provider factory +
+selection + secrets, planner (tool execution, refusal/skip paths),
+workflow ordering, SQLite schema + transactions + prepared statements,
+null model provider (`generate` + `generatePlan`), paths/config
+(Windows dirs), jobs + artifact checksums, UUID, model serialization
+round-trips, filesystem ops + safeJoin, repositories CRUD, logging
+file + buffer.
+
+## Plugging in an LLM (for the model developer)
+
+The app runs fully without a model (`null` provider). To connect one:
+
+1. Copy `include/trinity/intelligence/ExampleProvider.hpp` +
+   `src/intelligence/ExampleProvider.cpp` to your own files and rename
+   the class. The sample compiles but is never registered — it refuses
+   truthfully until you fill in the transport.
+2. Implement `configure()` (read `TRINITY_MODEL_API_KEY` via
+   `core::modelApiKeyFromEnv()` — never store or log the key),
+   `generate()` (translate `messages` → your wire format; return only
+   `{text, toolCalls}` — the Planner executes, never the provider),
+   `streamPlan()`, and `info()`.
+3. Register once at startup:
+   `ModelProviderFactory::instance().registerProvider("mine", ...);`
+4. Set the environment:
+   `TRINITY_MODEL_PROVIDER=mine`, `TRINITY_MODEL_ENDPOINT=...`,
+   `TRINITY_MODEL_NAME=...`, `TRINITY_MODEL_API_KEY=...`
+   (key is env-only; `Settings::toJson()` and logs never contain it).
+5. Run `Trinity.exe --selftest` — unknown ids fall back to `null`
+   with a `requested provider unavailable` warning, so a typo can't
+   prevent boot.
+
+Planner contract (`intelligence/Planner`): model output → validate
+each `ToolCall` against the registry (known engine + listed
+capability) → run sequentially through `JobManager::runSync`
+(tracked jobs, artifacts, validations) → stop on first failure,
+rest marked `skipped`. Model refusal executes nothing.
 
 ## Implemented in this phase
 
@@ -153,8 +185,11 @@ ops + safeJoin, repositories CRUD, logging file + buffer.
   `recent()` for future UI)
 - `ApplicationContext` owning config/logger/db/filesystem/services
   (`main.cpp` is a thin shell)
-- `IModelProvider::generate` seam + `NullModelProvider` (app runs fully
-  without an LLM)
+- `IModelProvider` plugin seam + `NullModelProvider` (app runs fully
+  without an LLM) + `ModelProviderFactory` (register/create/list,
+  env selection `TRINITY_MODEL_PROVIDER`, null fallback) +
+  `ExampleProvider` skeleton + `Planner` (model → validated tool
+  calls → `JobManager`, stop-on-first-failure, refusal runs nothing)
 - Engine architecture: `IEngine::{name,capabilities,execute,validate}` +
   `EngineBase` helpers (capability check, structured errors, timing,
   logging, metadata) + `EngineRegistry::{register,unregister,get,has,
@@ -175,7 +210,8 @@ ops + safeJoin, repositories CRUD, logging file + buffer.
 - Full Math (symbolic/numeric beyond `evaluate_expression`)
 - Full CAD quadcopter geometry, mesh builders, exporters
 - Real PCB/Firmware/Vision/Research/Simulation/Robotics implementations
-- Real `IModelProvider` implementations (OpenAI, Anthropic, local,
-  custom Trinity model)
+- Real `IModelProvider` transport implementations (OpenAI, Anthropic,
+  local, custom Trinity model — the factory + example + planner are
+  ready; only the transport is missing)
 - Installer/packaging (CPack/NSIS), code signing, update channel
 - QML workspace, 3D viewport, project tree, settings dialogs

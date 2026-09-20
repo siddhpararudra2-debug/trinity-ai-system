@@ -40,10 +40,13 @@ MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
     core->setWordWrap(true);
     layout->addWidget(core);
 
+    const QString modelText =
+        QString::fromStdString(summary_.modelProvider) +
+        (summary_.modelAvailable ? QString() : QStringLiteral(" (no model — LLM slot open)"));
     const QString status = QStringLiteral("Status: running  •  Version %1  •  Engines %2  •  Model %3")
                                .arg(QString::fromStdString(summary_.version))
                                .arg(static_cast<qulonglong>(summary_.engineCount))
-                               .arg(QString::fromStdString(summary_.modelProvider));
+                               .arg(modelText);
     auto* statusLabel = new QLabel(status, central);
     statusLabel->setStyleSheet(QStringLiteral("font-size: 13px; color: #444;"));
     statusLabel->setAlignment(Qt::AlignCenter);

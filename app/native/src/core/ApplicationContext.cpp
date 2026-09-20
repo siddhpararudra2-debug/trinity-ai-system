@@ -4,6 +4,7 @@
 
 #include "trinity/core/Paths.hpp"
 #include "trinity/engines/StubEngines.hpp"
+#include "trinity/intelligence/ModelProviderFactory.hpp"
 
 namespace trinity::core {
 
@@ -49,7 +50,28 @@ Status ApplicationContext::initialize() {
         artifacts_ = std::make_shared<artifacts::ArtifactManager>(db_,
                                                                   settings_.artifactsDir);
         jobs_ = std::make_shared<jobs::JobManager>(db_, registry_, artifacts_);
-        model_ = std::make_shared<intelligence::NullModelProvider>();
+        // Provider selection: TRINITY_MODEL_PROVIDER id via the factory.
+        // Unknown ids fall back to Null so a typo never prevents boot.
+        // Secrets are never logged — only the provider id is recorded.
+        try {
+            model_ = intelligence::ModelProviderFactory::instance().createOrNull(
+                settings_.model.providerId, settings_.model.toJson());
+            if (settings_.model.providerId != "null" &&
+                model_->info().providerId == "null") {
+                log.warning("model", "requested provider unavailable; using null provider",
+                            core::Json{{"requested", settings_.model.providerId}});
+            }
+            const auto configStatus = model_->configure(settings_.model.toJson());
+            if (!configStatus.isOk()) {
+                log.warning("model", "provider configure reported failure",
+                            core::Json{{"provider", settings_.model.providerId}});
+            }
+        } catch (const std::exception& exc) {
+            log.warning("model", "provider selection failed; using null provider",
+                        core::Json{{"provider", settings_.model.providerId},
+                                   {"error", exc.what()}});
+            model_ = std::make_shared<intelligence::NullModelProvider>();
+        }
         jobRepo_ = std::make_shared<storage::JobRepository>(db_);
         workflowRepo_ = std::make_shared<storage::WorkflowRepository>(db_);
         artifactRepo_ = std::make_shared<storage::ArtifactRepository>(db_);
