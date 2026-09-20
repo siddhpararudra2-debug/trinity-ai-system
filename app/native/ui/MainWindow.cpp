@@ -1,6 +1,7 @@
 #include "MainWindow.hpp"
 
 #include <QLabel>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -84,6 +85,28 @@ MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
                                    : QStringLiteral("font-size: 13px; color: #888;"));
             row->setAlignment(Qt::AlignCenter);
             layout->addWidget(row);
+
+            QString detail;
+            if (!engine.capabilities.empty()) {
+                QStringList caps;
+                for (const auto& cap : engine.capabilities) {
+                    caps.push_back(QString::fromStdString(cap));
+                }
+                detail = QStringLiteral("caps: ") + caps.join(QStringLiteral(", "));
+            }
+            if (!engine.lastResult.empty()) {
+                if (!detail.isEmpty()) {
+                    detail += QStringLiteral("  •  ");
+                }
+                detail += QString::fromStdString(engine.lastResult);
+            }
+            if (!detail.isEmpty()) {
+                auto* sub = new QLabel(detail, central);
+                sub->setStyleSheet(QStringLiteral("font-size: 11px; color: #888;"));
+                sub->setAlignment(Qt::AlignCenter);
+                sub->setWordWrap(true);
+                layout->addWidget(sub);
+            }
         }
     }
 

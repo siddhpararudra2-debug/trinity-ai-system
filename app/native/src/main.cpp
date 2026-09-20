@@ -93,6 +93,26 @@ int runSelftest() {
         refuseOk = false;
     }
     std::cout << (refuseOk ? "[PASS] " : "[FAIL] ") << "unsupported_operation_refuses\n";
+    // CAD must generate a real 108-triangle 50 mm frame. The "none"
+    // output requests geometry without scratch files, so the headless
+    // check leaves no temp litter behind.
+    bool cadOk = false;
+    try {
+        trinity::engines::EngineRequest genReq;
+        genReq.engine = "cad";
+        genReq.operation = "generate";
+        genReq.parameters = trinity::core::Json{
+            {"type", "quadcopter_frame"},
+            {"parameters", {{"overall_size", 50}}},
+            {"outputs", {"none"}}};
+        const auto genResult = context.engines().execute(genReq);
+        cadOk = genResult.success &&
+                genResult.result.value("triangle_count", 0) == 108 &&
+                genResult.validation.has_value() && genResult.validation->passed();
+    } catch (...) {
+        cadOk = false;
+    }
+    std::cout << (cadOk ? "[PASS] " : "[FAIL] ") << "cad_generates_frame\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -116,7 +136,8 @@ int runSelftest() {
         trinity::intelligence::ModelProviderFactory::instance().has(
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
-    allOk = allOk && missOk && mathOk && refuseOk && modelOk && plannerOk && providerOk;
+    allOk = allOk && missOk && mathOk && refuseOk && cadOk && modelOk && plannerOk &&
+            providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;
@@ -147,6 +168,8 @@ int main(int argc, char* argv[]) {
         trinity::ui::EngineEntry out;
         out.name = entry.name;
         out.version = entry.version;
+        out.capabilities = entry.capabilities;
+        out.lastResult = entry.lastResult;
         out.implemented = entry.implemented;
         uiSummary.engines.push_back(std::move(out));
     }

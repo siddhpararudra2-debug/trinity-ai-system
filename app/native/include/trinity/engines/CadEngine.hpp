@@ -1,9 +1,10 @@
 #pragma once
 
-// CAD engine skeleton: capability registration, request validation,
-// operation routing, result/validation/artifact contracts. Full
-// quadcopter geometry is a later phase; unsupported operations return
-// structured CAPABILITY_UNAVAILABLE rather than fake geometry.
+// CAD engine: parametric quadcopter-frame generation over the
+// dependency-free mesh backend (ports src/engines/cad/*). Generates
+// binary STL + spec JSON artifacts; STEP and kernel-backed formats
+// report CAD_KERNEL_UNAVAILABLE. Unknown operations return structured
+// CAPABILITY_UNAVAILABLE rather than fake geometry.
 
 #include <string>
 
@@ -17,6 +18,9 @@ public:
 
     EngineResult execute(const EngineRequest& request) override;
     validation::ValidationResult validate(const EngineResult& result) const override;
+
+private:
+    EngineResult executeGenerate(const EngineRequest& request);
 };
 
 }  // namespace trinity::engines

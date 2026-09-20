@@ -1,7 +1,14 @@
 #include "trinity/core/ApplicationContext.hpp"
 
+#include <cmath>
+#include <cstdio>
 #include <filesystem>
+#include <string>
 
+#include "trinity/cad/Builder.hpp"
+#include "trinity/cad/FrameParams.hpp"
+#include "trinity/cad/Mesh.hpp"
+#include "trinity/cad/Validators.hpp"
 #include "trinity/core/Paths.hpp"
 #include "trinity/engines/StubEngines.hpp"
 #include "trinity/intelligence/ModelProviderFactory.hpp"
@@ -123,9 +130,40 @@ InitSummary ApplicationContext::summary() const {
             entry.name = cap.name;
             entry.version = cap.version;
             entry.capabilities = cap.capabilities;
-            // Only math does real deterministic work in this phase; cad
-            // exposes describe only; the rest are scaffolded stubs.
-            entry.implemented = (cap.name == "math");
+            // In-memory demos only: no files, no DB writes. Failures leave
+            // lastResult empty rather than breaking startup.
+            try {
+                if (cap.name == "math" && registry_->has("math")) {
+                    engines::EngineRequest demo;
+                    demo.engine = "math";
+                    demo.operation = "evaluate_expression";
+                    demo.parameters = core::Json{{"expression", "2 + 3 * 4"}};
+                    const auto result = registry_->execute(demo);
+                    if (result.success) {
+                        char buffer[32];
+                        std::snprintf(buffer, sizeof(buffer), "%.6g",
+                                      result.result.value("value", 0.0));
+                        entry.implemented = true;
+                        entry.lastResult = std::string("2+3*4=") + buffer;
+                    }
+                } else if (cap.name == "cad") {
+                    const cad::FrameParams params =
+                        cad::FrameParams::fromRequest(core::Json::object());
+                    const cad::Mesh mesh = cad::buildQuadcopterFrame(params);
+                    const cad::FrameValidation check =
+                        cad::validateQuadcopterFrame(params, mesh);
+                    if (check.ok) {
+                        entry.implemented = true;
+                        entry.lastResult =
+                            "50mm frame: " + std::to_string(mesh.triangleCount()) +
+                            " triangles, span " +
+                            std::to_string(static_cast<int>(std::round(
+                                check.checks.value("expected_span_mm", 0.0)))) +
+                            "mm";
+                    }
+                }
+            } catch (...) {
+            }
             out.engines.push_back(std::move(entry));
         }
     }

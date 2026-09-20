@@ -1,10 +1,15 @@
 #pragma once
 
-// Math engine: deterministic, LLM-independent arithmetic evaluation.
-// This phase implements only `evaluate_expression` (e.g. "2 + 3 * 4"
-// -> 14). Full symbolic/numeric functionality is a later phase.
+// Math engine: deterministic, LLM-independent numeric evaluation and
+// equation solving. `evaluate_expression` handles plain arithmetic;
+// `evaluate` adds variables, functions and constants; `solve` finds
+// single-variable roots with residual verification. No symbolic
+// algebra system ships in C++ — transcendental/multi-variable systems
+// beyond numeric roots stay a later phase.
 
+#include <map>
 #include <string>
+#include <vector>
 
 #include "Engine.hpp"
 
@@ -20,6 +25,19 @@ public:
     /// Deterministic expression evaluator. Throws RequestValidationError
     /// on empty input, invalid characters, or malformed syntax.
     static double evaluateExpression(const std::string& expression);
+
+    /// Extended evaluator with variable bindings, functions
+    /// (sin/cos/tan/exp/log/sqrt/abs) and constants (pi/e).
+    static double evaluateWithVariables(const std::string& expression,
+                                        const std::map<std::string, double>& variables);
+
+    /// Variable names occurring in an expression (functions/constants excluded).
+    static std::vector<std::string> symbolsIn(const std::string& expression);
+
+private:
+    EngineResult executeSolve(const EngineRequest& request);
+    validation::ValidationResult validateSolve(
+        const EngineResult& result, validation::ValidationResult validation) const;
 };
 
 }  // namespace trinity::engines

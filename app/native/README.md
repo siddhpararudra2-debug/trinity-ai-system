@@ -42,6 +42,7 @@ app/native/
   include/trinity/
     core/{Error,Result,Config,Logger,Paths,Uuid,Time,Json,ApplicationContext}.hpp
     fs/Filesystem.hpp
+    cad/{FrameParams,Mesh,Builder,StlWriter,Validators}.hpp
     engines/{Engine,EngineRegistry,MathEngine,CadEngine,StubEngines}.hpp
     jobs/Job.hpp
     workflows/Workflow.hpp
@@ -54,7 +55,8 @@ app/native/
   ui/MainWindow.{hpp,cpp}
   tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
              jobs,uuid,serialization,filesystem,repositories,logging_config,
-             math_engine,cad_stubs,validation,provider_factory,planner}.cpp
+             math_engine,cad_stubs,cad_generate,validation,provider_factory,
+             planner}.cpp
   third_party/{sqlite,json,doctest}/
   build/{debug,release}/ (gitignored)
 ```
@@ -125,16 +127,19 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (56 cases, GUI-independent): error envelope + source/timestamp,
+Suites (64 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
-unknown/unsupported/invalid handling), math evaluation, cad skeleton +
-domain stubs, validation states + severity messages, provider factory +
-selection + secrets, planner (tool execution, refusal/skip paths),
-workflow ordering, SQLite schema + transactions + prepared statements,
-null model provider (`generate` + `generatePlan`), paths/config
-(Windows dirs), jobs + artifact checksums, UUID, model serialization
-round-trips, filesystem ops + safeJoin, repositories CRUD, logging
-file + buffer.
+unknown/unsupported/invalid handling), math (precedence, variables,
+functions/constants, power, evaluate, linear/quadratic solve with
+residual checks, structured rejections), cad (defaults → 108-triangle
+validated frame, bad-param rejections, stl+json artifacts through jobs,
+STEP unavailable note, deterministic encoding), validation states +
+severity messages, provider factory + selection + secrets, planner
+(tool execution, refusal/skip paths), workflow ordering, SQLite schema
++ transactions + prepared statements, null model provider (`generate`
++ `generatePlan`), paths/config (Windows dirs), jobs + artifact
+checksums, UUID, model serialization round-trips, filesystem ops +
+safeJoin, repositories CRUD, logging file + buffer.
 
 ## Plugging in an LLM (for the model developer)
 
@@ -195,20 +200,50 @@ rest marked `skipped`. Model refusal executes nothing.
   logging, metadata) + `EngineRegistry::{register,unregister,get,has,
   list,listCapabilities,execute}` with duplicate rejection and
   Request→Registry→Capability-check→Execute→Validate→Result routing
-- `MathEngine::evaluate_expression` deterministic (`2 + 3 * 4` → `14`);
-  `CADEngine` skeleton (describe + truthful `CAPABILITY_UNAVAILABLE`);
-  PCB/Firmware/Vision/Research/Simulation/Robotics stubs registering
-  metadata and refusing without fake results
+- `MathEngine` (`evaluate_expression` plain arithmetic; `evaluate` with
+  variables/functions/constants/power; `solve` single-variable numeric
+  roots with residual verification, identity checks, `solve_for`)
+- `CADEngine::generate` — parametric quadcopter frame over the
+  dependency-free mesh backend (`cad/FrameParams,Mesh,Builder,
+  StlWriter,Validators`): 108-triangle validated geometry, binary STL +
+  spec JSON artifacts via `JobManager`, STEP reported
+  `CAD_KERNEL_UNAVAILABLE`; PCB/Firmware/Vision/Research/Simulation/
+  Robotics remain stubs registering metadata and refusing without fake
+  results
 - Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
   `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
-- Qt `MainWindow` engine list (MATH implemented vs scaffolded/unavailable)
-- `Trinity.exe` (+ `--selftest`: 8 engines, math check, refusal check),
+- Qt `MainWindow` engine list (MATH/CAD implemented with capabilities +
+  last results vs scaffolded/unavailable)
+- `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
+  check, refusal check, planner/model/provider checks),
   `trinity_tests` via CTest
+
+### Engine quick reference
+
+```powershell
+# Math: plain, with variables, and solving (via JobManager envelope)
+# {engine: math, operation: evaluate_expression, parameters: {expression: "2 + 3 * 4"}}
+# → {value: 14}
+# {engine: math, operation: evaluate,
+#  parameters: {expression: "x^2 + 2*x + 1", variables: {x: 3}}} → {value: 16}
+# {engine: math, operation: solve,
+#  parameters: {expression: "x^2 - 4 = 0"}} → {solved_for: x, solutions: [-2, 2]}
+
+# CAD: 50 mm quadcopter frame (via JobManager envelope)
+# {engine: cad, operation: generate,
+#  parameters: {type: quadcopter_frame,
+#               parameters: {overall_size: 50, motor_count: 4},
+#               outputs: [stl, json]}}
+# → {triangle_count: 108, bounding_box_mm, spec} + VALIDATED + stl/json artifacts
+# outputs may include "step" → reported under unavailable_formats, not a failure
+```
 
 ## Intentionally left for later phases
 
-- Full Math (symbolic/numeric beyond `evaluate_expression`)
-- Full CAD quadcopter geometry, mesh builders, exporters
+- Math beyond single-variable numeric roots (transcendental systems,
+  multi-variable solving, symbolic algebra)
+- CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
+  mesh booleans beyond box composition
 - Real PCB/Firmware/Vision/Research/Simulation/Robotics implementations
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,
   local, custom Trinity model — the factory + example + planner are

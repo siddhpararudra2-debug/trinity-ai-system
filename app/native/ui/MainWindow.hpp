@@ -14,6 +14,8 @@ namespace trinity::ui {
 struct EngineEntry {
     std::string name;
     std::string version;
+    std::vector<std::string> capabilities;
+    std::string lastResult;
     bool implemented = false;
 };
 

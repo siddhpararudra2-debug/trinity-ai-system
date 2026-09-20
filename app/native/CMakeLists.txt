@@ -52,6 +52,11 @@ set(TRINITY_CORE_SOURCES
     src/core/Time.cpp
     src/core/ApplicationContext.cpp
     src/fs/Filesystem.cpp
+    src/cad/FrameParams.cpp
+    src/cad/Mesh.cpp
+    src/cad/Builder.cpp
+    src/cad/StlWriter.cpp
+    src/cad/Validators.cpp
     src/intelligence/ToolCall.cpp
     src/intelligence/Intent.cpp
     src/intelligence/ModelRequest.cpp
@@ -119,6 +124,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_logging_config.cpp
         tests/test_math_engine.cpp
         tests/test_cad_stubs.cpp
+        tests/test_cad_generate.cpp
         tests/test_validation.cpp
         tests/test_provider_factory.cpp
         tests/test_planner.cpp

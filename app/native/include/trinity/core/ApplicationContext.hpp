@@ -27,6 +27,7 @@ struct EngineListEntry {
     std::string version;
     std::vector<std::string> capabilities;
     bool implemented = false;  // true when the engine can do real work
+    std::string lastResult;    // short demo result, e.g. "2+3*4=14"
 };
 
 struct InitSummary {
