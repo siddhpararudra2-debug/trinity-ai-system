@@ -27,8 +27,18 @@ enum class JobStatus {
 std::string toString(JobStatus status);
 JobStatus fromString(const std::string& status);
 
+enum class JobType {
+    Engine,
+    Workflow,
+    Validation,
+};
+
+std::string jobTypeToString(JobType type);
+JobType jobTypeFromString(const std::string& type);
+
 struct Job {
     std::string jobId;
+    std::string workflowId;
     std::string engine;
     std::string operation;
     JobStatus status = JobStatus::Queued;
@@ -39,7 +49,10 @@ struct Job {
     std::string createdAt;
     std::string updatedAt;
 
+    bool succeeded() const noexcept { return status == JobStatus::Completed; }
+
     core::Json toJson() const;
+    static Job fromJson(const core::Json& json);
 };
 
 class JobManager {

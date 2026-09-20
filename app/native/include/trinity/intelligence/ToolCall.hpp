@@ -11,6 +11,7 @@
 namespace trinity::intelligence {
 
 struct ToolCall {
+    std::string toolCallId;  // UUID for tracing; empty when unset
     std::string engine;
     std::string operation;
     core::Json parameters = core::Json::object();

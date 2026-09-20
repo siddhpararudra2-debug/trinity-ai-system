@@ -12,9 +12,22 @@
 
 namespace trinity::artifacts {
 
+enum class ArtifactType {
+    Unknown,
+    Mesh,
+    Report,
+    Image,
+    Data,
+    Binary,
+};
+
+std::string toString(ArtifactType type);
+ArtifactType artifactTypeFromString(const std::string& type);
+
 struct Artifact {
     std::string artifactId;
     std::string jobId;
+    std::string workflowId;
     std::string type;
     std::string path;
     long long sizeBytes = 0;
@@ -22,6 +35,7 @@ struct Artifact {
     std::string createdAt;
 
     core::Json toJson() const;
+    static Artifact fromJson(const core::Json& json);
 };
 
 class ArtifactManager {

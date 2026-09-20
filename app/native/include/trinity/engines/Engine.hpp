@@ -29,25 +29,36 @@ struct ArtifactRef {
     std::string checksum;
 
     core::Json toJson() const;
+    static ArtifactRef fromJson(const core::Json& json);
 };
 
 struct EngineRequest {
+    std::string requestId;  // UUID, assigned by caller or JobManager
     std::string engine;
     std::string operation;
     core::Json parameters = core::Json::object();
+
+    core::Json toJson() const;
+    static EngineRequest fromJson(const core::Json& json);
 };
 
 struct EngineResult {
     bool success = false;
     std::string engine;
     std::string operation;
+    std::string jobId;      // filled by JobManager
+    std::string requestId;  // echoes EngineRequest::requestId when known
     core::Json result = core::Json::object();
     std::vector<ArtifactRef> artifacts;
     std::vector<std::pair<std::string, std::string>> pendingArtifacts;
     std::optional<validation::ValidationResult> validation;
-    std::vector<core::Json> errors;
+    std::vector<core::Json> errors;  // each entry is an ErrorInfo JSON envelope
+
+    bool failed() const noexcept { return !success; }
+    void addError(const core::ErrorInfo& error) { errors.push_back(error.toJson()); }
 
     core::Json toJson() const;
+    static EngineResult fromJson(const core::Json& json);
 };
 
 struct EngineCapability {
@@ -56,6 +67,7 @@ struct EngineCapability {
     std::vector<std::string> capabilities;
 
     core::Json toJson() const;
+    static EngineCapability fromJson(const core::Json& json);
 };
 
 class IEngine {

@@ -22,9 +22,15 @@ ValidationStatus fromString(const std::string& status);
 
 struct ValidationResult {
     ValidationStatus status = ValidationStatus::Generated;
+    std::string operation;   // engine operation that was checked
+    std::string jobId;       // owning job, when known
+    std::string workflowId;  // owning workflow, when known
+    std::string message;     // human-readable summary
     core::Json checks = core::Json::object();
+    core::Json error = nullptr;  // structured ErrorInfo JSON on failure
 
     bool passed() const noexcept;
+    bool success() const noexcept { return passed(); }
 
     core::Json toJson() const;
     static ValidationResult fromJson(const core::Json& json);

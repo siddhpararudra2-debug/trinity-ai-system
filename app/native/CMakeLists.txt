@@ -50,6 +50,8 @@ set(TRINITY_CORE_SOURCES
     src/core/Paths.cpp
     src/core/Uuid.cpp
     src/core/Time.cpp
+    src/core/ApplicationContext.cpp
+    src/fs/Filesystem.cpp
     src/intelligence/ToolCall.cpp
     src/intelligence/Intent.cpp
     src/intelligence/ModelRequest.cpp
@@ -60,6 +62,7 @@ set(TRINITY_CORE_SOURCES
     src/engines/EngineRegistry.cpp
     src/workflows/Workflow.cpp
     src/storage/Database.cpp
+    src/storage/Repositories.cpp
     src/artifacts/Artifact.cpp
     src/jobs/Job.cpp
 )
@@ -72,7 +75,7 @@ target_include_directories(trinity_core
 )
 target_link_libraries(trinity_core PUBLIC trinity_sqlite)
 if(WIN32)
-    target_link_libraries(trinity_core PUBLIC bcrypt)
+    target_link_libraries(trinity_core PUBLIC bcrypt shell32 ole32)
 endif()
 
 # ------------------------------------------------------------------- app
@@ -103,6 +106,11 @@ if(TRINITY_BUILD_TESTS)
         tests/test_model_provider.cpp
         tests/test_paths_config.cpp
         tests/test_jobs.cpp
+        tests/test_uuid.cpp
+        tests/test_serialization.cpp
+        tests/test_filesystem.cpp
+        tests/test_repositories.cpp
+        tests/test_logging_config.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

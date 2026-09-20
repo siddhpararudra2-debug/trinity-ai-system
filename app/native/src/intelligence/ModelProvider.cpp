@@ -1,5 +1,7 @@
 #include "trinity/intelligence/IModelProvider.hpp"
 
+#include "trinity/core/Uuid.hpp"
+
 namespace trinity::intelligence {
 
 ModelProviderInfo NullModelProvider::info() const {
@@ -11,13 +13,27 @@ ModelProviderInfo NullModelProvider::info() const {
     return info;
 }
 
-core::Result<ModelResponse> NullModelProvider::generatePlan(const ModelRequest& /*request*/) {
+namespace {
+
+ModelResponse refusal(const ModelRequest& request) {
     ModelResponse response;
     response.success = false;
-    response.error = core::Json{{"code", "capability_unavailable"},
-                                {"message", "No model provider is connected"},
-                                {"details", core::Json::object()}};
-    return core::Result<ModelResponse>::ok(response);
+    response.requestId = request.requestId;
+    response.operation = "generate";
+    response.error = core::makeError(core::ErrorCode::CapabilityUnavailableError,
+                                     "No model provider is connected", "model")
+                         .toJson();
+    return response;
+}
+
+}  // namespace
+
+ModelResponse NullModelProvider::generate(const ModelRequest& request) {
+    return refusal(request);
+}
+
+core::Result<ModelResponse> NullModelProvider::generatePlan(const ModelRequest& request) {
+    return core::Result<ModelResponse>::ok(refusal(request));
 }
 
 void NullModelProvider::streamPlan(const ModelRequest& /*request*/,

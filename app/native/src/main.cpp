@@ -1,4 +1,4 @@
-// Trinity application entry point.
+// Trinity application entry point (thin shell over ApplicationContext).
 //
 // Startup order (mirrors the Python lifespan in src/main.py):
 //   configuration -> logging -> paths -> SQLite init -> engine registry
@@ -9,7 +9,6 @@
 // a display server.
 
 #include <iostream>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -17,14 +16,9 @@
 #include <windows.h>
 #endif
 
-#include "trinity/artifacts/Artifact.hpp"
-#include "trinity/core/Config.hpp"
+#include "trinity/core/ApplicationContext.hpp"
 #include "trinity/core/Logger.hpp"
-#include "trinity/core/Paths.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
-#include "trinity/intelligence/IModelProvider.hpp"
-#include "trinity/jobs/Job.hpp"
-#include "trinity/storage/Database.hpp"
 
 #ifdef TRINITY_WITH_QT
 #include <QApplication>
@@ -34,49 +28,6 @@
 
 namespace {
 
-struct Bootstrap {
-    trinity::core::Settings settings;
-    std::shared_ptr<trinity::storage::Database> db;
-    std::shared_ptr<trinity::engines::EngineRegistry> registry;
-    std::shared_ptr<trinity::artifacts::ArtifactManager> artifacts;
-    std::shared_ptr<trinity::jobs::JobManager> jobs;
-    std::shared_ptr<trinity::intelligence::IModelProvider> model;
-    bool ok = false;
-    std::string error;
-};
-
-Bootstrap bootstrap() {
-    Bootstrap boot;
-    auto& log = trinity::core::Logger::instance();
-    try {
-        boot.settings = trinity::core::loadSettings();
-        trinity::core::ensureStorageLayout(boot.settings);
-
-        boot.db = std::make_shared<trinity::storage::Database>(boot.settings.dbPath);
-        boot.db->init();
-
-        boot.registry = std::make_shared<trinity::engines::EngineRegistry>();
-        // Later phases register math/cad/pcb/firmware/vision/research/
-        // simulation/robotics here. Nothing ships yet by design.
-
-        boot.artifacts = std::make_shared<trinity::artifacts::ArtifactManager>(
-            boot.db, boot.settings.artifactsDir);
-        boot.jobs = std::make_shared<trinity::jobs::JobManager>(boot.db, boot.registry,
-                                                                boot.artifacts);
-        boot.model = std::make_shared<trinity::intelligence::NullModelProvider>();
-
-        log.info("main", "trinity started",
-                 trinity::core::Json{{"engines", boot.registry->list().size()}});
-        boot.ok = true;
-    } catch (const std::exception& exc) {
-        boot.ok = false;
-        boot.error = exc.what();
-        log.error("main", "trinity startup failed",
-                  trinity::core::Json{{"error", boot.error}});
-    }
-    return boot;
-}
-
 int runSelftest() {
 #ifdef _WIN32
     // Headless console output for a WIN32-subsystem binary.
@@ -85,17 +36,19 @@ int runSelftest() {
     freopen_s(&ignored, "CONOUT$", "w", stdout);
     freopen_s(&ignored, "CONOUT$", "w", stderr);
 #endif
-    Bootstrap boot = bootstrap();
+    auto& context = trinity::core::ApplicationContext::instance();
+    const auto status = context.initialize();
+    const auto summary = context.summary();
     std::vector<std::pair<std::string, bool>> checks = {
-        {"config_loaded", !boot.settings.storageRoot.empty()},
-        {"database_initialized", boot.ok},
-        {"registry_ready", boot.registry != nullptr},
-        {"model_reports_unavailable",
-         boot.model != nullptr && !boot.model->info().available},
+        {"config_loaded", !context.config().storageRoot.empty()},
+        {"database_initialized", status.isOk()},
+        {"registry_ready", true},
+        {"model_reports_unavailable", !context.model().info().available},
         {"planned_engines_known",
          trinity::engines::EngineRegistry::plannedEngineNames().size() == 8},
+        {"log_file_configured", !context.config().logFilePath().empty()},
     };
-    bool allOk = boot.ok;
+    bool allOk = status.isOk();
     for (const auto& [name, passed] : checks) {
         std::cout << (passed ? "[PASS] " : "[FAIL] ") << name << "\n";
         allOk = allOk && passed;
@@ -103,12 +56,21 @@ int runSelftest() {
     // Engine lookup must fail truthfully while no engines are registered.
     bool missOk = false;
     try {
-        boot.registry->get("math");
+        context.engines().get("math");
     } catch (const trinity::core::EngineNotFoundError&) {
         missOk = true;
     }
     std::cout << (missOk ? "[PASS] " : "[FAIL] ") << "missing_engine_raises\n";
-    return (allOk && missOk) ? 0 : 1;
+    // Model seam must refuse truthfully without an LLM.
+    trinity::intelligence::ModelRequest request;
+    request.prompt = "selftest";
+    const auto response = context.model().generate(request);
+    const bool modelOk = !response.success && !response.error.is_null();
+    std::cout << (modelOk ? "[PASS] " : "[FAIL] ") << "model_refuses_without_llm\n";
+    allOk = allOk && missOk && modelOk;
+    (void)summary;
+    context.shutdown();
+    return allOk ? 0 : 1;
 }
 
 }  // namespace
@@ -121,25 +83,25 @@ int main(int argc, char* argv[]) {
     }
 
 #ifdef TRINITY_WITH_QT
-    Bootstrap boot = bootstrap();
+    auto& context = trinity::core::ApplicationContext::instance();
+    const auto status = context.initialize();
+    const auto summary = context.summary();
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Trinity"));
     app.setApplicationVersion(QStringLiteral("0.1.0"));
 
-    trinity::ui::InitSummary summary;
-    summary.dbPath = boot.settings.dbPath;
-    summary.engineCount = boot.registry ? boot.registry->list().size() : 0;
-    summary.modelProvider =
-        boot.model ? boot.model->info().displayName : std::string("none");
-    summary.coreOk = boot.ok;
+    trinity::ui::InitSummary uiSummary;
+    uiSummary.dbPath = summary.dbPath;
+    uiSummary.engineCount = summary.engineCount;
+    uiSummary.modelProvider = summary.modelProvider;
+    uiSummary.coreOk = status.isOk();
 
-    trinity::ui::MainWindow window(summary);
+    trinity::ui::MainWindow window(uiSummary);
     window.show();
     const int code = app.exec();
 
-    trinity::core::Logger::instance().info("main", "trinity shutdown",
-                                           trinity::core::Json{{"code", code}});
+    context.shutdown();
     return code;
 #else
     std::cerr << "Trinity built without Qt; run with --selftest.\n";

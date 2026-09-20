@@ -27,21 +27,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// SQL string escaping for the internal query helper: single quotes double.
-std::string sqlQuote(const std::string& value) {
-    std::string out;
-    out.reserve(value.size() + 2);
-    out += '\'';
-    for (char c : value) {
-        if (c == '\'') {
-            out += '\'';
-        }
-        out += c;
-    }
-    out += '\'';
-    return out;
-}
-
+// SHA-256 hex digest of a file (Windows CNG).
 std::string sha256File(const std::string& path) {
 #ifdef _WIN32
     BCRYPT_ALG_HANDLE algorithm = nullptr;
@@ -105,11 +91,52 @@ std::string sha256File(const std::string& path) {
 core::Json Artifact::toJson() const {
     return core::Json{{"artifact_id", artifactId},
                       {"job_id", jobId},
+                      {"workflow_id", workflowId},
                       {"type", type},
                       {"path", path},
                       {"size_bytes", sizeBytes},
                       {"checksum", checksum},
                       {"created_at", createdAt}};
+}
+
+Artifact Artifact::fromJson(const core::Json& json) {
+    Artifact artifact;
+    artifact.artifactId = json.value("artifact_id", "");
+    artifact.jobId = json.value("job_id", "");
+    artifact.workflowId = json.value("workflow_id", "");
+    artifact.type = json.value("type", "");
+    artifact.path = json.value("path", "");
+    artifact.sizeBytes = json.value("size_bytes", 0LL);
+    artifact.checksum = json.value("checksum", "");
+    artifact.createdAt = json.value("created_at", "");
+    return artifact;
+}
+
+std::string toString(ArtifactType type) {
+    switch (type) {
+        case ArtifactType::Mesh:
+            return "mesh";
+        case ArtifactType::Report:
+            return "report";
+        case ArtifactType::Image:
+            return "image";
+        case ArtifactType::Data:
+            return "data";
+        case ArtifactType::Binary:
+            return "binary";
+        case ArtifactType::Unknown:
+        default:
+            return "unknown";
+    }
+}
+
+ArtifactType artifactTypeFromString(const std::string& type) {
+    if (type == "mesh") return ArtifactType::Mesh;
+    if (type == "report") return ArtifactType::Report;
+    if (type == "image") return ArtifactType::Image;
+    if (type == "data") return ArtifactType::Data;
+    if (type == "binary") return ArtifactType::Binary;
+    return ArtifactType::Unknown;
 }
 
 ArtifactManager::ArtifactManager(std::shared_ptr<storage::Database> db,
@@ -145,20 +172,20 @@ Artifact ArtifactManager::storeFile(const std::string& srcPath,
     artifact.checksum = sha256File(dest.string());
     artifact.createdAt = core::utcNowIso();
 
-    db_->exec("INSERT INTO artifacts (artifact_id, job_id, type, path, size_bytes, "
-              "checksum, created_at) VALUES (" +
-              sqlQuote(artifact.artifactId) + ", " + sqlQuote(artifact.jobId) + ", " +
-              sqlQuote(artifact.type) + ", " + sqlQuote(artifact.path) + ", " +
-              std::to_string(artifact.sizeBytes) + ", " + sqlQuote(artifact.checksum) +
-              ", " + sqlQuote(artifact.createdAt) + ");");
+    db_->execute(
+        "INSERT INTO artifacts (artifact_id, job_id, type, path, size_bytes, "
+        "checksum, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);",
+        {artifact.artifactId, artifact.jobId, artifact.type, artifact.path,
+         static_cast<std::int64_t>(artifact.sizeBytes), artifact.checksum,
+         artifact.createdAt});
     return artifact;
 }
 
 Artifact ArtifactManager::get(const std::string& artifactId) const {
-    const auto rows =
-        db_->query("SELECT artifact_id, job_id, type, path, size_bytes, checksum, "
-                   "created_at FROM artifacts WHERE artifact_id = " +
-                   sqlQuote(artifactId) + ";");
+    const auto rows = db_->queryParams(
+        "SELECT artifact_id, job_id, type, path, size_bytes, checksum, "
+        "created_at FROM artifacts WHERE artifact_id = ?;",
+        {artifactId});
     if (rows.empty() || rows[0].size() < 7) {
         throw core::ArtifactNotFoundError("No artifact with id '" + artifactId + "'");
     }

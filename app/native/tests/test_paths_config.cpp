@@ -21,8 +21,16 @@ TEST_CASE("settings honor environment overrides") {
     const trinity::core::Settings settings = trinity::core::loadSettings();
     CHECK(settings.storageRoot == root);
     CHECK(settings.dbPath == root + "/custom.db");
-    CHECK(settings.artifactsDir == root + "/artifacts");
-    CHECK(settings.allStorageDirs().size() == 9);
+    // Separator-agnostic: Windows joins with '\\', POSIX with '/'.
+    CHECK(std::filesystem::path(settings.artifactsDir).filename() == "artifacts");
+    CHECK(std::filesystem::path(settings.artifactsDir).parent_path() ==
+          std::filesystem::path(root));
+    CHECK(settings.allStorageDirs().size() == 10);
+    CHECK_FALSE(settings.logDir.empty());
+    CHECK_FALSE(settings.logFilePath().empty());
+    CHECK(settings.dataDir == settings.storageRoot);
+    CHECK_FALSE(settings.appName.empty());
+    CHECK_FALSE(settings.buildMode.empty());
 
     TRINITY_SETENV("TRINITY_STORAGE_ROOT", "");
     TRINITY_SETENV("TRINITY_DB_PATH", "");

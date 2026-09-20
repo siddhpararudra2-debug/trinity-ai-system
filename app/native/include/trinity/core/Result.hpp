@@ -35,8 +35,10 @@ using Status = Result<bool>;
 
 inline Status okStatus() { return Status::ok(true); }
 
-inline Status errStatus(ErrorCode code, std::string message, Json details = Json::object()) {
-    return Status::fail(ErrorInfo{code, std::move(message), std::move(details)});
+inline Status errStatus(ErrorCode code, std::string message, Json details = Json::object(),
+                        std::string source = "") {
+    return Status::fail(makeError(code, std::move(message), std::move(source),
+                                  std::move(details)));
 }
 
 }  // namespace trinity::core

@@ -35,6 +35,11 @@ public:
 
     virtual ModelProviderInfo info() const = 0;
 
+    // Canonical LLM seam (task §10): produce a structured response.
+    // The application works fully without an LLM; NullModelProvider
+    // returns success=false + capability_unavailable.
+    virtual ModelResponse generate(const ModelRequest& request) = 0;
+
     // Produce a structured tool-call plan from a request. Deterministic
     // stand-ins emit fixed plans; a future model infers them.
     virtual core::Result<ModelResponse> generatePlan(const ModelRequest& request) = 0;
@@ -49,6 +54,7 @@ public:
 class NullModelProvider : public IModelProvider {
 public:
     ModelProviderInfo info() const override;
+    ModelResponse generate(const ModelRequest& request) override;
     core::Result<ModelResponse> generatePlan(const ModelRequest& request) override;
     void streamPlan(const ModelRequest& request, StreamCallback callback) override;
     core::Status configure(const core::Json& config) override;

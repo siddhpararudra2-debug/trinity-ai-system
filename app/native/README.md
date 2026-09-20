@@ -8,12 +8,18 @@ CI; this tree is the future native host.
 ## Architecture
 
 ```
-bootstrap (src/main.cpp)
-  configuration (core/Config) -> logging (core/Logger, JSON lines)
-  -> paths (core/Paths) -> SQLite init (storage/Database)
-  -> engine registry (engines/EngineRegistry)
-  -> model provider (NullModelProvider — no LLM connected)
-  -> Qt window (ui/MainWindow) -> clean shutdown
+main.cpp (thin shell)
+  -> ApplicationContext (core/ApplicationContext)
+       configuration (core/Config: app name/version, dev/release mode,
+                      data dir, db path, artifact dir, log dir)
+       -> logging (core/Logger: INFO/WARNING/ERROR/DEBUG, file + buffer)
+       -> filesystem (fs/Filesystem: Qt-independent)
+       -> paths (core/Paths) -> SQLite init (storage/Database)
+       -> repositories (storage/Repositories: jobs, workflows, artifacts)
+       -> engine registry (engines/EngineRegistry)
+       -> jobs/artifacts managers
+       -> model provider (NullModelProvider — no LLM connected)
+  -> Qt window (ui/MainWindow, reads Logger::recent()) -> clean shutdown
 ```
 
 Deterministic core principles (ported from `src/`):
@@ -27,6 +33,36 @@ Deterministic core principles (ported from `src/`):
   ToolResponse-style envelope as the Python backend.
 - Validation states `GENERATED | VALIDATED | VERIFIED | FAILED` stay
   separate from generation. SQLite holds metadata only (WAL mode).
+
+## Directory structure
+
+```
+app/native/
+  CMakeLists.txt / CMakePresets.json (windows-debug/release)
+  include/trinity/
+    core/{Error,Result,Config,Logger,Paths,Uuid,Time,Json,ApplicationContext}.hpp
+    fs/Filesystem.hpp
+    engines/{Engine,EngineRegistry}.hpp
+    jobs/Job.hpp
+    workflows/Workflow.hpp
+    validation/ValidationResult.hpp
+    artifacts/Artifact.hpp
+    intelligence/{ToolCall,Intent,ModelRequest,ModelResponse,IModelProvider}.hpp
+    storage/{Database,Repositories}.hpp
+  src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,storage}/...
+  ui/MainWindow.{hpp,cpp}
+  tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
+             jobs,uuid,serialization,filesystem,repositories,logging_config}.cpp
+  third_party/{sqlite,json,doctest}/
+  build/{debug,release}/ (gitignored)
+```
+
+## Dependencies
+
+- C++20, MSVC x64, CMake >= 3.24, Ninja, Qt 6.8 MSVC2022 (`CMAKE_PREFIX_PATH`)
+- Vendored (no network): SQLite amalgamation, nlohmann/json, doctest
+- Windows system libs: `bcrypt` (UUID + SHA-256), `shell32` + `ole32`
+  (`SHGetKnownFolderPath` for `%LOCALAPPDATA%`)
 
 ## Build requirements
 
@@ -52,7 +88,10 @@ cmake --build --preset windows-debug
 ## Launch Trinity.exe
 
 ```powershell
-# Headless startup check (no display needed, exit 0 = healthy)
+# Headless startup check (exit 0 = healthy; GUI subsystem so output
+# goes to the parent console, dirs/db/log are the ground truth)
+$env:PATH = "C:\Qt\6.8.3\msvc2022_64\bin;" + $env:PATH
+$env:TRINITY_STORAGE_ROOT = "$env:TEMP\trinity-verify"
 .\build\debug\Debug\Trinity.exe --selftest
 
 # Desktop window (needs Qt runtime next to the exe — see below)
@@ -65,25 +104,54 @@ Deploy Qt DLLs beside the exe before launching outside the dev shell:
 C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe --debug .\build\debug\Debug\Trinity.exe
 ```
 
-Set `TRINITY_STORAGE_ROOT` (default `./data`) and `TRINITY_DB_PATH`
-to isolate state.
+State resolution (no hardcoded machine paths):
+
+- `TRINITY_STORAGE_ROOT` (default `%LOCALAPPDATA%\Trinity`, fallback `./data`)
+- `TRINITY_DB_PATH` (default `<storage>\trinity.db`)
+- `TRINITY_LOG_DIR` (default `<storage>\logs`, file `trinity.log`)
+- `TRINITY_MODE` (`development`/`release`; default from `NDEBUG`)
+
+Verify after launch: 10 storage dirs exist, `trinity.db` contains
+`jobs/workflows/workflow_nodes/artifacts` (+ legacy tables),
+`logs/trinity.log` has startup/config/database/job/engine entries,
+exit code is 0.
 
 ## Tests
 
 ```powershell
-ctest --preset windows-debug
+ctest --preset windows-debug --output-on-failure
+# or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites: error envelope, engine registry, workflow ordering, SQLite
-schema, null model provider, paths/config, jobs + artifact checksums.
+Suites (34 cases, GUI-independent): error envelope + source/timestamp,
+engine registry, workflow ordering, SQLite schema + transactions +
+prepared statements, null model provider (`generate` + `generatePlan`),
+paths/config (Windows dirs), jobs + artifact checksums, UUID, model
+serialization round-trips, filesystem ops + safeJoin, repositories CRUD,
+logging file + buffer.
 
 ## Implemented in this phase
 
-- `include/trinity/...` + `src/...`: core, intelligence, engines,
-  workflows, jobs, validation, artifacts, storage
-- `IModelProvider` + `NullModelProvider` (LLM seam, unconnected)
-- `EngineRegistry` (register/find/exists/list, planned-engine catalogue)
-- Qt `MainWindow`: Trinity title, status line, core-init confirmation
+- Core models (`EngineRequest/EngineResult`, `ValidationResult`, `Job`,
+  `Workflow/WorkflowNode/WorkflowEdge`, `Artifact`, `Intent`, `ToolCall`,
+  `ModelRequest` (+`Message`), `ModelResponse`) with strong enums and
+  `toJson/fromJson` for persistence/logs/future LLM + tool calls
+- Centralized `ErrorInfo` (code/message/source/details/timestamp) +
+  `makeError`, used consistently
+- Single UUID utility (`newUuid` via CNG, `isValidUuid`)
+- `nlohmann/json` serialization for every core model
+- Config manager (app name/version, dev/release mode, data dir, db path,
+  artifact dir, log dir; `%LOCALAPPDATA%` defaults, env overrides)
+- Filesystem service (Qt-independent: mkdir/exists/read/write/metadata/
+  list/safeJoin)
+- SQLite directly (open/init/schema/transactions/prepared statements;
+  tables `jobs/workflows/workflow_nodes/artifacts` + legacy; repositories)
+- Centralized logging (INFO/WARNING/ERROR/DEBUG → stderr + file +
+  `recent()` for future UI)
+- `ApplicationContext` owning config/logger/db/filesystem/services
+  (`main.cpp` is a thin shell)
+- `IModelProvider::generate` seam + `NullModelProvider` (app runs fully
+  without an LLM)
 - `Trinity.exe` (+ `--selftest`), `trinity_tests` via CTest
 
 ## Intentionally left for later phases
