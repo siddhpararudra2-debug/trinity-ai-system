@@ -31,7 +31,7 @@ jobs:
     name: Build & Test (MSVC + Qt 6)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
