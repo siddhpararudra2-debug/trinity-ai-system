@@ -103,10 +103,11 @@ TEST_CASE("planner executes model tool calls through real engines") {
     math.engine = "math";
     math.operation = "evaluate_expression";
     math.parameters = {{"expression", "2 + 3 * 4"}};
-    trinity::intelligence::ToolCall cad;
-    cad.engine = "cad";
-    cad.operation = "describe";
-    script.toolCalls = {math, cad};
+    trinity::intelligence::ToolCall math2;
+    math2.engine = "math";
+    math2.operation = "evaluate_expression";
+    math2.parameters = {{"expression", "10 + 5"}};
+    script.toolCalls = {math, math2};
 
     ScriptedProvider model(script);
     trinity::intelligence::Planner planner(model, *fx.jobs, *fx.registry);
@@ -121,6 +122,7 @@ TEST_CASE("planner executes model tool calls through real engines") {
     CHECK(plan.steps[0].response["result"].value("value", 0.0) == 14.0);
     CHECK(plan.steps[1].executed);
     CHECK(plan.steps[1].success);
+    CHECK(plan.steps[1].response["result"].value("value", 0.0) == 15.0);
     // Round-trips for persistence/logs.
     CHECK(trinity::intelligence::PlanResult::fromJson(plan.toJson()).success);
 }

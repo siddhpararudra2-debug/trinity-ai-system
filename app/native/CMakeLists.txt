@@ -75,10 +75,14 @@ set(TRINITY_CORE_SOURCES
     src/engines/CadEngine.cpp
     src/engines/StubEngines.cpp
     src/workflows/Workflow.cpp
+    src/workflows/Executor.cpp
     src/storage/Database.cpp
+    src/storage/Migrations.cpp
     src/storage/Repositories.cpp
     src/artifacts/Artifact.cpp
     src/jobs/Job.cpp
+    src/jobs/JobWorker.cpp
+    src/intelligence/RequestPipeline.cpp
 )
 
 add_library(trinity_core STATIC ${TRINITY_CORE_SOURCES})
@@ -134,6 +138,9 @@ if(TRINITY_BUILD_TESTS)
         tests/test_requirement_parser.cpp
         tests/test_intent_validation.cpp
         tests/test_intent_router.cpp
+        tests/test_job_lifecycle.cpp
+        tests/test_request_pipeline.cpp
+        tests/test_workflow_executor.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

@@ -57,6 +57,22 @@ Status ApplicationContext::initialize() {
         artifacts_ = std::make_shared<artifacts::ArtifactManager>(db_,
                                                                   settings_.artifactsDir);
         jobs_ = std::make_shared<jobs::JobManager>(db_, registry_, artifacts_);
+        jobRepo_ = std::make_shared<storage::JobRepository>(db_);
+        workflowRepo_ = std::make_shared<storage::WorkflowRepository>(db_);
+        artifactRepo_ = std::make_shared<storage::ArtifactRepository>(db_);
+        executor_ = std::make_shared<workflows::WorkflowExecutor>(jobs_, registry_, workflowRepo_);
+        pipeline_ = std::make_shared<intelligence::RequestPipeline>(jobs_, registry_);
+        worker_ = std::make_shared<jobs::JobWorker>(jobs_, 1);
+        worker_->start();
+        pipeline_->setWorker(worker_);
+        // Recover interrupted jobs (QUEUED/RUNNING) after migrations.
+        try {
+            const int recovered = jobs_->recoverOnStartup();
+            (void)recovered;
+        } catch (const std::exception& exc) {
+            log.warning("app", "job recovery failed",
+                        Json{{"error", exc.what()}});
+        }
         // Provider selection: TRINITY_MODEL_PROVIDER id via the factory.
         // Unknown ids fall back to Null so a typo never prevents boot.
         // Secrets are never logged — only the provider id is recorded.
@@ -79,10 +95,6 @@ Status ApplicationContext::initialize() {
                                    {"error", exc.what()}});
             model_ = std::make_shared<intelligence::NullModelProvider>();
         }
-        jobRepo_ = std::make_shared<storage::JobRepository>(db_);
-        workflowRepo_ = std::make_shared<storage::WorkflowRepository>(db_);
-        artifactRepo_ = std::make_shared<storage::ArtifactRepository>(db_);
-
         log.info("engine", "engine operations ready", Json::object());
         log.info("model", "model provider ready",
                  Json{{"provider", model_->info().displayName},
@@ -109,6 +121,12 @@ void ApplicationContext::shutdown() {
         return;
     }
     Logger::instance().info("app", "trinity shutdown", Json::object());
+    if (worker_) {
+        worker_->stop();
+    }
+    worker_.reset();
+    pipeline_.reset();
+    executor_.reset();
     jobs_.reset();
     artifacts_.reset();
     registry_.reset();

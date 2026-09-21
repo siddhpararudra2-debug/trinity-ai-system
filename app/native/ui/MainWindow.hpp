@@ -17,8 +17,23 @@
 namespace trinity::engines {
 class EngineRegistry;
 }
+namespace trinity::jobs {
+class JobManager;
+}
+namespace trinity::workflows {
+class WorkflowExecutor;
+}
+namespace trinity::intelligence {
+class RequestPipeline;
+}
+
+class QTableWidget;
+class QTimer;
 
 namespace trinity::ui {
+
+class JobTableWidget;
+class WorkflowTableWidget;
 
 struct EngineEntry {
     std::string name;
@@ -45,15 +60,34 @@ public:
     explicit MainWindow(const InitSummary& summary, QWidget* parent = nullptr);
     explicit MainWindow(const InitSummary& summary, engines::EngineRegistry* registry,
                         QWidget* parent = nullptr);
+    explicit MainWindow(const InitSummary& summary, engines::EngineRegistry* registry,
+                        jobs::JobManager* jobs, workflows::WorkflowExecutor* executor,
+                        intelligence::RequestPipeline* pipeline, QWidget* parent = nullptr);
+
+private slots:
+    void handleParse();
+    void handleExecute();
+    void handleDemoWorkflow();
+    void refreshJobs();
+    void refreshWorkflows();
 
 private:
-    void handleParse();
+    void buildUi();
+    void refreshAll();
 
     InitSummary summary_;
     engines::EngineRegistry* registry_ = nullptr;
+    jobs::JobManager* jobs_ = nullptr;
+    workflows::WorkflowExecutor* executor_ = nullptr;
+    intelligence::RequestPipeline* pipeline_ = nullptr;
 
     QLineEdit* input_ = nullptr;
     QTextEdit* output_ = nullptr;
+    QLineEdit* executeInput_ = nullptr;
+    QTextEdit* executeOutput_ = nullptr;
+    QTableWidget* jobsTable_ = nullptr;
+    QTableWidget* workflowsTable_ = nullptr;
+    QTimer* refreshTimer_ = nullptr;
 };
 
 }  // namespace trinity::ui

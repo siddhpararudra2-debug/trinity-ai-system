@@ -5,6 +5,8 @@
 
 #include <sqlite3.h>
 
+#include "trinity/storage/Migrations.hpp"
+
 namespace trinity::storage {
 namespace fs = std::filesystem;
 
@@ -111,14 +113,18 @@ void Database::init() {
     std::error_code ec;
     fs::create_directories(fs::path(dbPath_).parent_path(), ec);
     ec.clear();
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    open();
-    char* error = nullptr;
-    if (sqlite3_exec(db_, kSchemaSql, nullptr, nullptr, &error) != SQLITE_OK) {
-        const std::string message = error != nullptr ? error : "unknown error";
-        sqlite3_free(error);
-        throw std::runtime_error("Failed to initialize schema: " + message);
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        open();
+        char* error = nullptr;
+        if (sqlite3_exec(db_, kSchemaSql, nullptr, nullptr, &error) != SQLITE_OK) {
+            const std::string message = error != nullptr ? error : "unknown error";
+            sqlite3_free(error);
+            throw std::runtime_error("Failed to initialize schema: " + message);
+        }
     }
+    // Additive versioned migrations (in place, idempotent).
+    runMigrations(*this);
 }
 
 void Database::exec(const std::string& sql) {

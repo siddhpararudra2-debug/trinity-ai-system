@@ -1,17 +1,26 @@
 #include "MainWindow.hpp"
 
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStringList>
+#include <QTableWidget>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <thread>
 
+#include "trinity/core/Time.hpp"
+#include "trinity/core/Uuid.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/intelligence/IntentRouter.hpp"
 #include "trinity/intelligence/IntentValidator.hpp"
 #include "trinity/intelligence/RequirementParser.hpp"
+#include "trinity/intelligence/RequestPipeline.hpp"
+#include "trinity/jobs/Job.hpp"
+#include "trinity/workflows/Executor.hpp"
 
 namespace trinity::ui {
 
@@ -20,27 +29,40 @@ MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
 
 MainWindow::MainWindow(const InitSummary& summary, engines::EngineRegistry* registry,
                        QWidget* parent)
-    : QMainWindow(parent), summary_(summary), registry_(registry) {
+    : MainWindow(summary, registry, nullptr, nullptr, nullptr, parent) {}
+
+MainWindow::MainWindow(const InitSummary& summary, engines::EngineRegistry* registry,
+                       jobs::JobManager* jobs, workflows::WorkflowExecutor* executor,
+                       intelligence::RequestPipeline* pipeline, QWidget* parent)
+    : QMainWindow(parent),
+      summary_(summary),
+      registry_(registry),
+      jobs_(jobs),
+      executor_(executor),
+      pipeline_(pipeline) {
+    buildUi();
+    refreshAll();
+}
+
+void MainWindow::buildUi() {
     setWindowTitle(QStringLiteral("Trinity"));
-    resize(720, 640);
+    resize(900, 1000);
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
-    layout->setContentsMargins(32, 32, 32, 32);
-    layout->setSpacing(12);
+    layout->setContentsMargins(32, 24, 32, 24);
+    layout->setSpacing(10);
 
     auto* title = new QLabel(QStringLiteral("Trinity"), central);
     title->setStyleSheet(QStringLiteral("font-size: 40px; font-weight: 600;"));
     title->setAlignment(Qt::AlignCenter);
     layout->addWidget(title);
 
-    auto* subtitle = new QLabel(
-        QStringLiteral("Native C++ engineering workspace"), central);
+    auto* subtitle =
+        new QLabel(QStringLiteral("Native C++ engineering workspace"), central);
     subtitle->setStyleSheet(QStringLiteral("font-size: 15px; color: #666;"));
     subtitle->setAlignment(Qt::AlignCenter);
     layout->addWidget(subtitle);
-
-    layout->addSpacing(12);
 
     const QString coreLine =
         summary_.coreOk ? QStringLiteral("Native C++ core initialized successfully")
@@ -97,33 +119,10 @@ MainWindow::MainWindow(const InitSummary& summary, engines::EngineRegistry* regi
                                    : QStringLiteral("font-size: 13px; color: #888;"));
             row->setAlignment(Qt::AlignCenter);
             layout->addWidget(row);
-
-            QString detail;
-            if (!engine.capabilities.empty()) {
-                QStringList caps;
-                for (const auto& cap : engine.capabilities) {
-                    caps.push_back(QString::fromStdString(cap));
-                }
-                detail = QStringLiteral("caps: ") + caps.join(QStringLiteral(", "));
-            }
-            if (!engine.lastResult.empty()) {
-                if (!detail.isEmpty()) {
-                    detail += QStringLiteral("  •  ");
-                }
-                detail += QString::fromStdString(engine.lastResult);
-            }
-            if (!detail.isEmpty()) {
-                auto* sub = new QLabel(detail, central);
-                sub->setStyleSheet(QStringLiteral("font-size: 11px; color: #888;"));
-                sub->setAlignment(Qt::AlignCenter);
-                sub->setWordWrap(true);
-                layout->addWidget(sub);
-            }
         }
     }
 
-    // Requirement-understanding panel (parse + validate + route only;
-    // this UI never executes an engine).
+    // Requirement-understanding panel (parse + validate + route only).
     auto* reqTitle = new QLabel(QStringLiteral("Requirement Understanding (no execution)"), central);
     reqTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
     reqTitle->setAlignment(Qt::AlignCenter);
@@ -141,13 +140,82 @@ MainWindow::MainWindow(const InitSummary& summary, engines::EngineRegistry* regi
 
     output_ = new QTextEdit(central);
     output_->setReadOnly(true);
-    output_->setMinimumHeight(220);
+    output_->setMinimumHeight(140);
     output_->setPlaceholderText(
         QStringLiteral("Parsed intent, validation, routing, parameters, missing, errors…"));
     layout->addWidget(output_);
 
+    // Execution panel: full pipeline through JobManager off the UI thread.
+    auto* execTitle = new QLabel(QStringLiteral("Execute (Jobs + Workflows)"), central);
+    execTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+    execTitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(execTitle);
+
+    executeInput_ = new QLineEdit(central);
+    executeInput_->setText(QStringLiteral("Calculate 25 * 8"));
+    executeInput_->setPlaceholderText(QStringLiteral("Calculate 25 * 8"));
+    layout->addWidget(executeInput_);
+
+    auto* runButton = new QPushButton(QStringLiteral("Submit Request (async)"), central);
+    runButton->setEnabled(pipeline_ != nullptr);
+    layout->addWidget(runButton);
+    connect(runButton, &QPushButton::clicked, this, &MainWindow::handleExecute);
+    connect(executeInput_, &QLineEdit::returnPressed, this, &MainWindow::handleExecute);
+
+    auto* demoButton = new QPushButton(QStringLiteral("Run Demo Workflow (2-node math)"), central);
+    demoButton->setEnabled(executor_ != nullptr);
+    layout->addWidget(demoButton);
+    connect(demoButton, &QPushButton::clicked, this, &MainWindow::handleDemoWorkflow);
+
+    executeOutput_ = new QTextEdit(central);
+    executeOutput_->setReadOnly(true);
+    executeOutput_->setMinimumHeight(120);
+    executeOutput_->setPlaceholderText(QStringLiteral("Execution lifecycle: submit → queued → running → completed/failed…"));
+    layout->addWidget(executeOutput_);
+
+    auto* jobsTitle = new QLabel(QStringLiteral("Jobs"), central);
+    jobsTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+    jobsTitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(jobsTitle);
+
+    jobsTable_ = new QTableWidget(central);
+    jobsTable_->setColumnCount(8);
+    jobsTable_->setHorizontalHeaderLabels(QStringList()
+                                          << "Job ID" << "Engine" << "Operation" << "Status"
+                                          << "Created" << "Started" << "Completed" << "Error");
+    jobsTable_->horizontalHeader()->setStretchLastSection(true);
+    jobsTable_->verticalHeader()->setVisible(false);
+    jobsTable_->setEditTriggers(QTableWidget::NoEditTriggers);
+    jobsTable_->setMinimumHeight(160);
+    layout->addWidget(jobsTable_);
+
+    auto* wfTitle = new QLabel(QStringLiteral("Workflows"), central);
+    wfTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+    wfTitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(wfTitle);
+
+    workflowsTable_ = new QTableWidget(central);
+    workflowsTable_->setColumnCount(5);
+    workflowsTable_->setHorizontalHeaderLabels(
+        QStringList() << "Workflow" << "Nodes" << "Current" << "Status" << "Failures");
+    workflowsTable_->horizontalHeader()->setStretchLastSection(true);
+    workflowsTable_->verticalHeader()->setVisible(false);
+    workflowsTable_->setEditTriggers(QTableWidget::NoEditTriggers);
+    workflowsTable_->setMinimumHeight(120);
+    layout->addWidget(workflowsTable_);
+
     layout->addStretch(1);
     setCentralWidget(central);
+
+    refreshTimer_ = new QTimer(this);
+    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshJobs);
+    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshWorkflows);
+    refreshTimer_->start(1000);
+}
+
+void MainWindow::refreshAll() {
+    refreshJobs();
+    refreshWorkflows();
 }
 
 void MainWindow::handleParse() {
@@ -156,8 +224,6 @@ void MainWindow::handleParse() {
     }
     const std::string request = input_->text().toStdString();
 
-    // Deterministic pipeline: parse -> validate -> route (lookup only).
-    // No EngineRegistry::execute, no JobManager::runSync here by design.
     const trinity::intelligence::RequirementParser parser;
     const trinity::intelligence::ParseResult parsed = parser.parse(request);
 
@@ -201,42 +267,171 @@ void MainWindow::handleParse() {
         report += QStringLiteral("Selected Engine: (registry unavailable)\n");
     }
 
-    report += QStringLiteral("Detected Parameters:\n") +
-              QString::fromStdString(parsed.intent.parameters.dump(2)) + QStringLiteral("\n");
-
-    QString missing;
-    for (const auto& item : parsed.intent.missing) {
-        if (!missing.isEmpty()) {
-            missing += QStringLiteral(", ");
-        }
-        missing += QString::fromStdString(item);
-    }
-    report += QStringLiteral("Missing Requirements: ") +
-              (missing.isEmpty() ? QStringLiteral("(none)") : missing) + QStringLiteral("\n");
-
-    QString errors;
-    for (const auto& item : parsed.errors) {
-        if (item.rfind("__no_", 0) == 0) {
-            continue;  // internal dispatch sentinel, never user-facing
-        }
-        if (!errors.isEmpty()) {
-            errors += QStringLiteral("\n");
-        }
-        errors += QString::fromStdString(item);
-    }
-    for (const auto& msg : validation.messages) {
-        if (!msg.passed) {
-            if (!errors.isEmpty()) {
-                errors += QStringLiteral("\n");
-            }
-            errors += QString::fromStdString("[" + msg.rule + "] " + msg.message);
-        }
-    }
-    report += QStringLiteral("Errors:\n") +
-              (errors.isEmpty() ? QStringLiteral("(none)") : errors) + QStringLiteral("\n");
     report += QStringLiteral("(No engine was executed.)\n");
-
     output_->setPlainText(report);
+}
+
+void MainWindow::handleExecute() {
+    if (executeInput_ == nullptr || executeOutput_ == nullptr || pipeline_ == nullptr) {
+        return;
+    }
+    const std::string request = executeInput_->text().toStdString();
+    try {
+        // Async submit: returns jobId immediately, worker thread executes.
+        const auto result = pipeline_->submit(request);
+        QString report = QStringLiteral("Request: ") + QString::fromStdString(request) +
+                         QStringLiteral("\nJob: ") +
+                         QString::fromStdString(result.jobId.empty() ? "(none)" : result.jobId) +
+                         QStringLiteral("\nRouted: ") +
+                         QString::fromStdString(result.routing.engine + "/" + result.routing.operation) +
+                         QStringLiteral(" [") + QString::fromStdString(result.routing.status) +
+                         QStringLiteral("]\n");
+        if (!result.success && !result.error.is_null()) {
+            report += QStringLiteral("Rejected: ") +
+                      QString::fromStdString(result.error.dump(2)) + QStringLiteral("\n");
+        } else {
+            report += QStringLiteral("Lifecycle: QUEUED → RUNNING → COMPLETED/FAILED (polling…)\n");
+        }
+        executeOutput_->setPlainText(report);
+    } catch (const std::exception& exc) {
+        executeOutput_->setPlainText(QStringLiteral("Submit failed: ") +
+                                     QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleDemoWorkflow() {
+    if (executor_ == nullptr || executeOutput_ == nullptr) {
+        return;
+    }
+    try {
+        trinity::workflows::Workflow wf;
+        wf.workflowId = trinity::core::newUuid();
+        wf.name = "demo-math-2node";
+        wf.description = "Node A computes 25*8; Node B consumes A.value via inputFrom.";
+        wf.status = trinity::workflows::WorkflowStatus::Queued;
+        wf.createdAt = trinity::core::utcNowIso();
+        wf.updatedAt = wf.createdAt;
+
+        trinity::workflows::WorkflowNode a;
+        a.id = "A";
+        a.nodeId = "A";
+        a.name = "compute-25x8";
+        a.engine = "math";
+        a.operation = "evaluate_expression";
+        a.parameters = trinity::core::Json{{"expression", "25 * 8"}};
+        a.input = a.parameters;
+
+        trinity::workflows::WorkflowNode b;
+        b.id = "B";
+        b.nodeId = "B";
+        b.name = "double-A";
+        b.engine = "math";
+        b.operation = "evaluate";
+        b.parameters = trinity::core::Json{{"expression", "x * 2"}};
+        b.input = b.parameters;
+        // Explicit structured propagation: B.variables.x <- A.value
+        b.inputFrom = trinity::core::Json{{"variables", {{"x", "{{A.value}}"}}}};
+
+        wf.nodes = {a, b};
+        trinity::workflows::WorkflowEdge e;
+        e.edgeId = trinity::core::newUuid();
+        e.fromNode = "A";
+        e.toNode = "B";
+        wf.edges = {e};
+
+        executor_->save(wf);
+        // Off the UI thread: detached worker runs the DAG; UI polls.
+        auto* exec = executor_;
+        std::thread([exec, wf]() mutable {
+            try {
+                exec->runInline(wf);
+            } catch (...) {
+            }
+        }).detach();
+        executeOutput_->setPlainText(QStringLiteral("Demo workflow submitted: ") +
+                                     QString::fromStdString(wf.workflowId) +
+                                     QStringLiteral("\nWatch Workflows table for progress."));
+    } catch (const std::exception& exc) {
+        executeOutput_->setPlainText(QStringLiteral("Workflow submit failed: ") +
+                                     QString::fromStdString(exc.what()));
+    }
+    refreshWorkflows();
+}
+
+void MainWindow::refreshJobs() {
+    if (jobsTable_ == nullptr || jobs_ == nullptr) {
+        return;
+    }
+    std::vector<trinity::jobs::Job> jobs;
+    try {
+        jobs = jobs_->listRecent(20);
+    } catch (...) {
+        return;
+    }
+    jobsTable_->setRowCount(static_cast<int>(jobs.size()));
+    for (int r = 0; r < static_cast<int>(jobs.size()); ++r) {
+        const auto& j = jobs[static_cast<size_t>(r)];
+        const QString shortId =
+            QString::fromStdString(j.jobId.size() > 8 ? j.jobId.substr(0, 8) : j.jobId);
+        jobsTable_->setItem(r, 0, new QTableWidgetItem(shortId));
+        jobsTable_->setItem(r, 1, new QTableWidgetItem(QString::fromStdString(j.engine)));
+        jobsTable_->setItem(r, 2, new QTableWidgetItem(QString::fromStdString(j.operation)));
+        jobsTable_->setItem(r, 3,
+                            new QTableWidgetItem(QString::fromStdString(toString(j.status))));
+        jobsTable_->setItem(r, 4, new QTableWidgetItem(QString::fromStdString(j.createdAt)));
+        jobsTable_->setItem(r, 5, new QTableWidgetItem(QString::fromStdString(j.startedAt)));
+        jobsTable_->setItem(r, 6, new QTableWidgetItem(QString::fromStdString(j.completedAt)));
+        std::string err;
+        if (!j.error.is_null()) {
+            err = j.error.dump();
+            if (err.size() > 120) {
+                err = err.substr(0, 120) + "…";
+            }
+        }
+        jobsTable_->setItem(r, 7, new QTableWidgetItem(QString::fromStdString(err)));
+    }
+}
+
+void MainWindow::refreshWorkflows() {
+    if (workflowsTable_ == nullptr || executor_ == nullptr) {
+        return;
+    }
+    std::vector<trinity::workflows::Workflow> wfs;
+    try {
+        wfs = executor_->listRecent(10);
+    } catch (...) {
+        return;
+    }
+    workflowsTable_->setRowCount(static_cast<int>(wfs.size()));
+    for (int r = 0; r < static_cast<int>(wfs.size()); ++r) {
+        const auto& w = wfs[static_cast<size_t>(r)];
+        workflowsTable_->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(w.name)));
+        workflowsTable_->setItem(
+            r, 1, new QTableWidgetItem(QString::number(static_cast<qulonglong>(w.nodes.size()))));
+        std::string current;
+        int failed = 0;
+        for (const auto& n : w.nodes) {
+            if (n.status == trinity::workflows::NodeStatus::Failed) {
+                ++failed;
+            }
+            if (n.status == trinity::workflows::NodeStatus::Running) {
+                current = n.effectiveId();
+            }
+        }
+        if (current.empty()) {
+            for (const auto& n : w.nodes) {
+                if (n.status == trinity::workflows::NodeStatus::Queued) {
+                    current = n.effectiveId();
+                    break;
+                }
+            }
+        }
+        workflowsTable_->setItem(r, 2, new QTableWidgetItem(QString::fromStdString(current)));
+        workflowsTable_->setItem(
+            r, 3, new QTableWidgetItem(QString::fromStdString(toString(w.status))));
+        workflowsTable_->setItem(r, 4, new QTableWidgetItem(QString::number(failed)));
+    }
 }
 
 }  // namespace trinity::ui

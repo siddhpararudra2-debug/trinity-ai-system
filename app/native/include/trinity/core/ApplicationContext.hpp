@@ -16,9 +16,12 @@
 #include "../engines/EngineRegistry.hpp"
 #include "../fs/Filesystem.hpp"
 #include "../intelligence/IModelProvider.hpp"
+#include "../intelligence/RequestPipeline.hpp"
 #include "../jobs/Job.hpp"
+#include "../jobs/JobWorker.hpp"
 #include "../storage/Database.hpp"
 #include "../storage/Repositories.hpp"
+#include "../workflows/Executor.hpp"
 
 namespace trinity::core {
 
@@ -60,6 +63,9 @@ public:
     engines::EngineRegistry& engines() { return *registry_; }
     artifacts::ArtifactManager& artifacts() { return *artifacts_; }
     jobs::JobManager& jobs() { return *jobs_; }
+    jobs::JobWorker& worker() { return *worker_; }
+    workflows::WorkflowExecutor& executor() { return *executor_; }
+    intelligence::RequestPipeline& pipeline() { return *pipeline_; }
     intelligence::IModelProvider& model() { return *model_; }
     storage::JobRepository& jobRepository() { return *jobRepo_; }
     storage::WorkflowRepository& workflowRepository() { return *workflowRepo_; }
@@ -77,6 +83,9 @@ private:
     std::shared_ptr<engines::EngineRegistry> registry_;
     std::shared_ptr<artifacts::ArtifactManager> artifacts_;
     std::shared_ptr<jobs::JobManager> jobs_;
+    std::shared_ptr<jobs::JobWorker> worker_;
+    std::shared_ptr<workflows::WorkflowExecutor> executor_;
+    std::shared_ptr<intelligence::RequestPipeline> pipeline_;
     std::shared_ptr<intelligence::IModelProvider> model_;
     std::shared_ptr<storage::JobRepository> jobRepo_;
     std::shared_ptr<storage::WorkflowRepository> workflowRepo_;

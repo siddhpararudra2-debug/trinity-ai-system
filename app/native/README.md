@@ -53,10 +53,10 @@ app/native/
     storage/{Database,Repositories}.hpp
   src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,storage}/...
   ui/MainWindow.{hpp,cpp}
-  tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
-             jobs,uuid,serialization,filesystem,repositories,logging_config,
-             math_engine,cad_stubs,cad_generate,validation,provider_factory,
-             planner}.cpp
+   tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
+              jobs,job_lifecycle,uuid,serialization,filesystem,repositories,logging_config,
+              math_engine,cad_stubs,cad_generate,validation,provider_factory,
+              planner,request_pipeline,workflow_executor}.cpp
   third_party/{sqlite,json,doctest}/
   build/{debug,release}/ (gitignored)
 ```
@@ -127,7 +127,7 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (64 cases, GUI-independent): error envelope + source/timestamp,
+Suites (117 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
 unknown/unsupported/invalid handling), math (precedence, variables,
 functions/constants, power, evaluate, linear/quadratic solve with
@@ -138,8 +138,13 @@ severity messages, provider factory + selection + secrets, planner
 (tool execution, refusal/skip paths), workflow ordering, SQLite schema
 + transactions + prepared statements, null model provider (`generate`
 + `generatePlan`), paths/config (Windows dirs), jobs + artifact
-checksums, UUID, model serialization round-trips, filesystem ops +
-safeJoin, repositories CRUD, logging file + buffer.
+ checksums, UUID, model serialization round-trips, filesystem ops +
+ safeJoin, repositories CRUD, logging file + buffer, job lifecycle
+ (`createJob`/`executeJob`/`cancel`/`recoverOnStartup`,
+ `isTerminal`/`canTransition`), background `JobWorker`, deterministic
+ `WorkflowExecutor` (topo order, value propagation,
+ `allowFailure`/`Skipped`), and `RequestPipeline` (parse → validate →
+ route → job; validation never bypassed).
 
 ## Plugging in an LLM (for the model developer)
 
