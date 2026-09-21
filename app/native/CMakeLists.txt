@@ -59,6 +59,9 @@ set(TRINITY_CORE_SOURCES
     src/cad/Validators.cpp
     src/intelligence/ToolCall.cpp
     src/intelligence/Intent.cpp
+    src/intelligence/RequirementParser.cpp
+    src/intelligence/IntentValidator.cpp
+    src/intelligence/IntentRouter.cpp
     src/intelligence/ModelRequest.cpp
     src/intelligence/ModelResponse.cpp
     src/intelligence/ModelProvider.cpp
@@ -128,6 +131,9 @@ if(TRINITY_BUILD_TESTS)
         tests/test_validation.cpp
         tests/test_provider_factory.cpp
         tests/test_planner.cpp
+        tests/test_requirement_parser.cpp
+        tests/test_intent_validation.cpp
+        tests/test_intent_router.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

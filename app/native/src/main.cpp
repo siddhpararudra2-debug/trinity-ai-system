@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
     uiSummary.modelAvailable = context.model().info().available;
     uiSummary.coreOk = status.isOk();
 
-    trinity::ui::MainWindow window(uiSummary);
+    trinity::ui::MainWindow window(uiSummary, &context.engines());
     window.show();
     const int code = app.exec();
 

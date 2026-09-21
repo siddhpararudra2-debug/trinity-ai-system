@@ -1,16 +1,28 @@
 #include "MainWindow.hpp"
 
 #include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QStringList>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include "trinity/engines/EngineRegistry.hpp"
+#include "trinity/intelligence/IntentRouter.hpp"
+#include "trinity/intelligence/IntentValidator.hpp"
+#include "trinity/intelligence/RequirementParser.hpp"
 
 namespace trinity::ui {
 
 MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
-    : QMainWindow(parent), summary_(summary) {
+    : MainWindow(summary, nullptr, parent) {}
+
+MainWindow::MainWindow(const InitSummary& summary, engines::EngineRegistry* registry,
+                       QWidget* parent)
+    : QMainWindow(parent), summary_(summary), registry_(registry) {
     setWindowTitle(QStringLiteral("Trinity"));
-    resize(640, 420);
+    resize(720, 640);
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
@@ -110,8 +122,121 @@ MainWindow::MainWindow(const InitSummary& summary, QWidget* parent)
         }
     }
 
+    // Requirement-understanding panel (parse + validate + route only;
+    // this UI never executes an engine).
+    auto* reqTitle = new QLabel(QStringLiteral("Requirement Understanding (no execution)"), central);
+    reqTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+    reqTitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(reqTitle);
+
+    input_ = new QLineEdit(central);
+    input_->setPlaceholderText(
+        QStringLiteral("e.g. Create a 50 mm quadcopter frame with 2 mm thick arms."));
+    layout->addWidget(input_);
+
+    auto* parseButton = new QPushButton(QStringLiteral("Parse Requirement"), central);
+    layout->addWidget(parseButton);
+    connect(parseButton, &QPushButton::clicked, this, &MainWindow::handleParse);
+    connect(input_, &QLineEdit::returnPressed, this, &MainWindow::handleParse);
+
+    output_ = new QTextEdit(central);
+    output_->setReadOnly(true);
+    output_->setMinimumHeight(220);
+    output_->setPlaceholderText(
+        QStringLiteral("Parsed intent, validation, routing, parameters, missing, errors…"));
+    layout->addWidget(output_);
+
     layout->addStretch(1);
     setCentralWidget(central);
+}
+
+void MainWindow::handleParse() {
+    if (input_ == nullptr || output_ == nullptr) {
+        return;
+    }
+    const std::string request = input_->text().toStdString();
+
+    // Deterministic pipeline: parse -> validate -> route (lookup only).
+    // No EngineRegistry::execute, no JobManager::runSync here by design.
+    const trinity::intelligence::RequirementParser parser;
+    const trinity::intelligence::ParseResult parsed = parser.parse(request);
+
+    trinity::intelligence::IntentValidator validator;
+    trinity::validation::ValidationResult validation;
+    if (registry_ != nullptr) {
+        validation = validator.validate(parsed.intent, *registry_);
+    } else {
+        validation = validator.validate(parsed.intent);
+    }
+
+    QString report;
+    report += QStringLiteral("Original Request:\n") + QString::fromStdString(request) +
+              QStringLiteral("\n\n");
+    report += QStringLiteral("Parsed Intent:\n") +
+              QString::fromStdString(parsed.intent.toJson().dump(2)) + QStringLiteral("\n\n");
+    report += QStringLiteral("Validation Status: ") +
+              QString::fromStdString(trinity::validation::toString(validation.status)) +
+              QStringLiteral(" — ") + QString::fromStdString(validation.message) +
+              QStringLiteral("\n");
+
+    if (registry_ != nullptr) {
+        const trinity::intelligence::IntentRouter router;
+        const trinity::intelligence::RouteResult route =
+            router.route(parsed.intent, *registry_);
+        report += QStringLiteral("Selected Engine: ") +
+                  (route.engine.empty() ? QStringLiteral("(none)")
+                                        : QString::fromStdString(route.engine)) +
+                  QStringLiteral("  •  Operation: ") +
+                  (route.operation.empty() ? QStringLiteral("(none)")
+                                           : QString::fromStdString(route.operation)) +
+                  QStringLiteral("  •  Status: ") +
+                  QString::fromStdString(route.status) + QStringLiteral("\n");
+        if (!route.reason.empty()) {
+            report += QStringLiteral("Routing Reason: ") +
+                      QString::fromStdString(route.reason) + QStringLiteral("\n");
+        }
+        report += QStringLiteral("Routing Detail:\n") +
+                  QString::fromStdString(route.toJson().dump(2)) + QStringLiteral("\n");
+    } else {
+        report += QStringLiteral("Selected Engine: (registry unavailable)\n");
+    }
+
+    report += QStringLiteral("Detected Parameters:\n") +
+              QString::fromStdString(parsed.intent.parameters.dump(2)) + QStringLiteral("\n");
+
+    QString missing;
+    for (const auto& item : parsed.intent.missing) {
+        if (!missing.isEmpty()) {
+            missing += QStringLiteral(", ");
+        }
+        missing += QString::fromStdString(item);
+    }
+    report += QStringLiteral("Missing Requirements: ") +
+              (missing.isEmpty() ? QStringLiteral("(none)") : missing) + QStringLiteral("\n");
+
+    QString errors;
+    for (const auto& item : parsed.errors) {
+        if (item.rfind("__no_", 0) == 0) {
+            continue;  // internal dispatch sentinel, never user-facing
+        }
+        if (!errors.isEmpty()) {
+            errors += QStringLiteral("\n");
+        }
+        errors += QString::fromStdString(item);
+    }
+    for (const auto& msg : validation.messages) {
+        if (!msg.passed) {
+            if (!errors.isEmpty()) {
+                errors += QStringLiteral("\n");
+            }
+            errors += QString::fromStdString("[" + msg.rule + "] " + msg.message);
+        }
+    }
+    report += QStringLiteral("Errors:\n") +
+              (errors.isEmpty() ? QStringLiteral("(none)") : errors) + QStringLiteral("\n");
+    report += QStringLiteral("(No engine was executed.)\n");
+
+    output_->setPlainText(report);
 }
 
 }  // namespace trinity::ui
