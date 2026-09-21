@@ -127,7 +127,7 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (117 cases, GUI-independent): error envelope + source/timestamp,
+Suites (118 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
 unknown/unsupported/invalid handling), math (precedence, variables,
 functions/constants, power, evaluate, linear/quadratic solve with

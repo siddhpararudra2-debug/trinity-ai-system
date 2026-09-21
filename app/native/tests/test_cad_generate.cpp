@@ -1,6 +1,7 @@
 #include <doctest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -126,4 +127,35 @@ TEST_CASE("cad stl encoding is deterministic") {
     const trinity::cad::Mesh first = trinity::cad::buildQuadcopterFrame(params);
     const trinity::cad::Mesh second = trinity::cad::buildQuadcopterFrame(params);
     CHECK(trinity::cad::encodeBinaryStl(first) == trinity::cad::encodeBinaryStl(second));
+}
+
+TEST_CASE("golden: standard 50 mm frame produces stable reference geometry") {
+    const trinity::cad::FrameParams params =
+        trinity::cad::FrameParams::fromRequest(trinity::core::Json::object());
+    REQUIRE(params.parameters.at("overall_size") == 50.0);
+    REQUIRE(params.parameters.at("motor_count") == 4.0);
+    const trinity::cad::Mesh mesh = trinity::cad::buildQuadcopterFrame(params);
+
+    // Reference metadata: 9 boxes (plate + 4 arms + 4 bosses) x 12 tris.
+    CHECK(mesh.triangleCount() == 108);
+    CHECK(mesh.triangles().size() * 3 == 324);
+
+    const trinity::cad::BoundingBox bbox = mesh.boundingBox();
+    // Centered symmetric frame: min mirrors max on every axis.
+    CHECK(bbox.min[0] == doctest::Approx(-bbox.max[0]));
+    CHECK(bbox.min[1] == doctest::Approx(-bbox.max[1]));
+    CHECK(bbox.min[2] == doctest::Approx(-bbox.max[2]));
+    CHECK(bbox.spanX() == doctest::Approx(bbox.spanY()));
+    // Z span is driven by the raised motor bosses (1.5x plate thickness).
+    CHECK(bbox.spanZ() == doctest::Approx(1.5 * 1.5));
+    // X/Y span matches the projected diagonal footprint formula.
+    const double expected = std::sqrt(2.0) * (50.0 / 2.0 + 6.0 * 1.4);
+    CHECK(bbox.spanX() == doctest::Approx(expected));
+    CHECK(bbox.spanY() == doctest::Approx(expected));
+
+    // STL bytes are stable: header + count + fixed 50-byte records.
+    const auto bytes = trinity::cad::encodeBinaryStl(mesh);
+    CHECK(bytes.size() == 84 + 50 * 108);
+    CHECK(trinity::cad::encodeBinaryStl(trinity::cad::buildQuadcopterFrame(params)) ==
+          bytes);
 }
