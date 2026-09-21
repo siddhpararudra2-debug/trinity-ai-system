@@ -27,6 +27,9 @@ public:
     Mesh() = default;
 
     void extend(const Mesh& other);
+    void addTriangle(const Triangle& tri);
+    void reserveTriangles(size_t n);
+    void clear();
     size_t triangleCount() const { return triangles_.size(); }
     bool empty() const { return triangles_.empty(); }
     const std::vector<Triangle>& triangles() const { return triangles_; }

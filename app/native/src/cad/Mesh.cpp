@@ -9,6 +9,12 @@ void Mesh::extend(const Mesh& other) {
     triangles_.insert(triangles_.end(), other.triangles_.begin(), other.triangles_.end());
 }
 
+void Mesh::addTriangle(const Triangle& tri) { triangles_.push_back(tri); }
+
+void Mesh::reserveTriangles(size_t n) { triangles_.reserve(n); }
+
+void Mesh::clear() { triangles_.clear(); }
+
 BoundingBox Mesh::boundingBox() const {
     if (triangles_.empty()) {
         throw std::invalid_argument("Cannot bound an empty mesh");

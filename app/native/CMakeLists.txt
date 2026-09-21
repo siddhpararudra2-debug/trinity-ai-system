@@ -56,7 +56,12 @@ set(TRINITY_CORE_SOURCES
     src/cad/Mesh.cpp
     src/cad/Builder.cpp
     src/cad/StlWriter.cpp
+    src/cad/StlReader.cpp
     src/cad/Validators.cpp
+    src/viewer/RenderData.cpp
+    src/viewer/ViewerState.cpp
+    src/viewer/Measure.cpp
+    src/viewer/ArtifactLoader.cpp
     src/intelligence/ToolCall.cpp
     src/intelligence/Intent.cpp
     src/intelligence/RequirementParser.cpp
@@ -98,14 +103,21 @@ endif()
 
 # ------------------------------------------------------------------- app
 if(TRINITY_WITH_QT)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets OpenGL)
+    find_package(OpenGL REQUIRED)
     qt_add_executable(Trinity
         src/main.cpp
         ui/MainWindow.cpp
         ui/MainWindow.hpp
+        ui/viewer/ViewportWidget.cpp
+        ui/viewer/ViewportWidget.hpp
+        ui/viewer/ViewerController.cpp
+        ui/viewer/ViewerController.hpp
+        ui/viewer/ViewerPanel.cpp
+        ui/viewer/ViewerPanel.hpp
     )
     target_compile_definitions(Trinity PRIVATE TRINITY_WITH_QT)
-    target_link_libraries(Trinity PRIVATE trinity_core Qt6::Widgets)
+    target_link_libraries(Trinity PRIVATE trinity_core Qt6::Widgets Qt6::OpenGLWidgets Qt6::OpenGL OpenGL::GL)
     set_target_properties(Trinity PROPERTIES WIN32_EXECUTABLE TRUE)
 else()
     add_executable(Trinity src/main.cpp)
@@ -141,6 +153,8 @@ if(TRINITY_BUILD_TESTS)
         tests/test_job_lifecycle.cpp
         tests/test_request_pipeline.cpp
         tests/test_workflow_executor.cpp
+        tests/test_viewer_geometry.cpp
+        tests/test_artifact_loading.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

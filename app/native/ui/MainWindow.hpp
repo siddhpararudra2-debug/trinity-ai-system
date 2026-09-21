@@ -6,6 +6,22 @@
 // Also hosts the requirement-understanding panel: a user request is
 // parsed into a structured Intent, validated, and routed to an engine
 // (lookup only — this UI never executes an engine).
+//
+// Viewer integration: center 3D viewport (ViewportWidget) driven by
+// ViewerController/ViewerState; right inspector (ViewerPanel) for
+// parameters/validation/artifacts; bottom jobs/logs. Layout:
+//
+// ┌──────────────────────────────────────────────┐
+// │ Trinity                                      │
+// ├──────────────┬───────────────────┬───────────┤
+// │ Navigation   │                   │ Inspector │
+// │              │     3D VIEW       │           │
+// │ Projects     │                   │ Parameters│
+// │ Jobs         │                   │ Validation│
+// │ Engines      │                   │ Artifacts │
+// ├──────────────┴───────────────────┴───────────┤
+// │ Jobs / Logs / Status                         │
+// └──────────────────────────────────────────────┘
 
 #include <QMainWindow>
 #include <QLineEdit>
@@ -26,6 +42,12 @@ class WorkflowExecutor;
 namespace trinity::intelligence {
 class RequestPipeline;
 }
+namespace trinity::storage {
+class ArtifactRepository;
+}
+namespace trinity::artifacts {
+class ArtifactManager;
+}
 
 class QTableWidget;
 class QTimer;
@@ -34,6 +56,9 @@ namespace trinity::ui {
 
 class JobTableWidget;
 class WorkflowTableWidget;
+class ViewportWidget;
+class ViewerPanel;
+class ViewerController;
 
 struct EngineEntry {
     std::string name;
@@ -64,12 +89,24 @@ public:
                         jobs::JobManager* jobs, workflows::WorkflowExecutor* executor,
                         intelligence::RequestPipeline* pipeline, QWidget* parent = nullptr);
 
+    void setViewerServices(storage::ArtifactRepository* artifactRepo,
+                           artifacts::ArtifactManager* artifacts);
+
 private slots:
     void handleParse();
     void handleExecute();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshWorkflows();
+    void refreshArtifacts();
+    void refreshLogs();
+    void onViewerStateChanged();
+    void onViewerModelReady(const QString& jobId);
+    void onViewerLoadError(const QString& message);
+    void onArtifactSelected(const std::string& artifactId);
+    void onViewportMeasurement(double ax, double ay, double az, double bx, double by,
+                               double bz, bool complete);
+    void onViewportCameraChanged();
 
 private:
     void buildUi();
@@ -80,6 +117,8 @@ private:
     jobs::JobManager* jobs_ = nullptr;
     workflows::WorkflowExecutor* executor_ = nullptr;
     intelligence::RequestPipeline* pipeline_ = nullptr;
+    storage::ArtifactRepository* artifactRepo_ = nullptr;
+    artifacts::ArtifactManager* artifactsMgr_ = nullptr;
 
     QLineEdit* input_ = nullptr;
     QTextEdit* output_ = nullptr;
@@ -87,7 +126,14 @@ private:
     QTextEdit* executeOutput_ = nullptr;
     QTableWidget* jobsTable_ = nullptr;
     QTableWidget* workflowsTable_ = nullptr;
+    QTextEdit* logView_ = nullptr;
     QTimer* refreshTimer_ = nullptr;
+
+    ViewportWidget* viewport_ = nullptr;
+    ViewerPanel* viewerPanel_ = nullptr;
+    ViewerController* viewerController_ = nullptr;
+    std::string lastShownArtifact_;
+    std::string lastShownJob_;
 };
 
 }  // namespace trinity::ui

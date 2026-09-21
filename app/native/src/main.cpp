@@ -179,6 +179,7 @@ int main(int argc, char* argv[]) {
 
     trinity::ui::MainWindow window(uiSummary, &context.engines(), &context.jobs(),
                                      &context.executor(), &context.pipeline());
+    window.setViewerServices(&context.artifactRepository(), &context.artifacts());
     window.show();
     const int code = app.exec();
 
