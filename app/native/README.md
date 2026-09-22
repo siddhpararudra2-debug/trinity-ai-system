@@ -222,6 +222,16 @@ rest marked `skipped`. Model refusal executes nothing.
 - `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
   check, refusal check, planner/model/provider checks),
   `trinity_tests` via CTest
+- Native Qt 6 3D viewer (`ui/viewer/ViewportWidget`, `ViewerController`,
+  `ViewerPanel` over Qt-free `viewer/{RenderData,ViewerState,Measure,
+  ArtifactLoader}` + `cad/StlReader`): real generated mesh only
+  (indexed upload per model change), orbit/pan/zoom, fit (F), reset (R),
+  perspective/orthographic, grid/axes, solid/wireframe, vertex-pair
+  measurement, mesh-derived bounding dimensions, validation badge, and
+  artifact selection (name/type/size/SHA-256/validation/job/created).
+  `CAD Engine → Mesh → Validation → ArtifactManager → Viewer` runs off
+  the GUI thread, preferring the in-memory job-spec rebuild with an
+  integrity-checked STL/spec-JSON fallback (no fake GLB)
 
 ### Engine quick reference
 
@@ -254,4 +264,4 @@ rest marked `skipped`. Model refusal executes nothing.
   local, custom Trinity model — the factory + example + planner are
   ready; only the transport is missing)
 - Installer/packaging (CPack/NSIS), code signing, update channel
-- QML workspace, 3D viewport, project tree, settings dialogs
+- QML workspace, project tree, settings dialogs
