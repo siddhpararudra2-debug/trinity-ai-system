@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
 #include <regex>
 
 #include "trinity/core/Logger.hpp"
@@ -29,6 +30,53 @@ std::string trim(const std::string& value) {
 
 bool contains(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
+}
+
+/// Parse `k = v` bindings ("x = 10, y = 3") into numeric values.
+/// Returns an empty map when nothing parses; callers treat that as
+/// "no bindings supplied" and never invent values.
+std::map<std::string, double> parseBindings(const std::string& text) {
+    std::map<std::string, double> out;
+    static const std::regex kBinding(
+        R"(([A-Za-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))");
+    auto begin = std::sregex_iterator(text.begin(), text.end(), kBinding);
+    auto end = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        try {
+            out[(*it)[1].str()] = std::stod((*it)[2].str());
+        } catch (...) {
+            // Skip unparseable numbers; the engine validates completeness.
+        }
+    }
+    return out;
+}
+
+/// Split "expr with a = 1, b = 2" into {expression, bindings}.
+/// The " with " separator is only honored when the trailing part parses
+/// as at least one binding; otherwise the text is unchanged.
+std::pair<std::string, std::map<std::string, double>> splitWithBindings(
+    const std::string& text) {
+    static const std::regex kWith(R"(\s+with\s+)", std::regex_constants::icase);
+    std::smatch m;
+    std::string head = text;
+    std::string tail;
+    // Use the last " with " so expressions stay intact.
+    auto begin = std::sregex_iterator(text.begin(), text.end(), kWith);
+    auto end = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        m = *it;
+    }
+    if (m.ready() && !m.empty()) {
+        head = text.substr(0, static_cast<size_t>(m.position(0)));
+        tail = text.substr(static_cast<size_t>(m.position(0) + m.length(0)));
+    } else {
+        return {trim(text), {}};
+    }
+    const auto bindings = parseBindings(tail);
+    if (bindings.empty()) {
+        return {trim(text), {}};
+    }
+    return {trim(head), bindings};
 }
 
 std::string detectPriority(const std::string& lowered) {
@@ -560,11 +608,13 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     const bool hasEval = contains(lowered, "calculate") || contains(lowered, "compute") ||
                          contains(lowered, "evaluate") || contains(lowered, "what is") ||
                          contains(lowered, "what's");
+    const bool hasConvert = contains(lowered, "convert");
+    const bool hasFormula = contains(lowered, "formula");
     // Bare arithmetic like "25 * 8" (no keywords) is also a math request.
     static const std::regex kBareArith(R"(^[\d\s\+\-\*\/\^\(\)\.\%]+$)");
     const bool isBareArith = std::regex_match(trim(text), kBareArith);
 
-    if (!hasSolve && !hasEval && !isBareArith) {
+    if (!hasSolve && !hasEval && !isBareArith && !hasConvert && !hasFormula) {
         ParseResult sentinel;
         sentinel.intent = makeBaseIntent(text);
         sentinel.status = ParseStatus::Invalid;
@@ -578,6 +628,91 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     intent.units = "";
     intent.priority = detectPriority(lowered);
     intent.outputs = detectOutputs(lowered);
+
+    // Structured unit conversion: "Convert 10 cm to mm".
+    if (hasConvert) {
+        static const std::regex kConvert(
+            R"(convert\s+(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*([A-Za-z%"]+)\s+to\s+([A-Za-z%"]+))",
+            std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kConvert)) {
+            intent.operation = "convert";
+            intent.parameters["value"] = std::stod(m[1].str());
+            intent.parameters["from"] = m[2].str();
+            intent.parameters["to"] = m[3].str();
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+    }
+
+    // Engineering formula: "Formula ohm with V = 12, R = 6".
+    if (hasFormula) {
+        static const std::regex kFormula(R"(formula\s+([A-Za-z_]\w*)\s+with\s+(.+))",
+                                         std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kFormula)) {
+            const auto bindings = parseBindings(m[2].str());
+            if (!bindings.empty()) {
+                intent.operation = "formula";
+                intent.parameters["name"] = trim(m[1].str());
+                core::Json inputs = core::Json::object();
+                for (const auto& [k, v] : bindings) {
+                    inputs[k] = v;
+                }
+                intent.parameters["inputs"] = inputs;
+                ParseResult result;
+                result.intent = intent;
+                result.status = ParseStatus::Valid;
+                result.intent.status = ParseStatus::Valid;
+                result.intent.confidence = 0.9;
+                return result;
+            }
+        }
+    }
+
+    // Closed-form coefficient solvers: "Solve linear with a = 2, b = 4",
+    // "Solve quadratic with a = 1, b = -5, c = 6".
+    if (hasSolve) {
+        static const std::regex kLinear(R"(solve\s+linear\s+with\s+(.+))",
+                                        std::regex_constants::icase);
+        static const std::regex kQuadratic(R"(solve\s+quadratic\s+with\s+(.+))",
+                                           std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kLinear)) {
+            const auto bindings = parseBindings(m[1].str());
+            if (bindings.count("a") != 0u && bindings.count("b") != 0u) {
+                intent.operation = "solve_linear";
+                intent.parameters["a"] = bindings.at("a");
+                intent.parameters["b"] = bindings.at("b");
+                ParseResult result;
+                result.intent = intent;
+                result.status = ParseStatus::Valid;
+                result.intent.status = ParseStatus::Valid;
+                result.intent.confidence = 0.9;
+                return result;
+            }
+        }
+        if (std::regex_search(text, m, kQuadratic)) {
+            const auto bindings = parseBindings(m[1].str());
+            if (bindings.count("a") != 0u && bindings.count("b") != 0u &&
+                bindings.count("c") != 0u) {
+                intent.operation = "solve_quadratic";
+                intent.parameters["a"] = bindings.at("a");
+                intent.parameters["b"] = bindings.at("b");
+                intent.parameters["c"] = bindings.at("c");
+                ParseResult result;
+                result.intent = intent;
+                result.status = ParseStatus::Valid;
+                result.intent.status = ParseStatus::Valid;
+                result.intent.confidence = 0.9;
+                return result;
+            }
+        }
+    }
 
     std::string expression;
     if (hasSolve) {
@@ -597,7 +732,17 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
             result.errors.push_back("Incomplete math request: solve is missing an expression");
             return result;
         }
-        intent.parameters["expression"] = expression;
+        // "Solve x + y = 10 with y = 3": trailing bindings become the
+        // variables map; every free symbol must still be bound or solved.
+        const auto split = splitWithBindings(expression);
+        intent.parameters["expression"] = split.first;
+        if (!split.second.empty()) {
+            core::Json vars = core::Json::object();
+            for (const auto& [k, v] : split.second) {
+                vars[k] = v;
+            }
+            intent.parameters["variables"] = vars;
+        }
         ParseResult result;
         result.intent = intent;
         result.status = ParseStatus::Valid;
@@ -641,6 +786,16 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     }
     // Any alphabetic content (functions, constants, variables) selects
     // the extended evaluator; otherwise the strict arithmetic path.
+    // A trailing "with x = 10, ..." supplies variable bindings.
+    const auto split = splitWithBindings(expression);
+    expression = split.first;
+    if (!split.second.empty()) {
+        core::Json vars = core::Json::object();
+        for (const auto& [k, v] : split.second) {
+            vars[k] = v;
+        }
+        intent.parameters["variables"] = vars;
+    }
     const bool hasAlpha =
         std::any_of(expression.begin(), expression.end(),
                     [](unsigned char c) { return std::isalpha(c) != 0; });

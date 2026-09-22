@@ -215,3 +215,46 @@ TEST_CASE("workflow persists and reloads") {
     CHECK(loaded.name == "chain");
     CHECK(loaded.nodes.size() == 2);
 }
+
+TEST_CASE("formula node feeds structured output into downstream math") {
+    Fixture fx;
+    trinity::workflows::Workflow wf;
+    wf.workflowId = "wf-force";
+    wf.name = "force-chain";
+    wf.status = trinity::workflows::WorkflowStatus::Queued;
+    wf.createdAt = "2026-01-01T00:00:00+00:00";
+    wf.updatedAt = wf.createdAt;
+
+    // Node A: calculate force F = m * a = 6 (structured outputs, not text).
+    trinity::workflows::WorkflowNode a;
+    a.id = "A";
+    a.nodeId = "A";
+    a.engine = "math";
+    a.operation = "formula";
+    a.parameters = {{"name", "force"}, {"inputs", {{"m", 2.0}, {"a", 3.0}}}};
+    a.input = a.parameters;
+
+    // Node B: consume A.outputs.F in another calculation: F * 2 = 12.
+    trinity::workflows::WorkflowNode b;
+    b.id = "B";
+    b.nodeId = "B";
+    b.engine = "math";
+    b.operation = "evaluate";
+    b.parameters = {{"expression", "F * 2"}};
+    b.input = b.parameters;
+    b.inputFrom = {{"variables", {{"F", "{{A.outputs.F}}"}}}};
+
+    wf.nodes = {a, b};
+    trinity::workflows::WorkflowEdge e;
+    e.edgeId = "e1";
+    e.fromNode = "A";
+    e.toNode = "B";
+    wf.edges = {e};
+
+    const auto result = fx.executor->runInline(wf);
+    CHECK(result.success);
+    REQUIRE(result.nodeResults.count("A") == 1);
+    REQUIRE(result.nodeResults.count("B") == 1);
+    CHECK(result.nodeResults.at("A")["outputs"]["F"] == doctest::Approx(6.0));
+    CHECK(result.nodeResults.at("B")["value"] == doctest::Approx(12.0));
+}

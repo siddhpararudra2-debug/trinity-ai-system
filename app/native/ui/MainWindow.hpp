@@ -51,6 +51,7 @@ class ArtifactManager;
 
 class QTableWidget;
 class QTimer;
+class QComboBox;
 
 namespace trinity::ui {
 
@@ -95,8 +96,10 @@ public:
 private slots:
     void handleParse();
     void handleExecute();
+    void handleMathSubmit();
     void handleDemoWorkflow();
     void refreshJobs();
+    void refreshMathResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -124,6 +127,11 @@ private:
     QTextEdit* output_ = nullptr;
     QLineEdit* executeInput_ = nullptr;
     QTextEdit* executeOutput_ = nullptr;
+    QComboBox* mathOp_ = nullptr;
+    QLineEdit* mathExpr_ = nullptr;
+    QLineEdit* mathParams_ = nullptr;
+    QTextEdit* mathOutput_ = nullptr;
+    std::string lastMathJobId_;
     QTableWidget* jobsTable_ = nullptr;
     QTableWidget* workflowsTable_ = nullptr;
     QTextEdit* logView_ = nullptr;

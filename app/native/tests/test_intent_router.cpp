@@ -182,3 +182,40 @@ TEST_CASE("LLM-produced intent uses the same validation and routing path") {
     CHECK(route.routed);
     CHECK(route.engine == "math");
 }
+
+TEST_CASE("new math operations route with full parameters") {
+    RequirementParser parser;
+    IntentValidator validator;
+    auto registry = makeRegistry();
+    IntentRouter router;
+
+    const auto linear = parser.parse("Solve linear with a = 2, b = 4");
+    REQUIRE(validator.validate(linear.intent, registry).passed());
+    const auto linearRoute = router.route(linear.intent, registry);
+    CHECK(linearRoute.routed);
+    CHECK(linearRoute.engine == "math");
+    CHECK(linearRoute.operation == "solve_linear");
+    CHECK(linearRoute.toolCall.parameters["a"].get<double>() == doctest::Approx(2.0));
+
+    const auto convert = parser.parse("Convert 10 cm to mm");
+    REQUIRE(validator.validate(convert.intent, registry).passed());
+    const auto convertRoute = router.route(convert.intent, registry);
+    CHECK(convertRoute.routed);
+    CHECK(convertRoute.operation == "convert");
+    CHECK(convertRoute.toolCall.parameters["to"].get<std::string>() == "mm");
+
+    const auto formula = parser.parse("Formula ohm with V = 12, R = 6");
+    REQUIRE(validator.validate(formula.intent, registry).passed());
+    const auto formulaRoute = router.route(formula.intent, registry);
+    CHECK(formulaRoute.routed);
+    CHECK(formulaRoute.operation == "formula");
+    CHECK(formulaRoute.toolCall.parameters["inputs"]["V"].get<double>() ==
+          doctest::Approx(12.0));
+
+    const auto vars = parser.parse("Calculate 2*x + 5 with x = 10");
+    REQUIRE(validator.validate(vars.intent, registry).passed());
+    const auto varsRoute = router.route(vars.intent, registry);
+    CHECK(varsRoute.routed);
+    CHECK(varsRoute.toolCall.parameters["variables"]["x"].get<double>() ==
+          doctest::Approx(10.0));
+}

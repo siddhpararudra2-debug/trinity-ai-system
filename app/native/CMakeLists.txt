@@ -142,6 +142,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_repositories.cpp
         tests/test_logging_config.cpp
         tests/test_math_engine.cpp
+        tests/test_math_pipeline.cpp
         tests/test_cad_stubs.cpp
         tests/test_cad_generate.cpp
         tests/test_validation.cpp

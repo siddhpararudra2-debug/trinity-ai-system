@@ -127,11 +127,14 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (118 cases, GUI-independent): error envelope + source/timestamp,
+Suites (148 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
 unknown/unsupported/invalid handling), math (precedence, variables,
-functions/constants, power, evaluate, linear/quadratic solve with
-residual checks, structured rejections), cad (defaults → 108-triangle
+functions/constants incl. asin/acos/atan/ln, power, evaluate, generic
+`solve` plus closed-form `solve_linear`/`solve_quadratic` with
+degenerate outcomes, `convert` with dimensional-mismatch errors,
+`formula` registry ohm/power/force, overflow/non-finite rejections,
+linear/quadratic solve with residual checks, structured rejections), cad (defaults → 108-triangle
 validated frame, bad-param rejections, stl+json artifacts through jobs,
 STEP unavailable note, deterministic encoding), validation states +
 severity messages, provider factory + selection + secrets, planner
@@ -207,7 +210,11 @@ rest marked `skipped`. Model refusal executes nothing.
   Request→Registry→Capability-check→Execute→Validate→Result routing
 - `MathEngine` (`evaluate_expression` plain arithmetic; `evaluate` with
   variables/functions/constants/power; `solve` single-variable numeric
-  roots with residual verification, identity checks, `solve_for`)
+  roots with residual verification, identity checks, `solve_for`;
+  closed-form `solve_linear`/`solve_quadratic` with degenerate outcomes;
+  `convert` over length/mass/angle/force/pressure with dimensional
+  mismatch errors; extensible `formula` registry seeded with ohm/power/
+  force; overflow and non-finite results are structured failures)
 - `CADEngine::generate` — parametric quadcopter frame over the
   dependency-free mesh backend (`cad/FrameParams,Mesh,Builder,
   StlWriter,Validators`): 108-triangle validated geometry, binary STL +
@@ -218,7 +225,10 @@ rest marked `skipped`. Model refusal executes nothing.
 - Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
   `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
 - Qt `MainWindow` engine list (MATH/CAD implemented with capabilities +
-  last results vs scaffolded/unavailable)
+  last results vs scaffolded/unavailable) plus a deterministic Math
+  panel (evaluate/solve/linear/quadratic/convert/formula) submitting
+  through `RequestPipeline` to the worker thread and rendering the
+  persisted job (result/units/validation/errors/job id/execution time)
 - `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
   check, refusal check, planner/model/provider checks),
   `trinity_tests` via CTest

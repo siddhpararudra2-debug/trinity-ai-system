@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -14,17 +15,21 @@ namespace trinity::engines {
 
 MathEngine::MathEngine() {
     name_ = "math";
-    version_ = "0.2.0";
-    capabilities_ = {"evaluate_expression", "evaluate", "solve"};
+    version_ = "0.3.0";
+    capabilities_ = {"evaluate_expression", "evaluate",         "solve",
+                     "solve_linear",        "solve_quadratic",  "convert",
+                     "formula"};
 }
 
 namespace {
 
 // Function names with single-double-argument semantics, plus constants.
-// Mirrors the Python backend's reserved set (sin/cos/tan/exp/log/sqrt/pi).
+// Mirrors the Python backend's reserved set (sin/cos/tan/exp/log/sqrt/pi)
+// extended with inverse trig (asin/acos/atan) and ln.
 bool isFunctionName(const std::string& name) {
-    return name == "sin" || name == "cos" || name == "tan" || name == "exp" ||
-           name == "log" || name == "sqrt" || name == "abs";
+    return name == "sin" || name == "cos" || name == "tan" || name == "asin" ||
+            name == "acos" || name == "atan" || name == "exp" || name == "log" ||
+            name == "ln" || name == "sqrt" || name == "abs";
 }
 
 bool isConstantName(const std::string& name) {
@@ -42,11 +47,26 @@ double applyFunction(const std::string& name, double arg, const std::string& exp
     if (name == "sin") return std::sin(arg);
     if (name == "cos") return std::cos(arg);
     if (name == "tan") return std::tan(arg);
+    if (name == "asin") {
+        if (arg < -1.0 || arg > 1.0) {
+            throw core::RequestValidationError("asin() requires an argument in [-1, 1]",
+                                                {{"expression", expression}}, "engines");
+        }
+        return std::asin(arg);
+    }
+    if (name == "acos") {
+        if (arg < -1.0 || arg > 1.0) {
+            throw core::RequestValidationError("acos() requires an argument in [-1, 1]",
+                                                {{"expression", expression}}, "engines");
+        }
+        return std::acos(arg);
+    }
+    if (name == "atan") return std::atan(arg);
     if (name == "exp") return std::exp(arg);
-    if (name == "log") {
+    if (name == "log" || name == "ln") {
         if (arg <= 0.0) {
-            throw core::RequestValidationError("log() requires a positive argument",
-                                               {{"expression", expression}}, "engines");
+            throw core::RequestValidationError(name + "() requires a positive argument",
+                                                {{"expression", expression}}, "engines");
         }
         return std::log(arg);
     }
@@ -297,14 +317,28 @@ double MathEngine::evaluateExpression(const std::string& expression) {
             "Expression contains unsupported character",
             {{"expression", expression}, {"character", std::string(1, c)}}, "engines");
     }
-    return evaluateWithVariables(expression, {});
+    const double value = evaluateWithVariables(expression, {});
+    if (!std::isfinite(value)) {
+        // Overflow (or any non-finite outcome) is an execution failure,
+        // never a successful result.
+        throw core::EngineExecutionError("Evaluation produced a non-finite value",
+                                         {{"expression", expression}}, "engines");
+    }
+    return value;
 }
 
 double MathEngine::evaluateWithVariables(const std::string& expression,
                                          const std::map<std::string, double>& variables) {
     // Extended path always: identifiers resolve via variables/functions/constants.
     try {
-        return Parser(expression, variables).parse();
+        const double value = Parser(expression, variables).parse();
+        if (!std::isfinite(value)) {
+            // Overflow (or any non-finite outcome) is an execution
+            // failure, never a usable value.
+            throw core::EngineExecutionError("Evaluation produced a non-finite value",
+                                             {{"expression", expression}}, "engines");
+        }
+        return value;
     } catch (const core::TrinityError&) {
         throw;
     } catch (const std::exception& exc) {
@@ -316,6 +350,271 @@ double MathEngine::evaluateWithVariables(const std::string& expression,
 
 std::vector<std::string> MathEngine::symbolsIn(const std::string& expression) {
     return extractSymbols(expression);
+}
+
+// --- Dimensional units ------------------------------------------------
+// Canonical base per dimension: length -> mm, mass -> g, angle -> rad,
+// force -> N, pressure -> Pa. `factor` converts one unit into canonical.
+struct UnitDef {
+    const char* dimension;
+    double factor;
+};
+
+const std::map<std::string, UnitDef>& unitTable() {
+    static const std::map<std::string, UnitDef> table = {
+        {"mm", {"length", 1.0}},      {"cm", {"length", 10.0}},
+        {"m", {"length", 1000.0}},    {"in", {"length", 25.4}},
+        {"g", {"mass", 1.0}},         {"kg", {"mass", 1000.0}},
+        {"deg", {"angle", 3.14159265358979323846 / 180.0}},
+        {"rad", {"angle", 1.0}},      {"n", {"force", 1.0}},
+        {"pa", {"pressure", 1.0}},    {"kpa", {"pressure", 1000.0}},
+        {"mpa", {"pressure", 1000000.0}},
+    };
+    return table;
+}
+
+std::string lowerUnit(const std::string& unit) {
+    std::string out;
+    out.reserve(unit.size());
+    for (char c : unit) {
+        out.push_back(static_cast<char>(
+            std::tolower(static_cast<unsigned char>(c))));
+    }
+    // Trim ASCII whitespace.
+    const auto first = out.find_first_not_of(" \t");
+    if (first == std::string::npos) {
+        return "";
+    }
+    const auto last = out.find_last_not_of(" \t");
+    return out.substr(first, last - first + 1);
+}
+
+std::string MathEngine::dimensionOf(const std::string& unit) {
+    const auto& table = unitTable();
+    const auto it = table.find(lowerUnit(unit));
+    return it == table.end() ? std::string() : std::string(it->second.dimension);
+}
+
+double MathEngine::convertUnits(double value, const std::string& from,
+                                const std::string& to) {
+    const auto& table = unitTable();
+    const std::string f = lowerUnit(from);
+    const std::string t = lowerUnit(to);
+    const auto fit = table.find(f);
+    if (fit == table.end()) {
+        throw core::RequestValidationError("Unknown unit '" + from + "'",
+                                           {{"from", from}, {"to", to}}, "engines");
+    }
+    const auto tit = table.find(t);
+    if (tit == table.end()) {
+        throw core::RequestValidationError("Unknown unit '" + to + "'",
+                                           {{"from", from}, {"to", to}}, "engines");
+    }
+    if (std::string(fit->second.dimension) != std::string(tit->second.dimension)) {
+        throw core::RequestValidationError(
+            "Dimensional mismatch: cannot convert " +
+                std::string(fit->second.dimension) + " '" + from + "' to " +
+                std::string(tit->second.dimension) + " '" + to + "'",
+            {{"from", from}, {"to", to}}, "engines");
+    }
+    if (!std::isfinite(value)) {
+        throw core::RequestValidationError("Conversion value must be finite",
+                                           {{"value", value}}, "engines");
+    }
+    const double canonical = value * fit->second.factor;
+    const double converted = canonical / tit->second.factor;
+    if (!std::isfinite(converted)) {
+        throw core::EngineExecutionError("Unit conversion overflowed",
+                                         {{"from", from}, {"to", to}}, "engines");
+    }
+    return converted;
+}
+
+// --- Engineering formulas ---------------------------------------------
+// Extensible registry: each formula names its variables, SI units and a
+// pure calculation function. Exactly one variable must be unknown —
+// callers pass the known inputs and receive every variable back.
+struct FormulaDef {
+    std::vector<std::string> variables;
+    std::map<std::string, std::string> units;
+    std::function<core::Json(const std::map<std::string, double>&)> solve;
+};
+
+namespace {
+
+double needFinite(const std::map<std::string, double>& in, const std::string& key,
+                  const std::string& formula) {
+    const auto it = in.find(key);
+    if (it == in.end() || !std::isfinite(it->second)) {
+        throw core::RequestValidationError(
+            "Formula '" + formula + "' needs a finite numeric '" + key + "'",
+            {{"formula", formula}}, "engines");
+    }
+    return it->second;
+}
+
+const std::map<std::string, FormulaDef>& formulaTable() {
+    static const std::map<std::string, FormulaDef> table = {
+        {"ohm",
+         {{"V", "I", "R"},
+          {{"V", "V"}, {"I", "A"}, {"R", "ohm"}},
+          [](const std::map<std::string, double>& in) {
+              const bool v = in.count("V") != 0u;
+              const bool i = in.count("I") != 0u;
+              const bool r = in.count("R") != 0u;
+              if (static_cast<int>(v) + static_cast<int>(i) + static_cast<int>(r) !=
+                  2) {
+                  throw core::RequestValidationError(
+                      "Ohm's law needs exactly two of V, I, R",
+                      {{"formula", "ohm"}}, "engines");
+              }
+              core::Json out = core::Json::object();
+              if (!v) {
+                  out["V"] = needFinite(in, "I", "ohm") * needFinite(in, "R", "ohm");
+              } else if (!i) {
+                  const double R = needFinite(in, "R", "ohm");
+                  if (R == 0.0) {
+                      throw core::RequestValidationError(
+                          "Ohm's law: division by zero (R = 0)",
+                          {{"formula", "ohm"}}, "engines");
+                  }
+                  out["I"] = needFinite(in, "V", "ohm") / R;
+              } else {
+                  const double I = needFinite(in, "I", "ohm");
+                  if (I == 0.0) {
+                      throw core::RequestValidationError(
+                          "Ohm's law: division by zero (I = 0)",
+                          {{"formula", "ohm"}}, "engines");
+                  }
+                  out["R"] = needFinite(in, "V", "ohm") / I;
+              }
+              return out;
+          }}},
+        {"power",
+         {{"P", "V", "I"},
+          {{"P", "W"}, {"V", "V"}, {"I", "A"}},
+          [](const std::map<std::string, double>& in) {
+              const bool p = in.count("P") != 0u;
+              const bool v = in.count("V") != 0u;
+              const bool i = in.count("I") != 0u;
+              if (static_cast<int>(p) + static_cast<int>(v) + static_cast<int>(i) !=
+                  2) {
+                  throw core::RequestValidationError(
+                      "Power formula needs exactly two of P, V, I",
+                      {{"formula", "power"}}, "engines");
+              }
+              core::Json out = core::Json::object();
+              if (!p) {
+                  out["P"] = needFinite(in, "V", "power") * needFinite(in, "I", "power");
+              } else if (!v) {
+                  const double I = needFinite(in, "I", "power");
+                  if (I == 0.0) {
+                      throw core::RequestValidationError(
+                          "Power formula: division by zero (I = 0)",
+                          {{"formula", "power"}}, "engines");
+                  }
+                  out["V"] = needFinite(in, "P", "power") / I;
+              } else {
+                  const double V = needFinite(in, "V", "power");
+                  if (V == 0.0) {
+                      throw core::RequestValidationError(
+                          "Power formula: division by zero (V = 0)",
+                          {{"formula", "power"}}, "engines");
+                  }
+                  out["I"] = needFinite(in, "P", "power") / V;
+              }
+              return out;
+          }}},
+        {"force",
+         {{"F", "m", "a"},
+          {{"F", "N"}, {"m", "kg"}, {"a", "m/s^2"}},
+          [](const std::map<std::string, double>& in) {
+              const bool f = in.count("F") != 0u;
+              const bool m = in.count("m") != 0u;
+              const bool a = in.count("a") != 0u;
+              if (static_cast<int>(f) + static_cast<int>(m) + static_cast<int>(a) !=
+                  2) {
+                  throw core::RequestValidationError(
+                      "Force formula needs exactly two of F, m, a",
+                      {{"formula", "force"}}, "engines");
+              }
+              core::Json out = core::Json::object();
+              if (!f) {
+                  out["F"] = needFinite(in, "m", "force") * needFinite(in, "a", "force");
+              } else if (!m) {
+                  const double A = needFinite(in, "a", "force");
+                  if (A == 0.0) {
+                      throw core::RequestValidationError(
+                          "Force formula: division by zero (a = 0)",
+                          {{"formula", "force"}}, "engines");
+                  }
+                  out["m"] = needFinite(in, "F", "force") / A;
+              } else {
+                  const double M = needFinite(in, "m", "force");
+                  if (M == 0.0) {
+                      throw core::RequestValidationError(
+                          "Force formula: division by zero (m = 0)",
+                          {{"formula", "force"}}, "engines");
+                  }
+                  out["a"] = needFinite(in, "F", "force") / M;
+              }
+              return out;
+          }}},
+    };
+    return table;
+}
+
+}  // namespace
+
+std::vector<std::string> MathEngine::formulaNames() {
+    std::vector<std::string> names;
+    for (const auto& [name, def] : formulaTable()) {
+        names.push_back(name);
+    }
+    return names;
+}
+
+core::Json MathEngine::formulaResult(const std::string& name, const core::Json& inputs) {
+    const auto& table = formulaTable();
+    const auto it = table.find(name);
+    if (it == table.end()) {
+        throw core::CapabilityUnavailableError(
+            "Unknown engineering formula '" + name + "'",
+            {{"formula", name}, {"supported", formulaNames()}}, "engines");
+    }
+    if (!inputs.is_object()) {
+        throw core::RequestValidationError("Formula inputs must be an object",
+                                           {{"formula", name}}, "engines");
+    }
+    std::map<std::string, double> in;
+    core::Json echoed = core::Json::object();
+    for (auto jt = inputs.begin(); jt != inputs.end(); ++jt) {
+        if (!jt.value().is_number()) {
+            throw core::RequestValidationError(
+                "Formula input '" + jt.key() + "' must be numeric",
+                {{"formula", name}}, "engines");
+        }
+        in[jt.key()] = jt.value().get<double>();
+        echoed[jt.key()] = jt.value().get<double>();
+    }
+    core::Json computed = it->second.solve(in);
+    core::Json outputs = echoed;
+    for (auto jt = computed.begin(); jt != computed.end(); ++jt) {
+        if (!jt.value().is_number() || !std::isfinite(jt.value().get<double>())) {
+            throw core::EngineExecutionError(
+                "Formula '" + name + "' produced a non-finite value",
+                {{"formula", name}}, "engines");
+        }
+        outputs[jt.key()] = jt.value();
+    }
+    core::Json units = core::Json::object();
+    for (const auto& [var, unit] : it->second.units) {
+        units[var] = unit;
+    }
+    return core::Json{{"formula", name},
+                      {"inputs", echoed},
+                      {"outputs", outputs},
+                      {"units", units}};
 }
 
 namespace {
@@ -496,6 +795,18 @@ EngineResult MathEngine::execute(const EngineRequest& request) {
         if (request.operation == "solve") {
             return executeSolve(request);
         }
+        if (request.operation == "solve_linear") {
+            return executeSolveLinear(request);
+        }
+        if (request.operation == "solve_quadratic") {
+            return executeSolveQuadratic(request);
+        }
+        if (request.operation == "convert") {
+            return executeConvert(request);
+        }
+        if (request.operation == "formula") {
+            return executeFormula(request);
+        }
         throw core::CapabilityUnavailableError(
             "Math engine has no operation '" + request.operation + "'",
             {{"engine", "math"}, {"operation", request.operation}}, "engines");
@@ -624,6 +935,183 @@ EngineResult MathEngine::executeSolve(const EngineRequest& request) {
     return out;
 }
 
+namespace {
+
+/// Read a required finite numeric parameter. Throws RequestValidationError
+/// when missing, non-numeric, NaN or infinite.
+double finiteParam(const core::Json& params, const std::string& key,
+                   const std::string& operation) {
+    if (!params.contains(key) || !params[key].is_number()) {
+        throw core::RequestValidationError(
+            "Operation '" + operation + "' requires a numeric '" + key + "'",
+            {{"operation", operation}}, "engines");
+    }
+    const double value = params[key].get<double>();
+    if (!std::isfinite(value)) {
+        throw core::RequestValidationError(
+            "Parameter '" + key + "' must be finite", {{"operation", operation}},
+            "engines");
+    }
+    return value;
+}
+
+}  // namespace
+
+EngineResult MathEngine::executeSolveLinear(const EngineRequest& request) {
+    requireParams(request, {"a", "b"});
+    const double a = finiteParam(request.parameters, "a", "solve_linear");
+    const double b = finiteParam(request.parameters, "b", "solve_linear");
+    core::Json data = {{"a", a}, {"b", b}};
+    if (a == 0.0) {
+        if (b == 0.0) {
+            // 0*x + 0 = 0 holds for every x.
+            data["outcome"] = "infinite_solutions";
+            data["message"] = "0*x + 0 = 0 holds for all x (infinitely many solutions)";
+        } else {
+            data["outcome"] = "no_solution";
+            data["message"] = "0*x + " + std::to_string(b) +
+                              " = 0 has no solution (contradiction)";
+        }
+        EngineResult out = successResult(request, data);
+        out.validation = validate(out);
+        return out;
+    }
+    const double x = -b / a;
+    if (!std::isfinite(x)) {
+        throw core::EngineExecutionError("Linear solve overflowed",
+                                         {{"a", a}, {"b", b}}, "engines");
+    }
+    data["outcome"] = "solution";
+    data["solution"] = x;
+    EngineResult out = successResult(request, data);
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math solve_linear", core::Json{{"a", a}, {"b", b}, {"x", x}});
+    return out;
+}
+
+EngineResult MathEngine::executeSolveQuadratic(const EngineRequest& request) {
+    requireParams(request, {"a", "b", "c"});
+    const double a = finiteParam(request.parameters, "a", "solve_quadratic");
+    const double b = finiteParam(request.parameters, "b", "solve_quadratic");
+    const double c = finiteParam(request.parameters, "c", "solve_quadratic");
+    if (a == 0.0) {
+        // Degenerate: fall back to the linear equation b*x + c = 0.
+        EngineRequest linear = request;
+        linear.operation = "solve_linear";
+        linear.parameters = core::Json{{"a", b}, {"b", c}};
+        EngineResult out = executeSolveLinear(linear);
+        out.operation = "solve_quadratic";
+        out.result["degraded_to_linear"] = true;
+        out.validation = validate(out);
+        return out;
+    }
+    const double disc = b * b - 4.0 * a * c;
+    if (!std::isfinite(disc)) {
+        throw core::EngineExecutionError("Quadratic discriminant overflowed",
+                                         {{"a", a}, {"b", b}, {"c", c}}, "engines");
+    }
+    core::Json data = {{"a", a}, {"b", b}, {"c", c}, {"discriminant", disc}};
+    if (disc < 0.0) {
+        data["outcome"] = "no_real_roots";
+        data["solutions"] = core::Json::array();
+        data["message"] =
+            "Discriminant is negative: no real roots. Complex output is unsupported.";
+        EngineResult out = successResult(request, data);
+        out.validation = validate(out);
+        return out;
+    }
+    core::Json solutions = core::Json::array();
+    if (disc == 0.0) {
+        const double x = -b / (2.0 * a);
+        if (!std::isfinite(x)) {
+            throw core::EngineExecutionError("Quadratic solve overflowed",
+                                             {{"a", a}, {"b", b}, {"c", c}}, "engines");
+        }
+        data["outcome"] = "repeated_root";
+        solutions.push_back(x);
+    } else {
+        const double root = std::sqrt(disc);
+        double x1 = (-b - root) / (2.0 * a);
+        double x2 = (-b + root) / (2.0 * a);
+        if (!std::isfinite(x1) || !std::isfinite(x2)) {
+            throw core::EngineExecutionError("Quadratic solve overflowed",
+                                             {{"a", a}, {"b", b}, {"c", c}}, "engines");
+        }
+        if (x1 > x2) {
+            std::swap(x1, x2);
+        }
+        data["outcome"] = "two_roots";
+        solutions.push_back(x1);
+        solutions.push_back(x2);
+    }
+    data["solutions"] = solutions;
+    EngineResult out = successResult(request, data);
+    // Residual verification per root: |a*x^2 + b*x + c| must vanish.
+    core::Json checks = core::Json::object();
+    bool allOk = true;
+    for (size_t i = 0; i < solutions.size(); ++i) {
+        const double x = solutions[i].get<double>();
+        const bool ok = std::fabs((a * x + b) * x + c) < 1e-9;
+        checks["root_" + std::to_string(i) + "_satisfies_equation"] = ok;
+        allOk = allOk && ok;
+    }
+    out.metadata["equation_checks"] = checks;
+    if (!allOk) {
+        out.success = false;
+        out.addError(core::makeError(core::ErrorCode::EngineExecutionError,
+                                     "Solution failed residual verification", "engines",
+                                     {{"a", a}, {"b", b}, {"c", c}}));
+    }
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math solve_quadratic",
+        core::Json{{"a", a}, {"b", b}, {"c", c}, {"outcome", data["outcome"]}});
+    return out;
+}
+
+EngineResult MathEngine::executeConvert(const EngineRequest& request) {
+    requireParams(request, {"value", "from", "to"});
+    if (!request.parameters["value"].is_number()) {
+        throw core::RequestValidationError("Convert 'value' must be numeric",
+                                           {{"operation", "convert"}}, "engines");
+    }
+    if (!request.parameters["from"].is_string() || !request.parameters["to"].is_string()) {
+        throw core::RequestValidationError("Convert 'from'/'to' must be unit strings",
+                                           {{"operation", "convert"}}, "engines");
+    }
+    const double value = request.parameters["value"].get<double>();
+    const std::string from = request.parameters["from"].get<std::string>();
+    const std::string to = request.parameters["to"].get<std::string>();
+    const double converted = convertUnits(value, from, to);
+    EngineResult out =
+        successResult(request, {{"input_value", value},
+                                {"from", from},
+                                {"to", to},
+                                {"value", converted},
+                                {"dimension", dimensionOf(to)}});
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math convert",
+        core::Json{{"value", value}, {"from", from}, {"to", to}, {"result", converted}});
+    return out;
+}
+
+EngineResult MathEngine::executeFormula(const EngineRequest& request) {
+    requireParams(request, {"name", "inputs"});
+    if (!request.parameters["name"].is_string()) {
+        throw core::RequestValidationError("Formula 'name' must be a string",
+                                           {{"operation", "formula"}}, "engines");
+    }
+    const std::string name = request.parameters["name"].get<std::string>();
+    const core::Json computed = formulaResult(name, request.parameters["inputs"]);
+    EngineResult out = successResult(request, computed);
+    out.validation = validate(out);
+    core::Logger::instance().info("engines", "math formula",
+                                  core::Json{{"formula", name}});
+    return out;
+}
+
 validation::ValidationResult MathEngine::validate(const EngineResult& result) const {
     validation::ValidationResult validation;
     validation.operation = result.operation;
@@ -645,6 +1133,76 @@ validation::ValidationResult MathEngine::validate(const EngineResult& result) co
     }
     if (result.operation == "solve") {
         return validateSolve(result, validation);
+    }
+    if (result.operation == "solve_linear" || result.operation == "solve_quadratic") {
+        const std::string outcome = result.result.value("outcome", "");
+        if (outcome.empty()) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Solver result has no outcome";
+            return validation;
+        }
+        if (outcome == "solution" || outcome == "two_roots" ||
+            outcome == "repeated_root") {
+            if (!result.result.contains("solutions") && !result.result.contains("solution")) {
+                validation.status = validation::ValidationStatus::Invalid;
+                validation.message = "Solver outcome claims roots but lists none";
+                return validation;
+            }
+            bool finite = true;
+            if (result.result.contains("solution")) {
+                finite = result.result["solution"].is_number() &&
+                         std::isfinite(result.result["solution"].get<double>());
+            }
+            if (result.result.contains("solutions")) {
+                for (const auto& sol : result.result["solutions"]) {
+                    if (!sol.is_number() || !std::isfinite(sol.get<double>())) {
+                        finite = false;
+                        break;
+                    }
+                }
+            }
+            if (!finite) {
+                validation.status = validation::ValidationStatus::Invalid;
+                validation.message = "Solver produced non-finite solutions";
+                return validation;
+            }
+        }
+        // no_solution / infinite_solutions / no_real_roots are truthful
+        // closed-form answers, not failures.
+        validation.status = validation::ValidationStatus::Validated;
+        validation.message = "Closed-form outcome: " + outcome;
+        validation::ValidationMessage msg;
+        msg.rule = "math.solver_outcome";
+        msg.severity = validation::Severity::Info;
+        msg.passed = true;
+        msg.message = validation.message;
+        validation.addMessage(std::move(msg));
+        return validation;
+    }
+    if (result.operation == "formula") {
+        if (!result.result.contains("outputs") || !result.result["outputs"].is_object() ||
+            result.result["outputs"].empty()) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Formula result has no outputs";
+            return validation;
+        }
+        for (auto it = result.result["outputs"].begin();
+             it != result.result["outputs"].end(); ++it) {
+            if (!it.value().is_number() || !std::isfinite(it.value().get<double>())) {
+                validation.status = validation::ValidationStatus::Invalid;
+                validation.message = "Formula produced a non-finite output";
+                return validation;
+            }
+        }
+        validation.status = validation::ValidationStatus::Validated;
+        validation.message = "Formula evaluated with finite outputs";
+        validation::ValidationMessage msg;
+        msg.rule = "math.formula_outputs_finite";
+        msg.severity = validation::Severity::Info;
+        msg.passed = true;
+        msg.message = validation.message;
+        validation.addMessage(std::move(msg));
+        return validation;
     }
     if (!result.result.contains("value") || !result.result["value"].is_number()) {
         validation.status = validation::ValidationStatus::Invalid;

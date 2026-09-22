@@ -13,6 +13,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QWidget>
+#include <QComboBox>
+#include <QDateTime>
 #include <thread>
 
 #include "trinity/artifacts/Artifact.hpp"
@@ -189,6 +191,89 @@ void MainWindow::buildUi() {
     executeOutput_->setPlaceholderText(
         QStringLiteral("Execution lifecycle: submit → queued → running → completed/failed…"));
     leftLayout->addWidget(executeOutput_);
+
+    // ---- Math (deterministic): structured operation form submitting
+    // through the same RequestPipeline -> JobManager -> worker path as
+    // the Execute box above (no separate execution system). ----
+    auto* mathTitle = new QLabel(QStringLiteral("Math (deterministic)"), leftPane);
+    mathTitle->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(mathTitle);
+
+    mathOp_ = new QComboBox(leftPane);
+    mathOp_->addItem(QStringLiteral("Evaluate expression"));
+    mathOp_->addItem(QStringLiteral("Solve equation"));
+    mathOp_->addItem(QStringLiteral("Solve linear (a, b)"));
+    mathOp_->addItem(QStringLiteral("Solve quadratic (a, b, c)"));
+    mathOp_->addItem(QStringLiteral("Convert units"));
+    mathOp_->addItem(QStringLiteral("Engineering formula"));
+    leftLayout->addWidget(mathOp_);
+
+    mathExpr_ = new QLineEdit(leftPane);
+    mathExpr_->setPlaceholderText(QStringLiteral("Expression (e.g. 2*x + 5, 2*x + 4 = 0)"));
+    mathExpr_->setText(QStringLiteral("2 + 3 * 4"));
+    leftLayout->addWidget(mathExpr_);
+
+    mathParams_ = new QLineEdit(leftPane);
+    mathParams_->setPlaceholderText(QStringLiteral("Variables (e.g. x = 10)"));
+    leftLayout->addWidget(mathParams_);
+
+    connect(mathOp_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+                if (mathExpr_ == nullptr || mathParams_ == nullptr) {
+                    return;
+                }
+                // Per-operation hints; the submitter composes the request.
+                switch (index) {
+                    case 1:
+                        mathExpr_->setPlaceholderText(
+                            QStringLiteral("Equation (e.g. 2*x + 4 = 0)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Variables, optional (e.g. y = 3)"));
+                        break;
+                    case 2:
+                        mathExpr_->setPlaceholderText(QStringLiteral("(unused)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Coefficients (e.g. a = 2, b = 4)"));
+                        break;
+                    case 3:
+                        mathExpr_->setPlaceholderText(QStringLiteral("(unused)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Coefficients (e.g. a = 1, b = -5, c = 6)"));
+                        break;
+                    case 4:
+                        mathExpr_->setPlaceholderText(
+                            QStringLiteral("Value + units (e.g. 10 cm to mm)"));
+                        mathParams_->setPlaceholderText(QStringLiteral("(unused)"));
+                        break;
+                    case 5:
+                        mathExpr_->setPlaceholderText(
+                            QStringLiteral("Formula name (ohm, power, force)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Inputs (e.g. V = 12, R = 6)"));
+                        break;
+                    default:
+                        mathExpr_->setPlaceholderText(
+                            QStringLiteral("Expression (e.g. 2*x + 5, 2*x + 4 = 0)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Variables (e.g. x = 10)"));
+                        break;
+                }
+            });
+
+    auto* mathRunButton =
+        new QPushButton(QStringLiteral("Run Math (async)"), leftPane);
+    mathRunButton->setEnabled(pipeline_ != nullptr);
+    leftLayout->addWidget(mathRunButton);
+    connect(mathRunButton, &QPushButton::clicked, this, &MainWindow::handleMathSubmit);
+    connect(mathExpr_, &QLineEdit::returnPressed, this, &MainWindow::handleMathSubmit);
+
+    mathOutput_ = new QTextEdit(leftPane);
+    mathOutput_->setReadOnly(true);
+    mathOutput_->setMinimumHeight(150);
+    mathOutput_->setPlaceholderText(QStringLiteral(
+        "Math result: expression / variables / operation / result / units / "
+        "validation / errors / job id / execution time…"));
+    leftLayout->addWidget(mathOutput_);
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -402,6 +487,142 @@ void MainWindow::handleExecute() {
     refreshJobs();
 }
 
+void MainWindow::handleMathSubmit() {
+    if (mathOp_ == nullptr || mathExpr_ == nullptr || mathParams_ == nullptr ||
+        mathOutput_ == nullptr || pipeline_ == nullptr) {
+        return;
+    }
+    const int op = mathOp_->currentIndex();
+    const std::string expr = mathExpr_->text().trimmed().toStdString();
+    const std::string params = mathParams_->text().trimmed().toStdString();
+    std::string request;
+    switch (op) {
+        case 1:  // Solve equation (generic string solver).
+            request = "Solve " + expr;
+            if (!params.empty()) {
+                request += " with " + params;
+            }
+            break;
+        case 2:  // solve_linear {a, b}.
+            request = "Solve linear with " + params;
+            break;
+        case 3:  // solve_quadratic {a, b, c}.
+            request = "Solve quadratic with " + params;
+            break;
+        case 4:  // convert value/from/to.
+            request = "Convert " + expr;
+            break;
+        case 5:  // formula name + inputs.
+            request = "Formula " + expr + " with " + params;
+            break;
+        default:  // Evaluate expression, optional variables.
+            request = "Calculate " + expr;
+            if (!params.empty()) {
+                request += " with " + params;
+            }
+            break;
+    }
+    try {
+        // Async submit: the worker thread runs
+        // JobManager -> EngineRegistry -> MathEngine; the 1 s refresh
+        // timer renders the persisted job below without blocking the UI.
+        const auto result = pipeline_->submit(request);
+        if (!result.success || result.jobId.empty()) {
+            QString report = QStringLiteral("Math rejected:\n") +
+                             QString::fromStdString(request) + QStringLiteral("\n");
+            if (!result.error.is_null()) {
+                report += QString::fromStdString(result.error.dump(2));
+            }
+            mathOutput_->setPlainText(report);
+            lastMathJobId_.clear();
+            return;
+        }
+        lastMathJobId_ = result.jobId;
+        mathOutput_->setPlainText(QStringLiteral("Math submitted:\n") +
+                                  QString::fromStdString(request) +
+                                  QStringLiteral("\nJob: ") +
+                                  QString::fromStdString(result.jobId) +
+                                  QStringLiteral("\nPolling for completion…"));
+    } catch (const std::exception& exc) {
+        mathOutput_->setPlainText(QStringLiteral("Math submit failed: ") +
+                                  QString::fromStdString(exc.what()));
+        lastMathJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshMathResult() {
+    if (mathOutput_ == nullptr || jobs_ == nullptr || lastMathJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastMathJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  %2/%3  •  %4\n")
+            .arg(shortId, QString::fromStdString(job.engine),
+                 QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+    if (!job.input.is_null() && !job.input.empty()) {
+        report += QStringLiteral("Input: ") +
+                  QString::fromStdString(job.input.dump()) + QStringLiteral("\n");
+    }
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& envelope = job.result;
+        if (envelope.contains("result")) {
+            report += QStringLiteral("Result: ") +
+                      QString::fromStdString(envelope["result"].dump(2)) +
+                      QStringLiteral("\n");
+        }
+        if (envelope.contains("validation") && !envelope["validation"].is_null()) {
+            const auto& v = envelope["validation"];
+            report += QStringLiteral("Validation: ") +
+                      QString::fromStdString(v.value("status", "?")) +
+                      QStringLiteral(" — ") +
+                      QString::fromStdString(v.value("message", "")) +
+                      QStringLiteral("\n");
+        }
+        if (envelope.contains("errors") && envelope["errors"].is_array() &&
+            !envelope["errors"].empty()) {
+            std::string errs = envelope["errors"].dump(2);
+            if (errs.size() > 600) {
+                errs = errs.substr(0, 600) + "…";
+            }
+            report += QStringLiteral("Errors: ") + QString::fromStdString(errs) +
+                      QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Job error: ") + QString::fromStdString(err) +
+                  QStringLiteral("\n");
+    }
+    // Execution time from persisted lifecycle timestamps.
+    const QDateTime started =
+        QDateTime::fromString(QString::fromStdString(job.startedAt), Qt::ISODate);
+    const QDateTime completed =
+        QDateTime::fromString(QString::fromStdString(job.completedAt), Qt::ISODate);
+    QString timing = QStringLiteral("Started: %1  Completed: %2")
+                         .arg(QString::fromStdString(job.startedAt),
+                              QString::fromStdString(job.completedAt.empty() ? "—"
+                                                                             : job.completedAt));
+    if (started.isValid() && completed.isValid()) {
+        timing += QStringLiteral("  (%1 ms)").arg(started.msecsTo(completed));
+    }
+    report += timing;
+    if (mathOutput_->toPlainText() != report) {
+        mathOutput_->setPlainText(report);
+    }
+}
+
 void MainWindow::handleDemoWorkflow() {
     if (executor_ == nullptr || executeOutput_ == nullptr) {
         return;
@@ -498,6 +719,7 @@ void MainWindow::refreshJobs() {
     if (viewerController_ != nullptr) {
         viewerController_->pollForNewCadJob();
     }
+    refreshMathResult();
 }
 
 void MainWindow::refreshWorkflows() {

@@ -141,3 +141,32 @@ TEST_CASE("unsupported CAD object fails capability check but passes shape checks
     }
     CHECK(hasCapability);
 }
+
+TEST_CASE("new math operations pass validation against registry") {
+    RequirementParser parser;
+    IntentValidator validator;
+    auto registry = makeRegistry();
+
+    for (const std::string& text : {
+             "Calculate 2*x + 5 with x = 10",
+             "Solve 2*x + 4 = 0",
+             "Solve linear with a = 2, b = 4",
+             "Solve quadratic with a = 1, b = -5, c = 6",
+             "Convert 10 cm to mm",
+             "Formula force with m = 2, a = 3",
+         }) {
+        const auto parsed = parser.parse(text);
+        REQUIRE(trinity::intelligence::toString(parsed.status) == "VALID");
+        CHECK(validator.validate(parsed.intent, registry).passed());
+    }
+}
+
+TEST_CASE("dimensional mismatch intent fails at engine with structured error") {
+    RequirementParser parser;
+    IntentValidator validator;
+    auto registry = makeRegistry();
+    // Parser accepts the shape; the engine owns dimensional truth.
+    const auto parsed = parser.parse("Convert 10 kg to mm");
+    REQUIRE(trinity::intelligence::toString(parsed.status) == "VALID");
+    CHECK(validator.validate(parsed.intent, registry).passed());
+}

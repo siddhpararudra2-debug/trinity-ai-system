@@ -31,7 +31,9 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
     }
     if (domain == "math") {
         return operation == "evaluate" || operation == "evaluate_expression" ||
-               operation == "solve";
+                operation == "solve" || operation == "solve_linear" ||
+                operation == "solve_quadratic" || operation == "convert" ||
+                operation == "formula";
     }
     return false;
 }
@@ -115,16 +117,81 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         addCheck(out, "intent.param_type", validation::Severity::Error, false,
                  "Intent parameters must be an object");
     } else if (intent.domain == "math") {
-        if (!intent.parameters.contains("expression") ||
-            !intent.parameters["expression"].is_string() ||
-            intent.parameters["expression"].get<std::string>().empty()) {
-            ok = false;
-            addCheck(out, "intent.param_type", validation::Severity::Error, false,
-                     "Math intent requires a non-empty string 'expression'",
-                     core::Json{{"parameters", intent.parameters}});
+        const std::string op = intent.operation;
+        if (op == "evaluate" || op == "evaluate_expression" || op == "solve") {
+            if (!intent.parameters.contains("expression") ||
+                !intent.parameters["expression"].is_string() ||
+                intent.parameters["expression"].get<std::string>().empty()) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "Math intent requires a non-empty string 'expression'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Math expression parameter present");
+            }
+        } else if (op == "solve_linear") {
+            if (!isFiniteNumber(intent.parameters.value("a", core::Json(nullptr))) ||
+                !isFiniteNumber(intent.parameters.value("b", core::Json(nullptr)))) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "solve_linear requires finite numeric 'a' and 'b'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Linear coefficients present");
+            }
+        } else if (op == "solve_quadratic") {
+            if (!isFiniteNumber(intent.parameters.value("a", core::Json(nullptr))) ||
+                !isFiniteNumber(intent.parameters.value("b", core::Json(nullptr))) ||
+                !isFiniteNumber(intent.parameters.value("c", core::Json(nullptr)))) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "solve_quadratic requires finite numeric 'a', 'b' and 'c'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Quadratic coefficients present");
+            }
+        } else if (op == "convert") {
+            const bool valueOk =
+                isFiniteNumber(intent.parameters.value("value", core::Json(nullptr)));
+            const bool fromOk = intent.parameters.contains("from") &&
+                                intent.parameters["from"].is_string() &&
+                                !intent.parameters["from"].get<std::string>().empty();
+            const bool toOk = intent.parameters.contains("to") &&
+                              intent.parameters["to"].is_string() &&
+                              !intent.parameters["to"].get<std::string>().empty();
+            if (!valueOk || !fromOk || !toOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "convert requires finite 'value' plus 'from'/'to' unit strings",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Conversion parameters present");
+            }
+        } else if (op == "formula") {
+            const bool nameOk = intent.parameters.contains("name") &&
+                                intent.parameters["name"].is_string() &&
+                                !intent.parameters["name"].get<std::string>().empty();
+            const bool inputsOk = intent.parameters.contains("inputs") &&
+                                  intent.parameters["inputs"].is_object() &&
+                                  !intent.parameters["inputs"].empty();
+            if (!nameOk || !inputsOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "formula requires a 'name' plus non-empty object 'inputs'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Formula parameters present");
+            }
         } else {
+            // Validated operation set already gates unknown ops; structural
+            // checks above cover every known math operation.
             addCheck(out, "intent.param_type", validation::Severity::Info, true,
-                     "Math expression parameter present");
+                     "Math parameters present");
         }
     } else if (intent.domain == "cad") {
         bool typesOk = true;
@@ -278,8 +345,9 @@ validation::ValidationResult IntentValidator::validate(
     }
     if (!engine.empty() && registry.has(engine)) {
         const std::vector<std::string> caps = registry.listCapabilities(engine);
-        // Intent operations map onto engine capabilities: math evaluate*
-        // and solve are direct; cad generate/describe are direct.
+        // Intent operations map onto engine capabilities: math evaluate*,
+        // solve, solve_linear, solve_quadratic, convert and formula are
+        // direct; cad generate/describe are direct.
         if (std::find(caps.begin(), caps.end(), intent.operation) != caps.end()) {
             // CAD object gate: only quadcopter_frame is implemented.
             if (intent.domain == "cad" && intent.object != "quadcopter_frame" &&

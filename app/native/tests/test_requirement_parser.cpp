@@ -173,3 +173,50 @@ TEST_CASE("intent serialization round-trips structured fields") {
     CHECK(trinity::intelligence::toString(back.status) == "VALID");
     CHECK(back.source == "deterministic");
 }
+
+TEST_CASE("math variables parse from with-bindings") {
+    RequirementParser parser;
+    const auto result = parser.parse("Calculate 2*x + 5 with x = 10");
+    CHECK(trinity::intelligence::toString(result.status) == "VALID");
+    CHECK(result.intent.domain == "math");
+    CHECK(result.intent.operation == "evaluate");
+    CHECK(result.intent.parameters["expression"].get<std::string>() == "2*x + 5");
+    REQUIRE(result.intent.parameters.contains("variables"));
+    CHECK(result.intent.parameters["variables"]["x"].get<double>() == doctest::Approx(10.0));
+}
+
+TEST_CASE("math convert request parses") {
+    RequirementParser parser;
+    const auto result = parser.parse("Convert 10 cm to mm");
+    CHECK(trinity::intelligence::toString(result.status) == "VALID");
+    CHECK(result.intent.domain == "math");
+    CHECK(result.intent.operation == "convert");
+    CHECK(result.intent.parameters["value"].get<double>() == doctest::Approx(10.0));
+    CHECK(result.intent.parameters["from"].get<std::string>() == "cm");
+    CHECK(result.intent.parameters["to"].get<std::string>() == "mm");
+}
+
+TEST_CASE("math formula request parses") {
+    RequirementParser parser;
+    const auto result = parser.parse("Formula ohm with V = 12, R = 6");
+    CHECK(trinity::intelligence::toString(result.status) == "VALID");
+    CHECK(result.intent.domain == "math");
+    CHECK(result.intent.operation == "formula");
+    CHECK(result.intent.parameters["name"].get<std::string>() == "ohm");
+    CHECK(result.intent.parameters["inputs"]["V"].get<double>() == doctest::Approx(12.0));
+    CHECK(result.intent.parameters["inputs"]["R"].get<double>() == doctest::Approx(6.0));
+}
+
+TEST_CASE("math coefficient solvers parse") {
+    RequirementParser parser;
+    const auto linear = parser.parse("Solve linear with a = 2, b = 4");
+    CHECK(trinity::intelligence::toString(linear.status) == "VALID");
+    CHECK(linear.intent.operation == "solve_linear");
+    CHECK(linear.intent.parameters["a"].get<double>() == doctest::Approx(2.0));
+    CHECK(linear.intent.parameters["b"].get<double>() == doctest::Approx(4.0));
+
+    const auto quad = parser.parse("Solve quadratic with a = 1, b = -5, c = 6");
+    CHECK(trinity::intelligence::toString(quad.status) == "VALID");
+    CHECK(quad.intent.operation == "solve_quadratic");
+    CHECK(quad.intent.parameters["c"].get<double>() == doctest::Approx(6.0));
+}

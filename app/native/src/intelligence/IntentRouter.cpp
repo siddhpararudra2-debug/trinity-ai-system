@@ -166,22 +166,25 @@ RouteResult IntentRouter::route(const Intent& intent,
         return out;
     }
 
-    // Math domain: expression passes through verbatim; the engine owns
-    // evaluation semantics.
-    if (!intent.parameters.contains("expression") ||
-        !intent.parameters["expression"].is_string()) {
-        return reject(engine, operation, "REJECTED",
-                      "Math intent requires a string 'expression' parameter");
-    }
+    // Math domain: parameters pass through verbatim; the engine owns
+    // evaluation semantics. Expression-style operations
+    // (evaluate/evaluate_expression/solve) require a string 'expression';
+    // structured operations carry their own validated parameters
+    // (solve_linear a/b, solve_quadratic a/b/c, convert value/from/to,
+    // formula name/inputs).
     ToolCall call;
     call.toolCallId = core::newUuid();
     call.engine = "math";
     call.operation = operation;
-    call.parameters = core::Json{
-        {"expression", intent.parameters["expression"].get<std::string>()}};
-    if (intent.parameters.contains("variables")) {
-        call.parameters["variables"] = intent.parameters["variables"];
+    if (operation == "evaluate" || operation == "evaluate_expression" ||
+        operation == "solve") {
+        if (!intent.parameters.contains("expression") ||
+            !intent.parameters["expression"].is_string()) {
+            return reject(engine, operation, "REJECTED",
+                          "Math intent requires a string 'expression' parameter");
+        }
     }
+    call.parameters = intent.parameters;
     RouteResult out;
     out.routed = true;
     out.engine = "math";
