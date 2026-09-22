@@ -8,6 +8,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPixmap>
 
 #include <cmath>
 
@@ -133,6 +134,12 @@ ViewerPanel::ViewerPanel(QWidget* parent) : QWidget(parent) {
     connect(artifactTable_, &QTableWidget::cellClicked, this,
             &ViewerPanel::onArtifactCellClicked);
 
+    imagePreview_ = new QLabel(this);
+    imagePreview_->setAlignment(Qt::AlignCenter);
+    imagePreview_->setScaledContents(false);
+    imagePreview_->setVisible(false);
+    layout->addWidget(imagePreview_);
+
     layout->addStretch(1);
 }
 
@@ -145,6 +152,22 @@ void ViewerPanel::setLoading(bool on) {
 void ViewerPanel::setErrorText(const QString& message) {
     errorLabel_->setVisible(!message.isEmpty());
     errorLabel_->setText(message);
+}
+
+void ViewerPanel::showImage(const QString& path) {
+    if (path.isEmpty()) {
+        imagePreview_->clear();
+        imagePreview_->setVisible(false);
+        return;
+    }
+    QPixmap pixmap(path);
+    if (!pixmap.isNull()) {
+        imagePreview_->setPixmap(pixmap.scaled(300, 300, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        imagePreview_->setVisible(true);
+    } else {
+        imagePreview_->clear();
+        imagePreview_->setVisible(false);
+    }
 }
 
 void ViewerPanel::setState(const viewer::ViewerState& state) {

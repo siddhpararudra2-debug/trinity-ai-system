@@ -83,12 +83,15 @@ set(TRINITY_CORE_SOURCES
     src/engines/CadEngine.cpp
     src/engines/PcbEngine.cpp
     src/engines/FirmwareEngine.cpp
+    src/engines/VisionEngine.cpp
     src/firmware/FirmwareProject.cpp
     src/firmware/McuDatabase.cpp
     src/firmware/CodeGen.cpp
     src/firmware/Validators.cpp
     src/firmware/Builder.cpp
     src/engines/StubEngines.cpp
+    src/vision/VisionProject.cpp
+    src/vision/ImageProcessor.cpp
     src/workflows/Workflow.cpp
     src/workflows/Executor.cpp
     src/storage/Database.cpp
@@ -106,7 +109,8 @@ target_include_directories(trinity_core
         include
         third_party/json
 )
-target_link_libraries(trinity_core PUBLIC trinity_sqlite)
+find_package(OpenCV REQUIRED)
+target_link_libraries(trinity_core PUBLIC trinity_sqlite ${OpenCV_LIBS})
 if(WIN32)
     target_link_libraries(trinity_core PUBLIC bcrypt shell32 ole32)
 endif()
@@ -168,6 +172,9 @@ if(TRINITY_BUILD_TESTS)
         tests/test_viewer_geometry.cpp
         tests/test_artifact_loading.cpp
         tests/test_firmware.cpp
+        tests/test_vision_project.cpp
+        tests/test_image_processor.cpp
+        tests/test_vision_engine.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

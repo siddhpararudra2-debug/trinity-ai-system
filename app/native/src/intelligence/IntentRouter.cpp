@@ -106,10 +106,12 @@ RouteResult IntentRouter::route(const Intent& intent,
         engine = "pcb";
     } else if (intent.domain == "firmware") {
         engine = "firmware";
+    } else if (intent.domain == "vision") {
+        engine = "vision";
     } else {
         return reject(intent.domain, operation, "REJECTED",
                       "Unsupported domain '" + intent.domain +
-                          "'; supported: cad, math, pcb, firmware");
+                          "'; supported: cad, math, pcb, firmware, vision");
     }
 
     if (!registry.has(engine)) {
@@ -210,6 +212,27 @@ RouteResult IntentRouter::route(const Intent& intent,
         core::Logger::instance().info(
             "intelligence", "intent routed",
             core::Json{{"intent_id", intent.intentId}, {"engine", "firmware"}});
+        return out;
+    }
+
+    // Vision domain: structured parameters (path/width/height/...) pass
+    // through verbatim; the engine owns image processing semantics.
+    if (intent.domain == "vision") {
+        ToolCall call;
+        call.toolCallId = core::newUuid();
+        call.engine = "vision";
+        call.operation = operation;
+        call.parameters = intent.parameters;
+        RouteResult out;
+        out.routed = true;
+        out.engine = "vision";
+        out.operation = operation;
+        out.capability = operation;
+        out.status = "ROUTED";
+        out.toolCall = std::move(call);
+        core::Logger::instance().info(
+            "intelligence", "intent routed",
+            core::Json{{"intent_id", intent.intentId}, {"engine", "vision"}});
         return out;
     }
 

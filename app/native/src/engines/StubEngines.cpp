@@ -6,6 +6,7 @@
 #include "trinity/engines/FirmwareEngine.hpp"
 #include "trinity/engines/MathEngine.hpp"
 #include "trinity/engines/PcbEngine.hpp"
+#include "trinity/engines/VisionEngine.hpp"
 
 namespace trinity::engines {
 
@@ -45,11 +46,6 @@ validation::ValidationResult StubEngine::validate(const EngineResult& result) co
     return validation;
 }
 
-std::shared_ptr<StubEngine> makeVisionEngine() {
-    return std::make_shared<StubEngine>("vision", "0.1.0",
-                                        std::vector<std::string>{"describe"});
-}
-
 std::shared_ptr<StubEngine> makeResearchEngine() {
     return std::make_shared<StubEngine>("research", "0.1.0",
                                         std::vector<std::string>{"describe"});
@@ -79,7 +75,7 @@ void registerAllEngines(EngineRegistry& registry) {
         registry.registerEngine(std::make_shared<FirmwareEngine>());
     }
     if (!registry.has("vision")) {
-        registry.registerEngine(makeVisionEngine());
+        registry.registerEngine(std::make_shared<VisionEngine>());
     }
     if (!registry.has("research")) {
         registry.registerEngine(makeResearchEngine());

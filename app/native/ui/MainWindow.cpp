@@ -1809,6 +1809,23 @@ void MainWindow::onArtifactSelected(const std::string& artifactId) {
     if (viewerController_ == nullptr || artifactId.empty()) {
         return;
     }
+    
+    if (artifactRepo_ != nullptr) {
+        try {
+            auto a = artifactRepo_->get(artifactId);
+            QString path = QString::fromStdString(a.path).toLower();
+            if (path.endsWith(QStringLiteral(".png")) || 
+                path.endsWith(QStringLiteral(".jpg")) || 
+                path.endsWith(QStringLiteral(".jpeg")) || 
+                path.endsWith(QStringLiteral(".bmp"))) {
+                if (viewerPanel_) viewerPanel_->showImage(QString::fromStdString(a.path));
+                return;
+            } else {
+                if (viewerPanel_) viewerPanel_->showImage(QString());
+            }
+        } catch(...) {}
+    }
+
     viewerController_->openArtifact(artifactId);
 }
 

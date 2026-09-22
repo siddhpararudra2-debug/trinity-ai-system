@@ -36,6 +36,7 @@ public:
     void setArtifacts(const std::vector<ArtifactRow>& rows);
     void setLoading(bool on);
     void setErrorText(const QString& message);
+    void showImage(const QString& path);
 
 signals:
     void fitRequested();
@@ -71,6 +72,7 @@ private:
     QLabel* validationDetail_ = nullptr;
     QLabel* artifactDetail_ = nullptr;
     QTableWidget* artifactTable_ = nullptr;
+    QLabel* imagePreview_ = nullptr;
     std::vector<ArtifactRow> rows_;
     bool suppressSignals_ = false;
 };

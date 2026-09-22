@@ -257,6 +257,15 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    ParseResult vision = tryVisionRequest(text, lowered, "");
+    if (vision.status != ParseStatus::Invalid || !vision.errors.empty()) {
+        const bool noVision =
+            vision.errors.size() == 1 && vision.errors.front() == "__no_vision_content__";
+        if (!noVision) {
+            return vision;
+        }
+    }
+
     Intent intent = makeBaseIntent(text);
     ParseResult result;
     result.intent = intent;
@@ -266,8 +275,8 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         "No deterministic parser matched this requirement; supported: CAD generation "
         "(quadcopter frame, plate), PCB creation (board dimensions, parts), math "
         "evaluation (calculate, solve), firmware configuration (MCU, GPIO, UART, I2C, "
-        "PWM), explicit engine "
-        "requests (using math/cad/pcb/firmware engine)");
+        "PWM), vision processing (resize, grayscale, edge detect), explicit engine "
+        "requests (using math/cad/pcb/firmware/vision engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -365,6 +374,28 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.missing = {"mcu", "name"};
             result.errors.push_back(
                 "Explicit firmware engine request is missing an MCU or project name");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "vision") {
+        ParseResult inner = tryVisionRequest(remainder.empty() ? text : remainder,
+                                             remainder.empty() ? lowered
+                                                               : remainderLower,
+                                             "vision");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_vision_content__") {
+            Intent intent = makeBaseIntent(text);
+            intent.domain = "vision";
+            intent.object = "image";
+            intent.operation = "load_image";
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"path"};
+            result.errors.push_back(
+                "Explicit vision engine request is missing an image path");
             return result;
         }
         return inner;
@@ -1354,6 +1385,79 @@ ParseResult RequirementParser::tryFirmwareRequest(const std::string& text,
         intent.parameters["name"] = "firmware_project";
     }
     return finish(ParseStatus::Incomplete, {"operation", "mcu"}, 0.4);
+}
+
+ParseResult RequirementParser::tryVisionRequest(const std::string& text,
+                                                const std::string& lowered,
+                                                const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "vision") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_vision_content__");
+        return sentinel;
+    }
+
+    const bool hasImage = contains(lowered, "image") || contains(lowered, "photo") || contains(lowered, "picture");
+    const bool hasResize = contains(lowered, "resize") || contains(lowered, "scale");
+    const bool hasGrayscale = contains(lowered, "grayscale") || contains(lowered, "grey") || contains(lowered, "gray");
+    const bool hasEdge = contains(lowered, "edge") || contains(lowered, "canny");
+    const bool hasStats = contains(lowered, "dimension") || contains(lowered, "statistic") || contains(lowered, "channel") || contains(lowered, "analyze");
+    
+    if (forcedDomain.empty() && !hasImage && !hasResize && !hasGrayscale && !hasEdge && !hasStats) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_vision_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "vision";
+    intent.object = "image";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    if (hasResize) {
+        intent.operation = "resize_image";
+        
+        static const std::regex kSize(R"((\d+)\s*[x\*]\s*(\d+))", std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kSize)) {
+            intent.parameters["width"] = std::stoi(m[1].str());
+            intent.parameters["height"] = std::stoi(m[2].str());
+        } else {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"width", "height"};
+            result.errors.push_back("Incomplete vision request: resize is missing dimensions");
+            return result;
+        }
+    } else if (hasEdge) {
+        intent.operation = "edge_detect";
+    } else if (hasStats) {
+        intent.operation = "image_statistics";
+    } else if (hasGrayscale) {
+        intent.operation = "grayscale";
+    } else {
+        intent.operation = "load_image";
+    }
+
+    // Try extracting path if mentioned like "image path/to/img.png"
+    static const std::regex kPath(R"((?:file|image)\s+['"]?([^'"]+\.[a-zA-Z0-9]+)['"]?)", std::regex_constants::icase);
+    std::smatch m2;
+    if (std::regex_search(text, m2, kPath)) {
+        intent.parameters["path"] = m2[1].str();
+    }
+
+    ParseResult result;
+    result.intent = intent;
+    result.status = ParseStatus::Valid;
+    result.intent.status = ParseStatus::Valid;
+    result.intent.confidence = 0.9;
+    return result;
 }
 
 }  // namespace trinity::intelligence
