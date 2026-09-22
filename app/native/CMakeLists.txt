@@ -58,6 +58,9 @@ set(TRINITY_CORE_SOURCES
     src/cad/StlWriter.cpp
     src/cad/StlReader.cpp
     src/cad/Validators.cpp
+    src/pcb/PcbDesign.cpp
+    src/pcb/Validators.cpp
+    src/pcb/KiCadExport.cpp
     src/viewer/RenderData.cpp
     src/viewer/ViewerState.cpp
     src/viewer/Measure.cpp
@@ -78,6 +81,7 @@ set(TRINITY_CORE_SOURCES
     src/engines/EngineRegistry.cpp
     src/engines/MathEngine.cpp
     src/engines/CadEngine.cpp
+    src/engines/PcbEngine.cpp
     src/engines/StubEngines.cpp
     src/workflows/Workflow.cpp
     src/workflows/Executor.cpp
@@ -143,6 +147,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_logging_config.cpp
         tests/test_math_engine.cpp
         tests/test_math_pipeline.cpp
+        tests/test_pcb.cpp
         tests/test_cad_stubs.cpp
         tests/test_cad_generate.cpp
         tests/test_validation.cpp

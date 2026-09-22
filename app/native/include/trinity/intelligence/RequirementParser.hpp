@@ -61,6 +61,9 @@ private:
     ParseResult tryMathRequest(const std::string& text,
                                const std::string& lowered,
                                const std::string& forcedDomain) const;
+    ParseResult tryPcbRequest(const std::string& text,
+                              const std::string& lowered,
+                              const std::string& forcedDomain) const;
 };
 
 }  // namespace trinity::intelligence

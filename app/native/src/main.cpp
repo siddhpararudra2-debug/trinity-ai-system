@@ -113,6 +113,24 @@ int runSelftest() {
         cadOk = false;
     }
     std::cout << (cadOk ? "[PASS] " : "[FAIL] ") << "cad_generates_frame\n";
+    // PCB must create a real board: 50x40 mm with two starter parts.
+    bool pcbOk = false;
+    try {
+        trinity::engines::EngineRequest pcbReq;
+        pcbReq.engine = "pcb";
+        pcbReq.operation = "create_board";
+        pcbReq.parameters = trinity::core::Json{
+            {"width_mm", 50.0},
+            {"height_mm", 40.0},
+            {"components", {{{"part", "esp32"}}, {{"part", "regulator"}}}}};
+        const auto pcbResult = context.engines().execute(pcbReq);
+        pcbOk = pcbResult.success &&
+                pcbResult.result.value("component_count", 0) == 2 &&
+                pcbResult.validation.has_value() && pcbResult.validation->passed();
+    } catch (...) {
+        pcbOk = false;
+    }
+    std::cout << (pcbOk ? "[PASS] " : "[FAIL] ") << "pcb_creates_board\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -136,8 +154,8 @@ int runSelftest() {
         trinity::intelligence::ModelProviderFactory::instance().has(
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
-    allOk = allOk && missOk && mathOk && refuseOk && cadOk && modelOk && plannerOk &&
-            providerOk;
+    allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && modelOk &&
+            plannerOk && providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;
@@ -180,6 +198,7 @@ int main(int argc, char* argv[]) {
     trinity::ui::MainWindow window(uiSummary, &context.engines(), &context.jobs(),
                                      &context.executor(), &context.pipeline());
     window.setViewerServices(&context.artifactRepository(), &context.artifacts());
+    window.setWorkerService(&context.worker());
     window.show();
     const int code = app.exec();
 

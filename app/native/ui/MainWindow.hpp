@@ -30,11 +30,14 @@
 #include <string>
 #include <vector>
 
+#include "trinity/core/Json.hpp"
+
 namespace trinity::engines {
 class EngineRegistry;
 }
 namespace trinity::jobs {
 class JobManager;
+class JobWorker;
 }
 namespace trinity::workflows {
 class WorkflowExecutor;
@@ -97,9 +100,16 @@ private slots:
     void handleParse();
     void handleExecute();
     void handleMathSubmit();
+    void handlePcbCreate();
+    void handlePcbAddComponent();
+    void handlePcbAddNet();
+    void handlePcbPlace();
+    void handlePcbValidate();
+    void handlePcbExport();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
+    void refreshPcbResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -132,6 +142,32 @@ private:
     QLineEdit* mathParams_ = nullptr;
     QTextEdit* mathOutput_ = nullptr;
     std::string lastMathJobId_;
+    // PCB workspace state: the live design JSON chains between ops
+    // (create -> add -> place -> validate -> export) and is the §12
+    // visualization interface (outline/placements/footprints/layers).
+    QLineEdit* pcbWidth_ = nullptr;
+    QLineEdit* pcbHeight_ = nullptr;
+    QLineEdit* pcbThick_ = nullptr;
+    QLineEdit* pcbRef_ = nullptr;
+    QLineEdit* pcbValue_ = nullptr;
+    QLineEdit* pcbFootprint_ = nullptr;
+    QLineEdit* pcbNetName_ = nullptr;
+    QLineEdit* pcbNetPins_ = nullptr;
+    QLineEdit* pcbPlaceRef_ = nullptr;
+    QLineEdit* pcbPlaceX_ = nullptr;
+    QLineEdit* pcbPlaceY_ = nullptr;
+    QLineEdit* pcbPlaceRot_ = nullptr;
+    QTextEdit* pcbOutput_ = nullptr;
+    core::Json lastPcbDesign_ = core::Json::object();
+    bool hasPcbDesign_ = false;
+    std::string lastPcbJobId_;
+    jobs::JobWorker* worker_ = nullptr;
+
+public:
+    void setWorkerService(jobs::JobWorker* worker) { worker_ = worker; }
+    // §12: board outline + placements + footprints + layers for the
+    // future 2D PCB viewer. No renderer lives here.
+    core::Json pcbDesignForViewer() const { return lastPcbDesign_; }
     QTableWidget* jobsTable_ = nullptr;
     QTableWidget* workflowsTable_ = nullptr;
     QTextEdit* logView_ = nullptr;

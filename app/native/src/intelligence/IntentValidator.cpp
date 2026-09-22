@@ -22,12 +22,18 @@ void addCheck(validation::ValidationResult& out, const std::string& rule,
 }
 
 bool isValidDomain(const std::string& domain) {
-    return domain == "cad" || domain == "math";
+    return domain == "cad" || domain == "math" || domain == "pcb";
 }
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
     if (domain == "cad") {
         return operation == "generate" || operation == "describe";
+    }
+    if (domain == "pcb") {
+        return operation == "describe" || operation == "create_board" ||
+                operation == "add_component" || operation == "add_net" ||
+                operation == "place_component" || operation == "validate_design" ||
+                operation == "export";
     }
     if (domain == "math") {
         return operation == "evaluate" || operation == "evaluate_expression" ||
@@ -74,8 +80,9 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         ok = false;
         addCheck(out, "intent.domain", validation::Severity::Error, false,
                  "Unsupported domain '" + intent.domain + "'",
-                 core::Json{{"domain", intent.domain},
-                            {"supported", core::Json::array({"cad", "math"})}});
+                         core::Json{{"domain", intent.domain},
+                                    {"supported",
+                                     core::Json::array({"cad", "math", "pcb"})}});
     } else {
         addCheck(out, "intent.domain", validation::Severity::Info, true,
                  "Domain '" + intent.domain + "' is supported");
@@ -116,6 +123,41 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         ok = false;
         addCheck(out, "intent.param_type", validation::Severity::Error, false,
                  "Intent parameters must be an object");
+    } else if (intent.domain == "pcb") {
+        const std::string op = intent.operation;
+        if (op == "describe") {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "PCB describe needs no parameters");
+        } else if (op == "create_board") {
+            if (!isFiniteNumber(intent.parameters.value("width_mm", core::Json(nullptr))) ||
+                !isFiniteNumber(intent.parameters.value("height_mm", core::Json(nullptr)))) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "create_board requires finite numeric 'width_mm' and 'height_mm'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Board dimensions present");
+            }
+        } else if (op == "add_component" || op == "add_net" ||
+                   op == "place_component" || op == "validate_design" ||
+                   op == "export") {
+            // Mutating/terminal ops all consume a design object produced by
+            // an earlier op; the engine owns deep structural validation.
+            if (!intent.parameters.contains("design") ||
+                !intent.parameters["design"].is_object()) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "PCB operation '" + op + "' requires a 'design' object",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "PCB design parameter present");
+            }
+        } else {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "PCB parameters present");
+        }
     } else if (intent.domain == "math") {
         const std::string op = intent.operation;
         if (op == "evaluate" || op == "evaluate_expression" || op == "solve") {
@@ -342,12 +384,15 @@ validation::ValidationResult IntentValidator::validate(
         engine = "cad";
     } else if (intent.domain == "math") {
         engine = "math";
+    } else if (intent.domain == "pcb") {
+        engine = "pcb";
     }
     if (!engine.empty() && registry.has(engine)) {
         const std::vector<std::string> caps = registry.listCapabilities(engine);
         // Intent operations map onto engine capabilities: math evaluate*,
         // solve, solve_linear, solve_quadratic, convert and formula are
-        // direct; cad generate/describe are direct.
+        // direct; pcb create/add/place/validate/export are direct;
+        // cad generate/describe are direct.
         if (std::find(caps.begin(), caps.end(), intent.operation) != caps.end()) {
             // CAD object gate: only quadcopter_frame is implemented.
             if (intent.domain == "cad" && intent.object != "quadcopter_frame" &&

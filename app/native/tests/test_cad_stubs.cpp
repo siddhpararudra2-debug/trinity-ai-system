@@ -2,6 +2,7 @@
 
 #include "trinity/engines/CadEngine.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
+#include "trinity/engines/PcbEngine.hpp"
 #include "trinity/engines/StubEngines.hpp"
 
 TEST_CASE("cad skeleton describes capabilities and refuses geometry") {
@@ -31,7 +32,7 @@ TEST_CASE("domain stubs register metadata and refuse execution") {
     const auto listed = registry.list();
     CHECK(listed.size() == 8);
 
-    for (const char* name : {"pcb", "firmware", "vision", "research", "simulation",
+    for (const char* name : {"firmware", "vision", "research", "simulation",
                              "robotics"}) {
         CHECK(registry.has(name));
         trinity::engines::EngineRequest req;
@@ -42,6 +43,17 @@ TEST_CASE("domain stubs register metadata and refuse execution") {
         CHECK_FALSE(result.success);
         REQUIRE_FALSE(result.errors.empty());
         CHECK(result.errors.front().value("code", "") == "capability_unavailable");
+    }
+
+    // The PCB domain graduated to a real engine: describe succeeds.
+    {
+        CHECK(registry.has("pcb"));
+        trinity::engines::EngineRequest req;
+        req.engine = "pcb";
+        req.operation = "describe";
+        const auto result = registry.execute(req);
+        CHECK(result.success);
+        CHECK(result.result.contains("footprints"));
     }
 }
 

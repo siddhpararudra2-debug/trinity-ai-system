@@ -127,7 +127,7 @@ ctest --preset windows-debug --output-on-failure
 # or: .\build\debug\Debug\trinity_tests.exe
 ```
 
-Suites (148 cases, GUI-independent): error envelope + source/timestamp,
+Suites (166 cases, GUI-independent): error envelope + source/timestamp,
 engine registry (register/dup-reject/unregister/listCaps/routing +
 unknown/unsupported/invalid handling), math (precedence, variables,
 functions/constants incl. asin/acos/atan/ln, power, evaluate, generic
@@ -219,16 +219,22 @@ rest marked `skipped`. Model refusal executes nothing.
   dependency-free mesh backend (`cad/FrameParams,Mesh,Builder,
   StlWriter,Validators`): 108-triangle validated geometry, binary STL +
   spec JSON artifacts via `JobManager`, STEP reported
-  `CAD_KERNEL_UNAVAILABLE`; PCB/Firmware/Vision/Research/Simulation/
+  `CAD_KERNEL_UNAVAILABLE`; Firmware/Vision/Research/Simulation/
   Robotics remain stubs registering metadata and refusing without fake
   results
+- `PcbEngine` (`describe/create_board/add_component/add_net/place_component/validate_design/export`)
+  over the tool-agnostic IR (`pcb/PcbDesign,Validators,KiCadExport`): starter footprints
+  (ESP32-WROOM-32, IMU-QFN-24, SOT-223, 0603), bounds/overlap/clearance/power-net
+  checks, self-verified KiCad 7/8 `.kicad_pcb` + design JSON artifacts via `JobManager`
 - Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
   `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
-- Qt `MainWindow` engine list (MATH/CAD implemented with capabilities +
+- Qt `MainWindow` engine list (MATH/CAD/PCB implemented with capabilities +
   last results vs scaffolded/unavailable) plus a deterministic Math
   panel (evaluate/solve/linear/quadratic/convert/formula) submitting
   through `RequestPipeline` to the worker thread and rendering the
   persisted job (result/units/validation/errors/job id/execution time)
+  plus a PCB workspace (board/component/net/place/validate/export forms
+  chaining the live design JSON through the shared worker thread)
 - `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
   check, refusal check, planner/model/provider checks),
   `trinity_tests` via CTest
@@ -269,7 +275,8 @@ rest marked `skipped`. Model refusal executes nothing.
   multi-variable solving, symbolic algebra)
 - CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
-- Real PCB/Firmware/Vision/Research/Simulation/Robotics implementations
+- PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
+- Real Firmware/Vision/Research/Simulation/Robotics implementations
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,
   local, custom Trinity model — the factory + example + planner are
   ready; only the transport is missing)

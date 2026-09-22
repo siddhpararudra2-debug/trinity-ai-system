@@ -220,3 +220,34 @@ TEST_CASE("math coefficient solvers parse") {
     CHECK(quad.intent.operation == "solve_quadratic");
     CHECK(quad.intent.parameters["c"].get<double>() == doctest::Approx(6.0));
 }
+
+TEST_CASE("pcb board request parses with dimensions and parts") {
+    RequirementParser parser;
+    const auto result = parser.parse("Create a 50 mm x 40 mm PCB with an ESP32");
+    CHECK(trinity::intelligence::toString(result.status) == "VALID");
+    CHECK(result.intent.domain == "pcb");
+    CHECK(result.intent.operation == "create_board");
+    CHECK(result.intent.object == "pcb");
+    CHECK(result.intent.parameters["width_mm"].get<double>() == doctest::Approx(50.0));
+    CHECK(result.intent.parameters["height_mm"].get<double>() == doctest::Approx(40.0));
+    REQUIRE(result.intent.parameters.contains("components"));
+    CHECK(result.intent.parameters["components"][0]["part"] == "esp32");
+}
+
+TEST_CASE("pcb placement without design reports missing requirements") {
+    RequirementParser parser;
+    const auto result = parser.parse("Place U1 at the center of the board");
+    CHECK(result.intent.domain == "pcb");
+    CHECK(result.intent.operation == "place_component");
+    CHECK(result.intent.parameters["ref"].get<std::string>() == "U1");
+    REQUIRE_FALSE(result.intent.missing.empty());
+    CHECK(result.intent.missing[0] == "design");
+}
+
+TEST_CASE("pcb dimension-less creation reports missing dimensions") {
+    RequirementParser parser;
+    const auto result = parser.parse("Create a PCB with an IMU and voltage regulator");
+    CHECK(result.intent.domain == "pcb");
+    CHECK(result.intent.operation == "create_board");
+    REQUIRE_FALSE(result.intent.missing.empty());
+}

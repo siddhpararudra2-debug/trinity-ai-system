@@ -236,6 +236,15 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    ParseResult pcb = tryPcbRequest(text, lowered, "");
+    if (pcb.status != ParseStatus::Invalid || !pcb.errors.empty()) {
+        const bool noPcb =
+            pcb.errors.size() == 1 && pcb.errors.front() == "__no_pcb_content__";
+        if (!noPcb) {
+            return pcb;
+        }
+    }
+
     Intent intent = makeBaseIntent(text);
     ParseResult result;
     result.intent = intent;
@@ -243,8 +252,9 @@ ParseResult RequirementParser::parse(const std::string& text) const {
     result.intent.status = ParseStatus::Invalid;
     result.errors.push_back(
         "No deterministic parser matched this requirement; supported: CAD generation "
-        "(quadcopter frame, plate), math evaluation (calculate, solve), explicit engine "
-        "requests (using math/cad engine)");
+        "(quadcopter frame, plate), PCB creation (board dimensions, parts), math "
+        "evaluation (calculate, solve), explicit engine "
+        "requests (using math/cad/pcb engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -301,6 +311,25 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.domain = "cad";
             result.intent.missing = {"object", "overall_size_mm"};
             result.errors.push_back("Explicit cad engine request is missing an object");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "pcb") {
+        ParseResult inner = tryPcbRequest(remainder.empty() ? text : remainder,
+                                          remainder.empty() ? lowered : remainderLower,
+                                          "pcb");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_pcb_content__") {
+            Intent intent = makeBaseIntent(text);
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.domain = "pcb";
+            result.intent.object = "pcb";
+            result.intent.missing = {"operation", "width_mm", "height_mm"};
+            result.errors.push_back("Explicit pcb engine request is missing a board");
             return result;
         }
         return inner;
@@ -834,6 +863,153 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     core::Logger::instance().info(
         "intelligence", "requirement parsed",
         core::Json{{"domain", "math"}, {"operation", intent.operation}, {"status", "VALID"}});
+    return result;
+}
+
+ParseResult RequirementParser::tryPcbRequest(const std::string& text,
+                                             const std::string& lowered,
+                                             const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "pcb") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_pcb_content__");
+        return sentinel;
+    }
+    const bool mentionsPcb =
+        contains(lowered, "pcb") || contains(lowered, "kicad") ||
+        contains(lowered, "circuit board") || contains(lowered, "board") ||
+        contains(lowered, "footprint") || contains(lowered, "esp32") ||
+        contains(lowered, "imu") || contains(lowered, "mpu") ||
+        contains(lowered, "regulator") || contains(lowered, "ams1117") ||
+        contains(lowered, "ldo");
+    if (forcedDomain.empty() && !mentionsPcb) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_pcb_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "pcb";
+    intent.object = "pcb";
+    intent.units = "mm";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    auto collectParts = [&]() {
+        core::Json parts = core::Json::array();
+        auto add = [&](const std::string& part) {
+            for (const auto& item : parts) {
+                if (item.is_string() && item.get<std::string>() == part) {
+                    return;
+                }
+            }
+            parts.push_back(part);
+        };
+        if (contains(lowered, "esp32")) add("esp32");
+        if (contains(lowered, "imu") || contains(lowered, "mpu") ||
+            contains(lowered, "accelerometer") || contains(lowered, "gyroscope"))
+            add("imu");
+        if (contains(lowered, "regulator") || contains(lowered, "ams1117") ||
+            contains(lowered, "ldo"))
+            add("regulator");
+        if (contains(lowered, "resistor")) add("resistor");
+        if (contains(lowered, "capacitor")) add("capacitor");
+        if (contains(lowered, "led")) add("led");
+        return parts;
+    };
+
+    // Placement requests need an existing design: report it missing
+    // instead of inventing board state.
+    {
+        static const std::regex kPlaceCenter(
+            R"(place\s+([A-Za-z]+\d+)\s+at\s+(?:the\s+)?center)",
+            std::regex_constants::icase);
+        static const std::regex kPlaceXy(
+            R"(place\s+([A-Za-z]+\d+)\s+at\s+(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?))",
+            std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kPlaceCenter) ||
+            std::regex_search(text, m, kPlaceXy)) {
+            intent.operation = "place_component";
+            intent.parameters["ref"] = m[1].str();
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"design"};
+            result.intent.confidence = 0.5;
+            result.errors.push_back(
+                "Placement needs an existing board design; create a board first");
+            return result;
+        }
+    }
+
+    // Board dimensions: "50 mm x 40 mm".
+    static const std::regex kDims(
+        R"((\d+(?:\.\d+)?)\s*mm\s*x\s*(\d+(?:\.\d+)?)\s*mm)",
+        std::regex_constants::icase);
+    std::smatch dims;
+    const bool hasDims = std::regex_search(text, dims, kDims);
+    static const std::regex kThick(R"((\d+(?:\.\d+)?)\s*mm\s+thick)",
+                                   std::regex_constants::icase);
+    std::smatch thick;
+
+    const bool hasVerb = contains(lowered, "create") || contains(lowered, "generate") ||
+                         contains(lowered, "make") || contains(lowered, "build") ||
+                         contains(lowered, "design") || !forcedDomain.empty();
+    if (hasDims || hasVerb) {
+        intent.operation = "create_board";
+        if (hasDims) {
+            intent.parameters["width_mm"] = std::stod(dims[1].str());
+            intent.parameters["height_mm"] = std::stod(dims[2].str());
+        }
+        if (std::regex_search(text, thick, kThick)) {
+            intent.parameters["thickness_mm"] = std::stod(thick[1].str());
+        }
+        const core::Json parts = collectParts();
+        if (!parts.empty()) {
+            core::Json components = core::Json::array();
+            for (const auto& part : parts) {
+                components.push_back(core::Json{{"part", part}});
+            }
+            intent.parameters["components"] = components;
+        }
+        if (!hasDims) {
+            // "Create a PCB" without dimensions: honest gap, parts kept.
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"width_mm", "height_mm"};
+            result.intent.confidence = 0.5;
+            result.errors.push_back(
+                "Incomplete PCB request: board dimensions are missing");
+            return result;
+        }
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        core::Logger::instance().info(
+            "intelligence", "requirement parsed",
+            core::Json{{"domain", "pcb"},
+                       {"operation", intent.operation},
+                       {"status", "VALID"}});
+        return result;
+    }
+
+    // PCB keyword without an actionable verb: incomplete, not invalid.
+    ParseResult result;
+    result.intent = intent;
+    result.status = ParseStatus::Incomplete;
+    result.intent.status = ParseStatus::Incomplete;
+    result.intent.missing = {"operation", "width_mm", "height_mm"};
+    result.intent.confidence = 0.4;
+    result.errors.push_back("Incomplete PCB request: no board operation recognized");
     return result;
 }
 

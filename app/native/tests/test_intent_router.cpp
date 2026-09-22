@@ -3,6 +3,7 @@
 #include "trinity/engines/CadEngine.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/engines/MathEngine.hpp"
+#include "trinity/engines/PcbEngine.hpp"
 #include "trinity/intelligence/IntentRouter.hpp"
 #include "trinity/intelligence/IntentValidator.hpp"
 #include "trinity/intelligence/RequirementParser.hpp"
@@ -218,4 +219,20 @@ TEST_CASE("new math operations route with full parameters") {
     CHECK(varsRoute.routed);
     CHECK(varsRoute.toolCall.parameters["variables"]["x"].get<double>() ==
           doctest::Approx(10.0));
+}
+
+TEST_CASE("pcb board intent routes to pcb/create_board") {
+    RequirementParser parser;
+    const auto parsed = parser.parse("Create a 50 mm x 40 mm PCB");
+    REQUIRE(trinity::intelligence::toString(parsed.status) == "VALID");
+    IntentValidator validator;
+    auto registry = makeRegistry();
+    registry.registerEngine(std::make_shared<trinity::engines::PcbEngine>());
+    REQUIRE(validator.validate(parsed.intent, registry).passed());
+    IntentRouter router;
+    const auto route = router.route(parsed.intent, registry);
+    CHECK(route.routed);
+    CHECK(route.engine == "pcb");
+    CHECK(route.operation == "create_board");
+    CHECK(route.toolCall.parameters["width_mm"].get<double>() == doctest::Approx(50.0));
 }

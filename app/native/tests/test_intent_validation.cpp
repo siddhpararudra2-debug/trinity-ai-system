@@ -3,6 +3,7 @@
 #include "trinity/engines/CadEngine.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/engines/MathEngine.hpp"
+#include "trinity/engines/PcbEngine.hpp"
 #include "trinity/intelligence/IntentValidator.hpp"
 #include "trinity/intelligence/RequirementParser.hpp"
 
@@ -169,4 +170,15 @@ TEST_CASE("dimensional mismatch intent fails at engine with structured error") {
     const auto parsed = parser.parse("Convert 10 kg to mm");
     REQUIRE(trinity::intelligence::toString(parsed.status) == "VALID");
     CHECK(validator.validate(parsed.intent, registry).passed());
+}
+
+TEST_CASE("pcb intents validate against registry") {
+    RequirementParser parser;
+    IntentValidator validator;
+    auto registry = makeRegistry();
+    registry.registerEngine(std::make_shared<trinity::engines::PcbEngine>());
+
+    const auto board = parser.parse("Create a 50 mm x 40 mm PCB");
+    REQUIRE(trinity::intelligence::toString(board.status) == "VALID");
+    CHECK(validator.validate(board.intent, registry).passed());
 }

@@ -15,12 +15,14 @@
 #include <QWidget>
 #include <QComboBox>
 #include <QDateTime>
+#include <cmath>
 #include <thread>
 
 #include "trinity/artifacts/Artifact.hpp"
 #include "trinity/core/Logger.hpp"
 #include "trinity/core/Time.hpp"
 #include "trinity/core/Uuid.hpp"
+#include "trinity/jobs/JobWorker.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/intelligence/IntentRouter.hpp"
 #include "trinity/intelligence/IntentValidator.hpp"
@@ -274,6 +276,97 @@ void MainWindow::buildUi() {
         "Math result: expression / variables / operation / result / units / "
         "validation / errors / job id / execution time…"));
     leftLayout->addWidget(mathOutput_);
+
+    // ---- PCB workspace: board/component/net forms submitting structured
+    // pcb jobs to the shared worker thread (same JobManager path as the
+    // pipeline and workflows). The live design JSON chains between ops.
+    auto* pcbTitle = new QLabel(QStringLiteral("PCB (deterministic)"), leftPane);
+    pcbTitle->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(pcbTitle);
+
+    auto* boardRow = new QHBoxLayout();
+    pcbWidth_ = new QLineEdit(leftPane);
+    pcbWidth_->setPlaceholderText(QStringLiteral("W mm (e.g. 50)"));
+    pcbWidth_->setText(QStringLiteral("50"));
+    pcbHeight_ = new QLineEdit(leftPane);
+    pcbHeight_->setPlaceholderText(QStringLiteral("H mm (e.g. 40)"));
+    pcbHeight_->setText(QStringLiteral("40"));
+    pcbThick_ = new QLineEdit(leftPane);
+    pcbThick_->setPlaceholderText(QStringLiteral("Thick (1.6)"));
+    boardRow->addWidget(pcbWidth_);
+    boardRow->addWidget(pcbHeight_);
+    boardRow->addWidget(pcbThick_);
+    leftLayout->addLayout(boardRow);
+    auto* pcbCreateButton =
+        new QPushButton(QStringLiteral("Create Board (async)"), leftPane);
+    leftLayout->addWidget(pcbCreateButton);
+    connect(pcbCreateButton, &QPushButton::clicked, this, &MainWindow::handlePcbCreate);
+
+    auto* compRow = new QHBoxLayout();
+    pcbRef_ = new QLineEdit(leftPane);
+    pcbRef_->setPlaceholderText(QStringLiteral("Ref (U1)"));
+    pcbValue_ = new QLineEdit(leftPane);
+    pcbValue_->setPlaceholderText(QStringLiteral("Value"));
+    pcbFootprint_ = new QLineEdit(leftPane);
+    pcbFootprint_->setPlaceholderText(QStringLiteral("Footprint"));
+    compRow->addWidget(pcbRef_);
+    compRow->addWidget(pcbValue_);
+    compRow->addWidget(pcbFootprint_);
+    leftLayout->addWidget(new QLabel(
+        QStringLiteral("Presets: ESP32-WROOM-32, IMU-QFN-24, SOT-223, 0603"), leftPane));
+    leftLayout->addLayout(compRow);
+    auto* pcbAddCompButton = new QPushButton(QStringLiteral("Add Component"), leftPane);
+    leftLayout->addWidget(pcbAddCompButton);
+    connect(pcbAddCompButton, &QPushButton::clicked, this,
+            &MainWindow::handlePcbAddComponent);
+
+    auto* netRow = new QHBoxLayout();
+    pcbNetName_ = new QLineEdit(leftPane);
+    pcbNetName_->setPlaceholderText(QStringLiteral("Net (GND)"));
+    pcbNetPins_ = new QLineEdit(leftPane);
+    pcbNetPins_->setPlaceholderText(QStringLiteral("Pins (U1.19, U2.13)"));
+    netRow->addWidget(pcbNetName_);
+    netRow->addWidget(pcbNetPins_);
+    leftLayout->addLayout(netRow);
+    auto* pcbAddNetButton = new QPushButton(QStringLiteral("Add Net"), leftPane);
+    leftLayout->addWidget(pcbAddNetButton);
+    connect(pcbAddNetButton, &QPushButton::clicked, this, &MainWindow::handlePcbAddNet);
+
+    auto* placeRow = new QHBoxLayout();
+    pcbPlaceRef_ = new QLineEdit(leftPane);
+    pcbPlaceRef_->setPlaceholderText(QStringLiteral("Ref"));
+    pcbPlaceX_ = new QLineEdit(leftPane);
+    pcbPlaceX_->setPlaceholderText(QStringLiteral("X mm"));
+    pcbPlaceY_ = new QLineEdit(leftPane);
+    pcbPlaceY_->setPlaceholderText(QStringLiteral("Y mm"));
+    pcbPlaceRot_ = new QLineEdit(leftPane);
+    pcbPlaceRot_->setPlaceholderText(QStringLiteral("Rot (0)"));
+    placeRow->addWidget(pcbPlaceRef_);
+    placeRow->addWidget(pcbPlaceX_);
+    placeRow->addWidget(pcbPlaceY_);
+    placeRow->addWidget(pcbPlaceRot_);
+    leftLayout->addLayout(placeRow);
+    auto* pcbPlaceButton = new QPushButton(QStringLiteral("Place Component"), leftPane);
+    leftLayout->addWidget(pcbPlaceButton);
+    connect(pcbPlaceButton, &QPushButton::clicked, this, &MainWindow::handlePcbPlace);
+
+    auto* validRow = new QHBoxLayout();
+    auto* pcbValidateButton = new QPushButton(QStringLiteral("Validate"), leftPane);
+    auto* pcbExportButton = new QPushButton(QStringLiteral("Export KiCad"), leftPane);
+    validRow->addWidget(pcbValidateButton);
+    validRow->addWidget(pcbExportButton);
+    leftLayout->addLayout(validRow);
+    connect(pcbValidateButton, &QPushButton::clicked, this,
+            &MainWindow::handlePcbValidate);
+    connect(pcbExportButton, &QPushButton::clicked, this, &MainWindow::handlePcbExport);
+
+    pcbOutput_ = new QTextEdit(leftPane);
+    pcbOutput_->setReadOnly(true);
+    pcbOutput_->setMinimumHeight(170);
+    pcbOutput_->setPlaceholderText(QStringLiteral(
+        "PCB: board / components / nets / placements / validation / "
+        "artifacts / job / errors…"));
+    leftLayout->addWidget(pcbOutput_);
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -623,6 +716,353 @@ void MainWindow::refreshMathResult() {
     }
 }
 
+// --- PCB workspace: structured pcb jobs on the shared worker thread.
+// Number parsing failures are reported inline without submitting.
+
+namespace {
+
+bool pcbNumber(const QString& text, double& valueOut) {
+    bool ok = false;
+    const double value = text.trimmed().toDouble(&ok);
+    if (!ok || !std::isfinite(value)) {
+        return false;
+    }
+    valueOut = value;
+    return true;
+}
+
+}  // namespace
+
+void MainWindow::handlePcbCreate() {
+    if (pcbWidth_ == nullptr || pcbHeight_ == nullptr || pcbOutput_ == nullptr ||
+        worker_ == nullptr) {
+        return;
+    }
+    double width = 0.0;
+    double height = 0.0;
+    if (!pcbNumber(pcbWidth_->text(), width) || !pcbNumber(pcbHeight_->text(), height)) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB: board width/height must be numbers"));
+        return;
+    }
+    trinity::core::Json params = {{"width_mm", width}, {"height_mm", height}};
+    if (pcbThick_ != nullptr && !pcbThick_->text().trimmed().isEmpty()) {
+        double thick = 0.0;
+        if (!pcbNumber(pcbThick_->text(), thick)) {
+            pcbOutput_->setPlainText(QStringLiteral("PCB: thickness must be a number"));
+            return;
+        }
+        params["thickness_mm"] = thick;
+    }
+    try {
+        lastPcbJobId_ = worker_->submit("pcb", "create_board", params);
+        hasPcbDesign_ = false;
+        pcbOutput_->setPlainText(QStringLiteral("PCB: board submitted, job %1…")
+                                     .arg(QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handlePcbAddComponent() {
+    if (pcbRef_ == nullptr || pcbValue_ == nullptr || pcbFootprint_ == nullptr ||
+        pcbOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasPcbDesign_) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: create a board first (no design in context)"));
+        return;
+    }
+    const std::string ref = pcbRef_->text().trimmed().toStdString();
+    const std::string footprint = pcbFootprint_->text().trimmed().toStdString();
+    if (ref.empty() || footprint.empty()) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: component ref and footprint are required"));
+        return;
+    }
+    trinity::core::Json params = {{"design", lastPcbDesign_},
+                                  {"ref", ref},
+                                  {"footprint", footprint},
+                                  {"value", pcbValue_->text().trimmed().toStdString()}};
+    try {
+        lastPcbJobId_ = worker_->submit("pcb", "add_component", params);
+        pcbOutput_->setPlainText(QStringLiteral("PCB: add %1 submitted, job %2…")
+                                     .arg(QString::fromStdString(ref),
+                                          QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handlePcbAddNet() {
+    if (pcbNetName_ == nullptr || pcbNetPins_ == nullptr || pcbOutput_ == nullptr ||
+        worker_ == nullptr) {
+        return;
+    }
+    if (!hasPcbDesign_) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: create a board first (no design in context)"));
+        return;
+    }
+    const std::string name = pcbNetName_->text().trimmed().toStdString();
+    if (name.empty()) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB: net name is required"));
+        return;
+    }
+    trinity::core::Json pins = trinity::core::Json::array();
+    for (const QString& part :
+         pcbNetPins_->text().split(QStringLiteral(","), Qt::SkipEmptyParts)) {
+        const QString pin = part.trimmed();
+        if (!pin.isEmpty()) {
+            pins.push_back(pin.toStdString());
+        }
+    }
+    if (pins.empty()) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: net pins are required (e.g. U1.19, U2.13)"));
+        return;
+    }
+    trinity::core::Json params = {
+        {"design", lastPcbDesign_}, {"name", name}, {"pins", pins}};
+    try {
+        lastPcbJobId_ = worker_->submit("pcb", "add_net", params);
+        pcbOutput_->setPlainText(QStringLiteral("PCB: net %1 submitted, job %2…")
+                                     .arg(QString::fromStdString(name),
+                                          QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handlePcbPlace() {
+    if (pcbPlaceRef_ == nullptr || pcbPlaceX_ == nullptr || pcbPlaceY_ == nullptr ||
+        pcbOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasPcbDesign_) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: create a board first (no design in context)"));
+        return;
+    }
+    const std::string ref = pcbPlaceRef_->text().trimmed().toStdString();
+    double x = 0.0;
+    double y = 0.0;
+    if (ref.empty() || !pcbNumber(pcbPlaceX_->text(), x) ||
+        !pcbNumber(pcbPlaceY_->text(), y)) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: ref and numeric X/Y are required"));
+        return;
+    }
+    double rot = 0.0;
+    if (pcbPlaceRot_ != nullptr && !pcbPlaceRot_->text().trimmed().isEmpty() &&
+        !pcbNumber(pcbPlaceRot_->text(), rot)) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB: rotation must be a number"));
+        return;
+    }
+    trinity::core::Json params = {{"design", lastPcbDesign_},
+                                  {"ref", ref},
+                                  {"x_mm", x},
+                                  {"y_mm", y},
+                                  {"rotation_deg", rot}};
+    try {
+        lastPcbJobId_ = worker_->submit("pcb", "place_component", params);
+        pcbOutput_->setPlainText(QStringLiteral("PCB: place %1 submitted, job %2…")
+                                     .arg(QString::fromStdString(ref),
+                                          QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handlePcbValidate() {
+    if (pcbOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasPcbDesign_) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: create a board first (no design in context)"));
+        return;
+    }
+    try {
+        lastPcbJobId_ =
+            worker_->submit("pcb", "validate_design", {{"design", lastPcbDesign_}});
+        pcbOutput_->setPlainText(QStringLiteral("PCB: validation submitted, job %1…")
+                                     .arg(QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handlePcbExport() {
+    if (pcbOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasPcbDesign_) {
+        pcbOutput_->setPlainText(
+            QStringLiteral("PCB: create a board first (no design in context)"));
+        return;
+    }
+    try {
+        lastPcbJobId_ = worker_->submit(
+            "pcb", "export",
+            {{"design", lastPcbDesign_}, {"project", "trinity_pcb"}});
+        pcbOutput_->setPlainText(QStringLiteral("PCB: export submitted, job %1…")
+                                     .arg(QString::fromStdString(lastPcbJobId_)));
+    } catch (const std::exception& exc) {
+        pcbOutput_->setPlainText(QStringLiteral("PCB submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshPcbResult() {
+    if (pcbOutput_ == nullptr || jobs_ == nullptr || lastPcbJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastPcbJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  pcb/%2  •  %3\n")
+            .arg(shortId, QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& envelope = job.result;
+        if (envelope.contains("result") && envelope["result"].is_object()) {
+            const auto& data = envelope["result"];
+            if (data.contains("design") && data["design"].is_object()) {
+                // Chain the live design for the next op and the viewer.
+                lastPcbDesign_ = data["design"];
+                hasPcbDesign_ = true;
+                const auto& design = data["design"];
+                if (design.contains("board")) {
+                    report += QStringLiteral("Board: ") +
+                              QString::fromStdString(
+                                  design["board"].value("width_mm", 0.0) == 0.0
+                                      ? design["board"].dump()
+                                      : ("W " + std::to_string(design["board"].value(
+                                                                    "width_mm", 0.0)) +
+                                         " x H " +
+                                         std::to_string(design["board"].value(
+                                             "height_mm", 0.0)) +
+                                         " x T " +
+                                         std::to_string(design["board"].value(
+                                             "thickness_mm", 0.0)) +
+                                         " mm")) +
+                              QStringLiteral("\n");
+                }
+                if (design.contains("components")) {
+                    report += QStringLiteral("Components: %1  •  Nets: %2  •  "
+                                             "Placements: %3\n")
+                                  .arg(design["components"].is_array()
+                                           ? static_cast<qulonglong>(
+                                                 design["components"].size())
+                                           : 0)
+                                  .arg(design["nets"].is_array() ? static_cast<qulonglong>(
+                                                                       design["nets"].size())
+                                                                 : 0)
+                                  .arg(design["placements"].is_array()
+                                           ? static_cast<qulonglong>(
+                                                 design["placements"].size())
+                                           : 0);
+                    if (design["components"].is_array()) {
+                        QStringList refs;
+                        for (const auto& comp : design["components"]) {
+                            refs << QString::fromStdString(comp.value("ref", "?"));
+                        }
+                        report += QStringLiteral("Refs: ") + refs.join(QStringLiteral(", ")) +
+                                  QStringLiteral("\n");
+                    }
+                }
+            }
+            if (data.contains("rules") && data["rules"].is_array()) {
+                report += QStringLiteral("Rules:\n");
+                for (const auto& rule : data["rules"]) {
+                    if (!rule.value("passed", true)) {
+                        report += QStringLiteral("  FAIL [%1] %2\n")
+                                      .arg(QString::fromStdString(rule.value("rule", "?")),
+                                           QString::fromStdString(
+                                               rule.value("message", "")));
+                    }
+                }
+            }
+            if (data.contains("project")) {
+                report += QStringLiteral("Project: ") +
+                          QString::fromStdString(data.value("project", "")) +
+                          QStringLiteral("\n");
+            }
+        }
+        if (envelope.contains("artifacts") && envelope["artifacts"].is_array() &&
+            !envelope["artifacts"].empty()) {
+            report += QStringLiteral("Artifacts:\n");
+            for (const auto& art : envelope["artifacts"]) {
+                report += QStringLiteral("  %1 (%2, %3 B, sha256 %4…)\n")
+                              .arg(QString::fromStdString(art.value("path", "")),
+                                   QString::fromStdString(art.value("type", "")),
+                                   QString::number(
+                                       static_cast<qulonglong>(art.value("size_bytes", 0LL))),
+                                   QString::fromStdString(
+                                       art.value("checksum", "").substr(0, 12)));
+            }
+        }
+        if (envelope.contains("validation") && !envelope["validation"].is_null()) {
+            const auto& v = envelope["validation"];
+            report += QStringLiteral("Validation: ") +
+                      QString::fromStdString(v.value("status", "?")) +
+                      QStringLiteral(" — ") +
+                      QString::fromStdString(v.value("message", "")) +
+                      QStringLiteral("\n");
+        }
+        if (envelope.contains("errors") && envelope["errors"].is_array() &&
+            !envelope["errors"].empty()) {
+            std::string errs = envelope["errors"].dump(2);
+            if (errs.size() > 600) {
+                errs = errs.substr(0, 600) + "…";
+            }
+            report += QStringLiteral("Errors: ") + QString::fromStdString(errs) +
+                      QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Job error: ") + QString::fromStdString(err) +
+                  QStringLiteral("\n");
+    }
+    const QDateTime started =
+        QDateTime::fromString(QString::fromStdString(job.startedAt), Qt::ISODate);
+    const QDateTime completed =
+        QDateTime::fromString(QString::fromStdString(job.completedAt), Qt::ISODate);
+    QString timing = QStringLiteral("Started: %1  Completed: %2")
+                         .arg(QString::fromStdString(job.startedAt),
+                              QString::fromStdString(job.completedAt.empty() ? "—"
+                                                                             : job.completedAt));
+    if (started.isValid() && completed.isValid()) {
+        timing += QStringLiteral("  (%1 ms)").arg(started.msecsTo(completed));
+    }
+    report += timing;
+    if (pcbOutput_->toPlainText() != report) {
+        pcbOutput_->setPlainText(report);
+    }
+}
+
 void MainWindow::handleDemoWorkflow() {
     if (executor_ == nullptr || executeOutput_ == nullptr) {
         return;
@@ -720,6 +1160,7 @@ void MainWindow::refreshJobs() {
         viewerController_->pollForNewCadJob();
     }
     refreshMathResult();
+    refreshPcbResult();
 }
 
 void MainWindow::refreshWorkflows() {

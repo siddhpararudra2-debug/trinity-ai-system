@@ -1,8 +1,9 @@
 #pragma once
 
-// Domain stub engines: PCB, Firmware, Vision, Research, Simulation,
+// Domain stub engines: Firmware, Vision, Research, Simulation,
 // Robotics. Each registers capability metadata and refuses execution
 // with structured CAPABILITY_UNAVAILABLE — never fake results.
+// (The PCB domain graduated to a real engine: see PcbEngine.)
 
 #include <string>
 #include <vector>
@@ -21,7 +22,6 @@ public:
     validation::ValidationResult validate(const EngineResult& result) const override;
 };
 
-std::shared_ptr<StubEngine> makePcbEngine();
 std::shared_ptr<StubEngine> makeFirmwareEngine();
 std::shared_ptr<StubEngine> makeVisionEngine();
 std::shared_ptr<StubEngine> makeResearchEngine();
@@ -30,7 +30,7 @@ std::shared_ptr<StubEngine> makeRoboticsEngine();
 
 class EngineRegistry;
 
-/// Register all Phase-2 engines: math + cad + six domain stubs.
+/// Register all Phase-2 engines: math + cad + pcb + five domain stubs.
 /// Idempotent per process: skips engines already registered (e.g. when
 /// ApplicationContext::initialize runs twice in tests).
 void registerAllEngines(EngineRegistry& registry);
