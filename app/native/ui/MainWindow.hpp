@@ -106,10 +106,18 @@ private slots:
     void handlePcbPlace();
     void handlePcbValidate();
     void handlePcbExport();
+    void handleFwCreate();
+    void handleFwSelectMcu();
+    void handleFwConfigurePin();
+    void handleFwConfigurePeripheral();
+    void handleFwGenerate();
+    void handleFwValidate();
+    void handleFwBuild();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
     void refreshPcbResult();
+    void refreshFwResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -161,6 +169,23 @@ private:
     core::Json lastPcbDesign_ = core::Json::object();
     bool hasPcbDesign_ = false;
     std::string lastPcbJobId_;
+    // Firmware workspace state: live project JSON chains between ops
+    // (create -> mcu -> pins/peripherals -> generate -> validate -> build),
+    // same structured-state pattern as the PCB design.
+    QLineEdit* fwName_ = nullptr;
+    QComboBox* fwMcu_ = nullptr;
+    QLineEdit* fwPin_ = nullptr;
+    QLineEdit* fwFunc_ = nullptr;
+    QComboBox* fwDir_ = nullptr;
+    QComboBox* fwKind_ = nullptr;
+    QLineEdit* fwPinA_ = nullptr;
+    QLineEdit* fwPinB_ = nullptr;
+    QLineEdit* fwParam_ = nullptr;
+    QComboBox* fwProfile_ = nullptr;
+    QTextEdit* fwOutput_ = nullptr;
+    core::Json lastFwProject_ = core::Json::object();
+    bool hasFwProject_ = false;
+    std::string lastFwJobId_;
     jobs::JobWorker* worker_ = nullptr;
 
 public:

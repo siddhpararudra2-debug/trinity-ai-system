@@ -22,7 +22,8 @@ void addCheck(validation::ValidationResult& out, const std::string& rule,
 }
 
 bool isValidDomain(const std::string& domain) {
-    return domain == "cad" || domain == "math" || domain == "pcb";
+    return domain == "cad" || domain == "math" || domain == "pcb" ||
+           domain == "firmware";
 }
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
@@ -40,6 +41,13 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
                 operation == "solve" || operation == "solve_linear" ||
                 operation == "solve_quadratic" || operation == "convert" ||
                 operation == "formula";
+    }
+    if (domain == "firmware") {
+        return operation == "describe" || operation == "create_project" ||
+               operation == "select_mcu" || operation == "configure_pin" ||
+               operation == "configure_peripheral" ||
+               operation == "generate_firmware" || operation == "validate_project" ||
+               operation == "build";
     }
     return false;
 }
@@ -82,7 +90,8 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                  "Unsupported domain '" + intent.domain + "'",
                          core::Json{{"domain", intent.domain},
                                     {"supported",
-                                     core::Json::array({"cad", "math", "pcb"})}});
+                                     core::Json::array({"cad", "math", "pcb",
+                                                        "firmware"})}});
     } else {
         addCheck(out, "intent.domain", validation::Severity::Info, true,
                  "Domain '" + intent.domain + "' is supported");
@@ -157,6 +166,80 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         } else {
             addCheck(out, "intent.param_type", validation::Severity::Info, true,
                      "PCB parameters present");
+        }
+    } else if (intent.domain == "firmware") {
+        const std::string op = intent.operation;
+        if (op == "describe") {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Firmware describe needs no parameters");
+        } else if (op == "create_project") {
+            const bool nameOk = intent.parameters.contains("name") &&
+                                intent.parameters["name"].is_string() &&
+                                !intent.parameters["name"].get<std::string>().empty();
+            if (!nameOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "create_project requires a non-empty string 'name'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Firmware project name present");
+            }
+        } else if (op == "select_mcu") {
+            const bool mcuOk = intent.parameters.contains("mcu") &&
+                               intent.parameters["mcu"].is_string() &&
+                               !intent.parameters["mcu"].get<std::string>().empty();
+            if (!mcuOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "select_mcu requires a non-empty string 'mcu'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Firmware MCU present");
+            }
+        } else if (op == "configure_pin") {
+            const bool pinOk = intent.parameters.contains("pin") &&
+                               intent.parameters["pin"].is_string() &&
+                               !intent.parameters["pin"].get<std::string>().empty();
+            const bool dirOk = intent.parameters.contains("direction") &&
+                               intent.parameters["direction"].is_string();
+            if (!pinOk || !dirOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "configure_pin requires string 'pin' and 'direction'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Firmware pin parameters present");
+            }
+        } else if (op == "configure_peripheral") {
+            const bool kindOk = intent.parameters.contains("kind") &&
+                                intent.parameters["kind"].is_string();
+            if (!kindOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "configure_peripheral requires a string 'kind'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Firmware peripheral kind present");
+            }
+        } else if (op == "generate_firmware" || op == "validate_project" ||
+                   op == "build") {
+            if (!intent.parameters.contains("project") ||
+                !intent.parameters["project"].is_object()) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "Firmware operation '" + op + "' requires a 'project' object",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Firmware project parameter present");
+            }
+        } else {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Firmware parameters present");
         }
     } else if (intent.domain == "math") {
         const std::string op = intent.operation;
@@ -386,6 +469,8 @@ validation::ValidationResult IntentValidator::validate(
         engine = "math";
     } else if (intent.domain == "pcb") {
         engine = "pcb";
+    } else if (intent.domain == "firmware") {
+        engine = "firmware";
     }
     if (!engine.empty() && registry.has(engine)) {
         const std::vector<std::string> caps = registry.listCapabilities(engine);

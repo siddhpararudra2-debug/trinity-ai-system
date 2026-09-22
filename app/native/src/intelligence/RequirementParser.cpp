@@ -236,6 +236,18 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    // Firmware before PCB: PCB's keyword list includes "esp32", which
+    // must not steal "Generate firmware for ESP32 ..." requests.
+    ParseResult firmware = tryFirmwareRequest(text, lowered, "");
+    if (firmware.status != ParseStatus::Invalid || !firmware.errors.empty()) {
+        const bool noFirmware =
+            firmware.errors.size() == 1 &&
+            firmware.errors.front() == "__no_firmware_content__";
+        if (!noFirmware) {
+            return firmware;
+        }
+    }
+
     ParseResult pcb = tryPcbRequest(text, lowered, "");
     if (pcb.status != ParseStatus::Invalid || !pcb.errors.empty()) {
         const bool noPcb =
@@ -253,8 +265,9 @@ ParseResult RequirementParser::parse(const std::string& text) const {
     result.errors.push_back(
         "No deterministic parser matched this requirement; supported: CAD generation "
         "(quadcopter frame, plate), PCB creation (board dimensions, parts), math "
-        "evaluation (calculate, solve), explicit engine "
-        "requests (using math/cad/pcb engine)");
+        "evaluation (calculate, solve), firmware configuration (MCU, GPIO, UART, I2C, "
+        "PWM), explicit engine "
+        "requests (using math/cad/pcb/firmware engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -330,6 +343,28 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.object = "pcb";
             result.intent.missing = {"operation", "width_mm", "height_mm"};
             result.errors.push_back("Explicit pcb engine request is missing a board");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "firmware") {
+        ParseResult inner = tryFirmwareRequest(remainder.empty() ? text : remainder,
+                                               remainder.empty() ? lowered
+                                                                 : remainderLower,
+                                               "firmware");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_firmware_content__") {
+            Intent intent = makeBaseIntent(text);
+            intent.domain = "firmware";
+            intent.object = "firmware_project";
+            intent.operation = "create_project";
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"mcu", "name"};
+            result.errors.push_back(
+                "Explicit firmware engine request is missing an MCU or project name");
             return result;
         }
         return inner;
@@ -1011,6 +1046,314 @@ ParseResult RequirementParser::tryPcbRequest(const std::string& text,
     result.intent.confidence = 0.4;
     result.errors.push_back("Incomplete PCB request: no board operation recognized");
     return result;
+}
+
+ParseResult RequirementParser::tryFirmwareRequest(const std::string& text,
+                                                  const std::string& lowered,
+                                                  const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "firmware") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_firmware_content__");
+        return sentinel;
+    }
+
+    // Claim only explicit firmware signals. Never invent MCU/pin data.
+    const bool mentionsFirmware = contains(lowered, "firmware");
+    static const std::regex kConfigureGpio(
+        R"(configure\s+(?:gpio|pin)\s+\d+|gpio\s*\d+\s+as\s+(?:an?\s+)?(?:output|input))",
+        std::regex_constants::icase);
+    static const std::regex kPwmControl(
+        R"((?:create|configure|pwm)\s+pwm|(?:pwm\s+control)|pwm\s+on\s+gpio)",
+        std::regex_constants::icase);
+    static const std::regex kI2cConfigure(
+        R"((?:configure\s+i2c|i2c\s+on\s+sda)|(?:sda\s+\d+.*scl\s+\d+)|(?:scl\s+\d+.*sda\s+\d+))",
+        std::regex_constants::icase);
+    static const std::regex kUartConfigure(
+        R"((?:uart\s+communication|serial\s+communication|configure\s+uart|(?:tx|rx)\s+gpio\s*\d+))",
+        std::regex_constants::icase);
+    const bool configureGpio = std::regex_search(text, kConfigureGpio);
+    const bool pwmControl = std::regex_search(text, kPwmControl);
+    const bool i2cConfigure = std::regex_search(text, kI2cConfigure);
+    const bool uartConfigure = std::regex_search(text, kUartConfigure) &&
+                               (mentionsFirmware || contains(lowered, "uart") ||
+                                contains(lowered, "serial"));
+    const bool selectMcu = contains(lowered, "select") && contains(lowered, "mcu");
+
+    const bool claims =
+        forcedDomain == "firmware" || mentionsFirmware || configureGpio ||
+        pwmControl || i2cConfigure || uartConfigure || selectMcu;
+    if (!claims) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_firmware_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "firmware";
+    intent.object = "firmware_project";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    // MCU: only an explicitly named supported model.
+    static const std::regex kMcu(
+        R"(\b(ESP32|STM32F401RE|RP2040)\b)", std::regex_constants::icase);
+    std::smatch mcuMatch;
+    const bool hasMcu = std::regex_search(text, mcuMatch, kMcu);
+    if (hasMcu) {
+        std::string model = mcuMatch[1].str();
+        for (auto& c : model) {
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+        // Canonical spellings.
+        if (model == "STM32F401RE") {
+            model = "STM32F401RE";
+        } else if (model == "RP2040") {
+            model = "RP2040";
+        } else if (model == "ESP32") {
+            model = "ESP32";
+        }
+        intent.parameters["mcu"] = model;
+    }
+
+    // GPIO pin reference: "GPIO 2", "GPIO18", "PA5", "GP4".
+    static const std::regex kPin(
+        R"(\b(?:gpio|gp|pa|pb)\s*(\d+)\b)", std::regex_constants::icase);
+    // Named pin roles: "SDA 21", "SCL 22", "TX GPIO1", "RX GPIO3".
+    static const std::regex kRolePin(
+        R"(\b(sda|scl|tx|rx)\s+(?:gpio\s*)?(\d+)\b)", std::regex_constants::icase);
+
+    std::vector<std::pair<std::string, std::string>> rolePins;  // role -> pin name
+    auto begin = std::sregex_iterator(text.begin(), text.end(), kRolePin);
+    auto end = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        std::string role = (*it)[1].str();
+        for (auto& c : role) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        const std::string num = (*it)[2].str();
+        const std::string prefix =
+            (role == "sda" || role == "scl") ? "GPIO" : "GPIO";
+        rolePins.emplace_back(role, prefix + num);
+        intent.parameters[role] = prefix + num;
+    }
+
+    // Generic pin when no role pins consumed the GPIO match.
+    std::smatch pinMatch;
+    bool hasGenericPin = false;
+    if (std::regex_search(text, pinMatch, kPin)) {
+        // Prefer the first GPIO that is not already claimed by a role.
+        auto beginP = std::sregex_iterator(text.begin(), text.end(), kPin);
+        for (auto it = beginP; it != end; ++it) {
+            const std::string num = (*it)[1].str();
+            std::string upperText = (*it)[0].str();
+            for (auto& c : upperText) {
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            }
+            std::string pinName;
+            if (upperText.rfind("PA", 0) == 0 || upperText.rfind("PB", 0) == 0) {
+                pinName = upperText.substr(0, 2) + num;
+            } else if (upperText.rfind("GP", 0) == 0 &&
+                       upperText.rfind("GPIO", 0) != 0) {
+                pinName = "GP" + num;
+            } else {
+                pinName = "GPIO" + num;
+            }
+            // Skip pins already used as role pins (e.g. "SDA 21").
+            bool usedAsRole = false;
+            for (const auto& [role, rp] : rolePins) {
+                (void)role;
+                if (rp == pinName) {
+                    usedAsRole = true;
+                    break;
+                }
+            }
+            if (!usedAsRole) {
+                intent.parameters["pin"] = pinName;
+                hasGenericPin = true;
+                break;
+            }
+        }
+    }
+
+    // Direction: "as output" / "as input".
+    static const std::regex kDirection(
+        R"(\bas\s+(?:an?\s+)?(output|input)\b|\bas\s+(out|in)\b)",
+        std::regex_constants::icase);
+    std::smatch dirMatch;
+    const bool hasDirection = std::regex_search(text, dirMatch, kDirection);
+    if (hasDirection) {
+        std::string dir = dirMatch[1].matched ? dirMatch[1].str() : dirMatch[2].str();
+        for (auto& c : dir) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        intent.parameters["direction"] =
+            (dir == "output" || dir == "out") ? "out" : "in";
+    }
+
+    // Baud rate when explicitly provided.
+    static const std::regex kBaud(R"((\d+)\s*baud)", std::regex_constants::icase);
+    std::smatch baudMatch;
+    if (std::regex_search(text, baudMatch, kBaud)) {
+        try {
+            intent.parameters["baud"] = std::stoi(baudMatch[1].str());
+        } catch (...) {
+            // Ignore unparseable baud; engine validates.
+        }
+    }
+
+    auto finish = [&](ParseStatus status, const std::vector<std::string>& missing,
+                      double confidence) -> ParseResult {
+        ParseResult result;
+        intent.status = status;
+        result.intent = intent;
+        result.status = status;
+        result.intent.missing = missing;
+        result.intent.confidence = confidence;
+        if (status == ParseStatus::Valid) {
+            core::Logger::instance().info(
+                "intelligence", "requirement parsed",
+                core::Json{{"domain", "firmware"},
+                           {"operation", intent.operation},
+                           {"status", "VALID"}});
+        } else {
+            core::Json missingJson = core::Json::array();
+            for (const auto& item : missing) {
+                missingJson.push_back(item);
+                result.errors.push_back("Missing firmware requirement: " + item);
+            }
+            core::Logger::instance().warning(
+                "intelligence", "requirement parse incomplete",
+                core::Json{{"domain", "firmware"}, {"missing", missingJson}});
+        }
+        return result;
+    };
+
+    // --- Operation selection from explicit content only ---
+    if (selectMcu) {
+        intent.operation = "select_mcu";
+        if (!hasMcu) {
+            return finish(ParseStatus::Incomplete, {"mcu"}, 0.5);
+        }
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    if (contains(lowered, "validate")) {
+        intent.operation = "validate_project";
+        return finish(ParseStatus::Valid, {}, 0.85);
+    }
+
+    if (configureGpio && (hasDirection || contains(lowered, "gpio"))) {
+        intent.operation = "configure_pin";
+        intent.parameters["peripheral"] = "gpio";
+        if (!hasGenericPin && !hasDirection) {
+            return finish(ParseStatus::Incomplete, {"pin", "direction"}, 0.4);
+        }
+        std::vector<std::string> missing;
+        if (!hasGenericPin) {
+            missing.push_back("pin");
+        }
+        if (!hasDirection) {
+            missing.push_back("direction");
+        }
+        if (!missing.empty()) {
+            return finish(ParseStatus::Incomplete, missing, 0.5);
+        }
+        // Function label derived from the provided direction (not hardware
+        // invention: it is a symbolic name the engine accepts).
+        const std::string dir = intent.parameters.value("direction", "out");
+        if (!intent.parameters.contains("function")) {
+            intent.parameters["function"] =
+                dir == "out" ? "gpio_out" : "gpio_in";
+        }
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    if (pwmControl) {
+        intent.operation = "configure_peripheral";
+        intent.parameters["kind"] = "pwm";
+        if (!intent.parameters.contains("peripheral")) {
+            intent.parameters["peripheral"] = "PWM";
+        }
+        if (!hasGenericPin) {
+            return finish(ParseStatus::Incomplete, {"pin"}, 0.5);
+        }
+        if (!intent.parameters.contains("freq_hz")) {
+            intent.parameters["freq_hz"] = 1000;
+        }
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    if (i2cConfigure ||
+        (contains(lowered, "i2c") &&
+         (intent.parameters.contains("sda") || intent.parameters.contains("scl")))) {
+        intent.operation = "configure_peripheral";
+        intent.parameters["kind"] = "i2c";
+        if (!intent.parameters.contains("peripheral")) {
+            intent.parameters["peripheral"] = "I2C0";
+        }
+        std::vector<std::string> missing;
+        if (!intent.parameters.contains("sda")) {
+            missing.push_back("sda");
+        }
+        if (!intent.parameters.contains("scl")) {
+            missing.push_back("scl");
+        }
+        if (!missing.empty()) {
+            return finish(ParseStatus::Incomplete, missing, 0.5);
+        }
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    if (uartConfigure ||
+        (contains(lowered, "uart") && intent.parameters.contains("tx"))) {
+        intent.operation = "configure_peripheral";
+        intent.parameters["kind"] = "uart";
+        if (!intent.parameters.contains("peripheral")) {
+            intent.parameters["peripheral"] = "UART0";
+        }
+        std::vector<std::string> missing;
+        if (!intent.parameters.contains("tx")) {
+            missing.push_back("tx");
+        }
+        if (!intent.parameters.contains("rx")) {
+            missing.push_back("rx");
+        }
+        if (!missing.empty()) {
+            return finish(ParseStatus::Incomplete, missing, 0.5);
+        }
+        if (!intent.parameters.contains("baud")) {
+            intent.parameters["baud"] = 115200;
+        }
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    // Generate/create/build firmware (entry point: create_project; the
+    // UI/job chain continues with select_mcu/configure_*).
+    if (mentionsFirmware ||
+        (forcedDomain == "firmware" &&
+         (contains(lowered, "create") || contains(lowered, "generate") ||
+          contains(lowered, "build")))) {
+        intent.operation = "create_project";
+        if (!intent.parameters.contains("name")) {
+            intent.parameters["name"] = "firmware_project";
+        }
+        if (!hasMcu) {
+            return finish(ParseStatus::Incomplete, {"mcu"}, 0.5);
+        }
+        // Stage any explicit peripheral config for downstream chaining.
+        return finish(ParseStatus::Valid, {}, 0.9);
+    }
+
+    // Firmware keywords with no recognized operation.
+    intent.operation = "create_project";
+    if (!intent.parameters.contains("name")) {
+        intent.parameters["name"] = "firmware_project";
+    }
+    return finish(ParseStatus::Incomplete, {"operation", "mcu"}, 0.4);
 }
 
 }  // namespace trinity::intelligence

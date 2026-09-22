@@ -3,6 +3,7 @@
 #include "trinity/core/Logger.hpp"
 #include "trinity/engines/CadEngine.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
+#include "trinity/engines/FirmwareEngine.hpp"
 #include "trinity/engines/MathEngine.hpp"
 #include "trinity/engines/PcbEngine.hpp"
 
@@ -44,11 +45,6 @@ validation::ValidationResult StubEngine::validate(const EngineResult& result) co
     return validation;
 }
 
-std::shared_ptr<StubEngine> makeFirmwareEngine() {
-    return std::make_shared<StubEngine>("firmware", "0.1.0",
-                                        std::vector<std::string>{"describe"});
-}
-
 std::shared_ptr<StubEngine> makeVisionEngine() {
     return std::make_shared<StubEngine>("vision", "0.1.0",
                                         std::vector<std::string>{"describe"});
@@ -80,7 +76,7 @@ void registerAllEngines(EngineRegistry& registry) {
         registry.registerEngine(std::make_shared<PcbEngine>());
     }
     if (!registry.has("firmware")) {
-        registry.registerEngine(makeFirmwareEngine());
+        registry.registerEngine(std::make_shared<FirmwareEngine>());
     }
     if (!registry.has("vision")) {
         registry.registerEngine(makeVisionEngine());

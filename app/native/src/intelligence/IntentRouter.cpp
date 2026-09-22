@@ -104,9 +104,12 @@ RouteResult IntentRouter::route(const Intent& intent,
         engine = "math";
     } else if (intent.domain == "pcb") {
         engine = "pcb";
+    } else if (intent.domain == "firmware") {
+        engine = "firmware";
     } else {
         return reject(intent.domain, operation, "REJECTED",
-                      "Unsupported domain '" + intent.domain + "'; supported: cad, math, pcb");
+                      "Unsupported domain '" + intent.domain +
+                          "'; supported: cad, math, pcb, firmware");
     }
 
     if (!registry.has(engine)) {
@@ -186,6 +189,27 @@ RouteResult IntentRouter::route(const Intent& intent,
         core::Logger::instance().info(
             "intelligence", "intent routed",
             core::Json{{"intent_id", intent.intentId}, {"engine", "pcb"}});
+        return out;
+    }
+
+    // Firmware domain: structured parameters (name/mcu/pin/kind/...) pass
+    // through verbatim; the engine owns project-state semantics.
+    if (intent.domain == "firmware") {
+        ToolCall call;
+        call.toolCallId = core::newUuid();
+        call.engine = "firmware";
+        call.operation = operation;
+        call.parameters = intent.parameters;
+        RouteResult out;
+        out.routed = true;
+        out.engine = "firmware";
+        out.operation = operation;
+        out.capability = operation;
+        out.status = "ROUTED";
+        out.toolCall = std::move(call);
+        core::Logger::instance().info(
+            "intelligence", "intent routed",
+            core::Json{{"intent_id", intent.intentId}, {"engine", "firmware"}});
         return out;
     }
 

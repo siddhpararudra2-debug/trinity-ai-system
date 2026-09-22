@@ -131,6 +131,47 @@ int runSelftest() {
         pcbOk = false;
     }
     std::cout << (pcbOk ? "[PASS] " : "[FAIL] ") << "pcb_creates_board\n";
+    // FirmwareEngine must generate deterministic sources for a simple GPIO project.
+    bool fwOk = false;
+    try {
+        trinity::engines::EngineRequest createReq;
+        createReq.engine = "firmware";
+        createReq.operation = "create_project";
+        createReq.parameters = trinity::core::Json{{"name", "selftest-fw"}};
+        const auto created = context.engines().execute(createReq);
+        if (created.success) {
+            trinity::engines::EngineRequest mcuReq;
+            mcuReq.engine = "firmware";
+            mcuReq.operation = "select_mcu";
+            mcuReq.parameters = trinity::core::Json{
+                {"project", created.result["project"]}, {"mcu", "ESP32"}};
+            const auto withMcu = context.engines().execute(mcuReq);
+            if (withMcu.success) {
+                trinity::engines::EngineRequest pinReq;
+                pinReq.engine = "firmware";
+                pinReq.operation = "configure_pin";
+                pinReq.parameters = trinity::core::Json{
+                    {"project", withMcu.result["project"]},
+                    {"pin", "GPIO2"},
+                    {"function", "status_led"},
+                    {"direction", "out"}};
+                const auto withPin = context.engines().execute(pinReq);
+                if (withPin.success) {
+                    trinity::engines::EngineRequest genReq;
+                    genReq.engine = "firmware";
+                    genReq.operation = "generate_firmware";
+                    genReq.parameters = trinity::core::Json{
+                        {"project", withPin.result["project"]}};
+                    const auto generated = context.engines().execute(genReq);
+                    fwOk = generated.success &&
+                           generated.result.value("file_count", 0) == 3;
+                }
+            }
+        }
+    } catch (...) {
+        fwOk = false;
+    }
+    std::cout << (fwOk ? "[PASS] " : "[FAIL] ") << "firmware_generates_sources\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -154,8 +195,8 @@ int runSelftest() {
         trinity::intelligence::ModelProviderFactory::instance().has(
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
-    allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && modelOk &&
-            plannerOk && providerOk;
+    allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && fwOk &&
+            modelOk && plannerOk && providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;

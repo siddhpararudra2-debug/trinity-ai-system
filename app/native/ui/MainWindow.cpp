@@ -22,6 +22,7 @@
 #include "trinity/core/Logger.hpp"
 #include "trinity/core/Time.hpp"
 #include "trinity/core/Uuid.hpp"
+#include "trinity/engines/FirmwareEngine.hpp"
 #include "trinity/jobs/JobWorker.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/intelligence/IntentRouter.hpp"
@@ -367,6 +368,115 @@ void MainWindow::buildUi() {
         "PCB: board / components / nets / placements / validation / "
         "artifacts / job / errors…"));
     leftLayout->addWidget(pcbOutput_);
+
+    // ---- Firmware workspace: project JSON chains between ops on the
+    // shared worker thread (same JobManager path as PCB/math/workflows).
+    auto* fwTitle = new QLabel(QStringLiteral("Firmware (deterministic)"), leftPane);
+    fwTitle->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(fwTitle);
+
+    auto* fwNameRow = new QHBoxLayout();
+    fwName_ = new QLineEdit(leftPane);
+    fwName_->setPlaceholderText(QStringLiteral("Project name"));
+    fwName_->setText(QStringLiteral("trinity_fw"));
+    auto* fwCreateButton = new QPushButton(QStringLiteral("Create Project"), leftPane);
+    fwNameRow->addWidget(fwName_);
+    fwNameRow->addWidget(fwCreateButton);
+    leftLayout->addLayout(fwNameRow);
+    connect(fwCreateButton, &QPushButton::clicked, this, &MainWindow::handleFwCreate);
+
+    auto* fwMcuRow = new QHBoxLayout();
+    fwMcu_ = new QComboBox(leftPane);
+    for (const auto& model : trinity::engines::FirmwareEngine::mcuNames()) {
+        fwMcu_->addItem(QString::fromStdString(model));
+    }
+    auto* fwSelectButton = new QPushButton(QStringLiteral("Select MCU"), leftPane);
+    fwMcuRow->addWidget(fwMcu_, 1);
+    fwMcuRow->addWidget(fwSelectButton);
+    leftLayout->addLayout(fwMcuRow);
+    connect(fwSelectButton, &QPushButton::clicked, this, &MainWindow::handleFwSelectMcu);
+
+    auto* fwPinRow = new QHBoxLayout();
+    fwPin_ = new QLineEdit(leftPane);
+    fwPin_->setPlaceholderText(QStringLiteral("Pin (GPIO2)"));
+    fwFunc_ = new QLineEdit(leftPane);
+    fwFunc_->setPlaceholderText(QStringLiteral("Function"));
+    fwFunc_->setText(QStringLiteral("status_led"));
+    fwDir_ = new QComboBox(leftPane);
+    fwDir_->addItems({QStringLiteral("out"), QStringLiteral("in"), QStringLiteral("inout")});
+    fwPinRow->addWidget(fwPin_);
+    fwPinRow->addWidget(fwFunc_);
+    fwPinRow->addWidget(fwDir_);
+    leftLayout->addLayout(fwPinRow);
+    auto* fwPinButton = new QPushButton(QStringLiteral("Configure Pin"), leftPane);
+    leftLayout->addWidget(fwPinButton);
+    connect(fwPinButton, &QPushButton::clicked, this, &MainWindow::handleFwConfigurePin);
+
+    auto* fwPeriRow = new QHBoxLayout();
+    fwKind_ = new QComboBox(leftPane);
+    fwKind_->addItems({QStringLiteral("uart"), QStringLiteral("i2c"),
+                       QStringLiteral("pwm")});
+    fwPinA_ = new QLineEdit(leftPane);
+    fwPinA_->setPlaceholderText(QStringLiteral("TX/SDA/pin"));
+    fwPinB_ = new QLineEdit(leftPane);
+    fwPinB_->setPlaceholderText(QStringLiteral("RX/SCL"));
+    fwParam_ = new QLineEdit(leftPane);
+    fwParam_->setPlaceholderText(QStringLiteral("baud/freq"));
+    fwParam_->setText(QStringLiteral("115200"));
+    fwPeriRow->addWidget(fwKind_);
+    fwPeriRow->addWidget(fwPinA_);
+    fwPeriRow->addWidget(fwPinB_);
+    fwPeriRow->addWidget(fwParam_);
+    leftLayout->addLayout(fwPeriRow);
+    connect(fwKind_, &QComboBox::currentTextChanged, this, [this](const QString& kind) {
+        if (fwPinA_ == nullptr || fwPinB_ == nullptr || fwParam_ == nullptr) {
+            return;
+        }
+        if (kind == QStringLiteral("uart")) {
+            fwPinA_->setPlaceholderText(QStringLiteral("TX (GPIO1)"));
+            fwPinB_->setPlaceholderText(QStringLiteral("RX (GPIO3)"));
+            fwParam_->setPlaceholderText(QStringLiteral("baud"));
+            fwParam_->setText(QStringLiteral("115200"));
+        } else if (kind == QStringLiteral("i2c")) {
+            fwPinA_->setPlaceholderText(QStringLiteral("SDA (GPIO21)"));
+            fwPinB_->setPlaceholderText(QStringLiteral("SCL (GPIO22)"));
+            fwParam_->setPlaceholderText(QStringLiteral("(unused)"));
+            fwParam_->setText(QString());
+        } else {
+            fwPinA_->setPlaceholderText(QStringLiteral("PWM pin (GPIO18)"));
+            fwPinB_->setPlaceholderText(QStringLiteral("(unused)"));
+            fwParam_->setPlaceholderText(QStringLiteral("freq Hz"));
+            fwParam_->setText(QStringLiteral("1000"));
+        }
+    });
+    auto* fwPeriButton =
+        new QPushButton(QStringLiteral("Configure Peripheral"), leftPane);
+    leftLayout->addWidget(fwPeriButton);
+    connect(fwPeriButton, &QPushButton::clicked, this,
+            &MainWindow::handleFwConfigurePeripheral);
+
+    auto* fwActionRow = new QHBoxLayout();
+    auto* fwGenerateButton = new QPushButton(QStringLiteral("Generate"), leftPane);
+    auto* fwValidateButton = new QPushButton(QStringLiteral("Validate"), leftPane);
+    fwProfile_ = new QComboBox(leftPane);
+    fwProfile_->addItems({QStringLiteral("debug"), QStringLiteral("release")});
+    auto* fwBuildButton = new QPushButton(QStringLiteral("Build"), leftPane);
+    fwActionRow->addWidget(fwGenerateButton);
+    fwActionRow->addWidget(fwValidateButton);
+    fwActionRow->addWidget(fwProfile_);
+    fwActionRow->addWidget(fwBuildButton);
+    leftLayout->addLayout(fwActionRow);
+    connect(fwGenerateButton, &QPushButton::clicked, this, &MainWindow::handleFwGenerate);
+    connect(fwValidateButton, &QPushButton::clicked, this, &MainWindow::handleFwValidate);
+    connect(fwBuildButton, &QPushButton::clicked, this, &MainWindow::handleFwBuild);
+
+    fwOutput_ = new QTextEdit(leftPane);
+    fwOutput_->setReadOnly(true);
+    fwOutput_->setMinimumHeight(200);
+    fwOutput_->setPlaceholderText(QStringLiteral(
+        "Firmware: project / MCU / pins / peripherals / requirements / "
+        "validation / generated files / build / artifacts / job / errors…"));
+    leftLayout->addWidget(fwOutput_);
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -925,6 +1035,376 @@ void MainWindow::handlePcbExport() {
     refreshJobs();
 }
 
+// --- Firmware workspace: structured firmware jobs on the shared worker
+// thread. The live project JSON chains between ops (same pattern as PCB).
+
+void MainWindow::handleFwCreate() {
+    if (fwName_ == nullptr || fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string name = fwName_->text().trimmed().toStdString();
+    if (name.empty()) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware: project name is required"));
+        return;
+    }
+    try {
+        lastFwJobId_ = worker_->submit("firmware", "create_project", {{"name", name}});
+        hasFwProject_ = false;
+        lastFwProject_ = core::Json::object();
+        fwOutput_->setPlainText(QStringLiteral("Firmware: create project '%1' submitted, job %2…")
+                                    .arg(QString::fromStdString(name),
+                                         QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwSelectMcu() {
+    if (fwMcu_ == nullptr || fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: create a project first (no project in context)"));
+        return;
+    }
+    const std::string mcu = fwMcu_->currentText().toStdString();
+    try {
+        lastFwJobId_ = worker_->submit(
+            "firmware", "select_mcu", {{"project", lastFwProject_}, {"mcu", mcu}});
+        fwOutput_->setPlainText(QStringLiteral("Firmware: select %1 submitted, job %2…")
+                                    .arg(QString::fromStdString(mcu),
+                                         QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwConfigurePin() {
+    if (fwPin_ == nullptr || fwFunc_ == nullptr || fwDir_ == nullptr ||
+        fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: select an MCU first (no project in context)"));
+        return;
+    }
+    const std::string pin = fwPin_->text().trimmed().toStdString();
+    const std::string function = fwFunc_->text().trimmed().toStdString();
+    const std::string direction = fwDir_->currentText().toStdString();
+    if (pin.empty() || function.empty()) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: pin and function are required"));
+        return;
+    }
+    try {
+        lastFwJobId_ = worker_->submit("firmware", "configure_pin",
+                                       {{"project", lastFwProject_},
+                                        {"pin", pin},
+                                        {"function", function},
+                                        {"direction", direction}});
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: pin %1 (%2) submitted, job %3…")
+                .arg(QString::fromStdString(pin), QString::fromStdString(direction),
+                     QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwConfigurePeripheral() {
+    if (fwKind_ == nullptr || fwPinA_ == nullptr || fwOutput_ == nullptr ||
+        worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: select an MCU first (no project in context)"));
+        return;
+    }
+    const std::string kind = fwKind_->currentText().toStdString();
+    const std::string a = fwPinA_->text().trimmed().toStdString();
+    const std::string b =
+        fwPinB_ != nullptr ? fwPinB_->text().trimmed().toStdString() : std::string();
+    const std::string param =
+        fwParam_ != nullptr ? fwParam_->text().trimmed().toStdString() : std::string();
+    core::Json params = {{"project", lastFwProject_}, {"kind", kind}};
+    if (kind == "uart") {
+        if (a.empty() || b.empty()) {
+            fwOutput_->setPlainText(
+                QStringLiteral("Firmware: UART requires TX and RX pins"));
+            return;
+        }
+        params["peripheral"] = "UART0";
+        params["tx"] = a;
+        params["rx"] = b;
+        if (!param.empty()) {
+            params["baud"] = std::atoi(param.c_str());
+        }
+    } else if (kind == "i2c") {
+        if (a.empty() || b.empty()) {
+            fwOutput_->setPlainText(
+                QStringLiteral("Firmware: I2C requires SDA and SCL pins"));
+            return;
+        }
+        params["peripheral"] = "I2C0";
+        params["sda"] = a;
+        params["scl"] = b;
+    } else {
+        if (a.empty()) {
+            fwOutput_->setPlainText(QStringLiteral("Firmware: PWM requires a pin"));
+            return;
+        }
+        params["peripheral"] = "PWM";
+        params["pin"] = a;
+        if (!param.empty()) {
+            params["freq_hz"] = std::atoi(param.c_str());
+        }
+    }
+    try {
+        lastFwJobId_ = worker_->submit("firmware", "configure_peripheral", params);
+        fwOutput_->setPlainText(QStringLiteral("Firmware: %1 submitted, job %2…")
+                                    .arg(QString::fromStdString(kind),
+                                         QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwGenerate() {
+    if (fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: configure a project first (no project in context)"));
+        return;
+    }
+    try {
+        lastFwJobId_ =
+            worker_->submit("firmware", "generate_firmware", {{"project", lastFwProject_}});
+        fwOutput_->setPlainText(QStringLiteral("Firmware: generate submitted, job %1…")
+                                    .arg(QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwValidate() {
+    if (fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: configure a project first (no project in context)"));
+        return;
+    }
+    try {
+        lastFwJobId_ =
+            worker_->submit("firmware", "validate_project", {{"project", lastFwProject_}});
+        fwOutput_->setPlainText(QStringLiteral("Firmware: validate submitted, job %1…")
+                                    .arg(QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleFwBuild() {
+    if (fwOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    if (!hasFwProject_) {
+        fwOutput_->setPlainText(
+            QStringLiteral("Firmware: generate sources first (no project in context)"));
+        return;
+    }
+    core::Json project = lastFwProject_;
+    if (project.contains("build") && project["build"].is_object() &&
+        fwProfile_ != nullptr) {
+        project["build"]["profile"] = fwProfile_->currentText().toStdString();
+    }
+    try {
+        lastFwJobId_ = worker_->submit("firmware", "build", {{"project", project}});
+        fwOutput_->setPlainText(QStringLiteral("Firmware: build submitted, job %1…")
+                                    .arg(QString::fromStdString(lastFwJobId_)));
+    } catch (const std::exception& exc) {
+        fwOutput_->setPlainText(QStringLiteral("Firmware submit failed: ") +
+                                QString::fromStdString(exc.what()));
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshFwResult() {
+    if (fwOutput_ == nullptr || jobs_ == nullptr || lastFwJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastFwJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  firmware/%2  •  %3\n")
+            .arg(shortId, QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& envelope = job.result;
+        if (envelope.contains("result") && envelope["result"].is_object()) {
+            const auto& data = envelope["result"];
+            if (data.contains("project") && data["project"].is_object()) {
+                lastFwProject_ = data["project"];
+                hasFwProject_ = true;
+                const auto& p = lastFwProject_;
+                report += QStringLiteral("Project: %1  •  MCU: %2  •  Clock: %3 Hz\n")
+                              .arg(QString::fromStdString(p.value("name", "")),
+                                   p.value("has_mcu", false)
+                                       ? QString::fromStdString(p["mcu"].value("model", "?"))
+                                       : QStringLiteral("(none)"),
+                                   QString::number(static_cast<qulonglong>(
+                                       p.value("clock_hz", 0LL))));
+                QStringList pinList;
+                if (p.contains("pin_mappings") && p["pin_mappings"].is_array()) {
+                    for (const auto& m : p["pin_mappings"]) {
+                        pinList << QString::fromStdString(m.value("mcu_pin", "?")) +
+                                       QStringLiteral(":") +
+                                       QString::fromStdString(m.value("function", "?"));
+                    }
+                }
+                report += QStringLiteral("Pins: %1\n")
+                              .arg(pinList.isEmpty() ? QStringLiteral("(none)")
+                                                     : pinList.join(QStringLiteral(", ")));
+                QStringList reqList;
+                if (p.contains("requirements") && p["requirements"].is_array()) {
+                    for (const auto& r : p["requirements"]) {
+                        reqList << QString::fromStdString(r.value("kind", "?"));
+                    }
+                }
+                report += QStringLiteral("Requirements: %1\n")
+                              .arg(reqList.isEmpty() ? QStringLiteral("(none)")
+                                                     : reqList.join(QStringLiteral(", ")));
+                if (p.contains("build") && p["build"].is_object()) {
+                    report += QStringLiteral("Build: %1 / %2 / %3\n")
+                                  .arg(QString::fromStdString(
+                                           p["build"].value("profile", "debug")),
+                                       QString::fromStdString(p["build"].value("arch", "?")),
+                                       QString::fromStdString(
+                                           p["build"].value("toolchain", "?")));
+                }
+            }
+            if (data.contains("files") && data["files"].is_array()) {
+                report += QStringLiteral("Generated files:\n");
+                for (const auto& f : data["files"]) {
+                    report += QStringLiteral("  %1 (%2 B)\n")
+                                  .arg(QString::fromStdString(f.value("path", "?")),
+                                       QString::number(
+                                           static_cast<qulonglong>(f.value("bytes", 0))));
+                }
+            }
+            if (data.contains("rules") && data["rules"].is_array()) {
+                report += QStringLiteral("Validation rules:\n");
+                for (const auto& rule : data["rules"]) {
+                    if (!rule.value("passed", true)) {
+                        report += QStringLiteral("  FAIL [%1] %2\n")
+                                      .arg(QString::fromStdString(rule.value("rule", "?")),
+                                           QString::fromStdString(
+                                               rule.value("message", "")));
+                    }
+                }
+            }
+            if (data.contains("passed")) {
+                report += QStringLiteral("Validation: %1\n")
+                              .arg(data.value("passed", false)
+                                       ? QStringLiteral("VALIDATED")
+                                       : QStringLiteral("INVALID"));
+            }
+            if (data.contains("executed")) {
+                const bool executed = data.value("executed", false);
+                report += QStringLiteral("Build: %1\n")
+                              .arg(executed
+                                       ? QStringLiteral("executed, exit %1, success=%2")
+                                             .arg(data.value("exit_code", -1))
+                                             .arg(data.value("success", false)
+                                                      ? QStringLiteral("true")
+                                                      : QStringLiteral("false"))
+                                       : QStringLiteral(
+                                             "CAPABILITY_UNAVAILABLE (no toolchain)"));
+                if (data.contains("stdout") &&
+                    !data["stdout"].get<std::string>().empty()) {
+                    report += QStringLiteral("stdout: ") +
+                              QString::fromStdString(data["stdout"].get<std::string>()) +
+                              QStringLiteral("\n");
+                }
+                if (data.contains("stderr") &&
+                    !data["stderr"].get<std::string>().empty()) {
+                    report += QStringLiteral("stderr: ") +
+                              QString::fromStdString(data["stderr"].get<std::string>()) +
+                              QStringLiteral("\n");
+                }
+            }
+            if (data.contains("message")) {
+                report += QStringLiteral("Message: ") +
+                          QString::fromStdString(data.value("message", "")) +
+                          QStringLiteral("\n");
+            }
+        }
+        if (envelope.contains("artifacts") && envelope["artifacts"].is_array() &&
+            !envelope["artifacts"].empty()) {
+            report += QStringLiteral("Artifacts:\n");
+            for (const auto& art : envelope["artifacts"]) {
+                report += QStringLiteral("  %1 (%2, %3 B, sha256 %4…)\n")
+                              .arg(QString::fromStdString(art.value("path", "")),
+                                   QString::fromStdString(art.value("type", "")),
+                                   QString::number(static_cast<qulonglong>(
+                                       art.value("size_bytes", 0LL))),
+                                   QString::fromStdString(
+                                       art.value("checksum", "").substr(0, 12)));
+            }
+        }
+        if (envelope.contains("validation") && !envelope["validation"].is_null()) {
+            const auto& v = envelope["validation"];
+            report += QStringLiteral("Validation: ") +
+                      QString::fromStdString(v.value("status", "?")) + QStringLiteral(" — ") +
+                      QString::fromStdString(v.value("message", "")) + QStringLiteral("\n");
+        }
+        if (envelope.contains("errors") && envelope["errors"].is_array() &&
+            !envelope["errors"].empty()) {
+            std::string errs = envelope["errors"].dump(2);
+            if (errs.size() > 600) {
+                errs = errs.substr(0, 600) + "…";
+            }
+            report += QStringLiteral("Errors: ") + QString::fromStdString(errs) +
+                      QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Job error: ") + QString::fromStdString(err) +
+                  QStringLiteral("\n");
+    }
+    if (fwOutput_->toPlainText() != report) {
+        fwOutput_->setPlainText(report);
+    }
+}
+
 void MainWindow::refreshPcbResult() {
     if (pcbOutput_ == nullptr || jobs_ == nullptr || lastPcbJobId_.empty()) {
         return;
@@ -1161,6 +1641,7 @@ void MainWindow::refreshJobs() {
     }
     refreshMathResult();
     refreshPcbResult();
+    refreshFwResult();
 }
 
 void MainWindow::refreshWorkflows() {

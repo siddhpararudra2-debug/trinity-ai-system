@@ -82,6 +82,12 @@ set(TRINITY_CORE_SOURCES
     src/engines/MathEngine.cpp
     src/engines/CadEngine.cpp
     src/engines/PcbEngine.cpp
+    src/engines/FirmwareEngine.cpp
+    src/firmware/FirmwareProject.cpp
+    src/firmware/McuDatabase.cpp
+    src/firmware/CodeGen.cpp
+    src/firmware/Validators.cpp
+    src/firmware/Builder.cpp
     src/engines/StubEngines.cpp
     src/workflows/Workflow.cpp
     src/workflows/Executor.cpp
@@ -161,6 +167,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_workflow_executor.cpp
         tests/test_viewer_geometry.cpp
         tests/test_artifact_loading.cpp
+        tests/test_firmware.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

@@ -64,6 +64,9 @@ private:
     ParseResult tryPcbRequest(const std::string& text,
                               const std::string& lowered,
                               const std::string& forcedDomain) const;
+    ParseResult tryFirmwareRequest(const std::string& text,
+                                   const std::string& lowered,
+                                   const std::string& forcedDomain) const;
 };
 
 }  // namespace trinity::intelligence

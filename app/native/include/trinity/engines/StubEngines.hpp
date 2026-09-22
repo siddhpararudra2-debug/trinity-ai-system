@@ -22,7 +22,6 @@ public:
     validation::ValidationResult validate(const EngineResult& result) const override;
 };
 
-std::shared_ptr<StubEngine> makeFirmwareEngine();
 std::shared_ptr<StubEngine> makeVisionEngine();
 std::shared_ptr<StubEngine> makeResearchEngine();
 std::shared_ptr<StubEngine> makeSimulationEngine();
