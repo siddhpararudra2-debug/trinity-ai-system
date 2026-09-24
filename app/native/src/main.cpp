@@ -8,12 +8,19 @@
 // exits 0 on success so CI and operators can verify startup without
 // a display server.
 
+#include <cstdio>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
+#endif
+
+#ifdef TRINITY_HAS_OPENCV
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 #endif
 
 #include "trinity/core/ApplicationContext.hpp"
@@ -172,6 +179,50 @@ int runSelftest() {
         fwOk = false;
     }
     std::cout << (fwOk ? "[PASS] " : "[FAIL] ") << "firmware_generates_sources\n";
+    // Vision must load a real image when OpenCV is present, and refuse
+    // truthfully when it is not. Both paths prove no fabricated results.
+    bool visionOk = false;
+    try {
+        trinity::engines::EngineRequest visionReq;
+        visionReq.engine = "vision";
+        visionReq.operation = "load_image";
+#ifdef TRINITY_HAS_OPENCV
+        const std::string visionImg =
+            (std::filesystem::temp_directory_path() / "trinity_selftest.png").string();
+        const cv::Mat probe(8, 8, CV_8UC3, cv::Scalar(10, 20, 30));
+        cv::imwrite(visionImg, probe);
+        visionReq.parameters = trinity::core::Json{{"path", visionImg}};
+        const auto visionResult = context.engines().execute(visionReq);
+        visionOk = visionResult.success &&
+                   visionResult.result["input"]["metadata"]["width"] == 8;
+        std::remove(visionImg.c_str());
+#else
+        visionReq.parameters = trinity::core::Json{{"path", "missing.png"}};
+        const auto visionResult = context.engines().execute(visionReq);
+        visionOk = !visionResult.success && !visionResult.errors.empty();
+#endif
+    } catch (...) {
+        visionOk = false;
+    }
+    std::cout << (visionOk ? "[PASS] " : "[FAIL] ") << "vision_image_ops\n";
+    // Simulation must run a deterministic closed-form linear motion.
+    bool simOk = false;
+    try {
+        trinity::engines::EngineRequest simReq;
+        simReq.engine = "simulation";
+        simReq.operation = "simulate_linear_motion";
+        simReq.parameters = trinity::core::Json{
+            {"duration_s", 1.0},
+            {"initial_velocity_m_s", 2.0},
+            {"acceleration_m_s2", 1.0},
+            {"write_artifacts", false}};
+        const auto simResult = context.engines().execute(simReq);
+        simOk = simResult.success &&
+                simResult.result["result"].value("step_count", 0LL) > 0;
+    } catch (...) {
+        simOk = false;
+    }
+    std::cout << (simOk ? "[PASS] " : "[FAIL] ") << "simulation_runs_linear_motion\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -196,7 +247,7 @@ int runSelftest() {
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
     allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && fwOk &&
-            modelOk && plannerOk && providerOk;
+            visionOk && simOk && modelOk && plannerOk && providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;

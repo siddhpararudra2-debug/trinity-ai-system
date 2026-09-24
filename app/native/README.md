@@ -28,7 +28,9 @@ Deterministic core principles (ported from `src/`):
   `IModelProvider` is the seam for OpenAI / Anthropic / local / custom
   Trinity models. `NullModelProvider` refuses truthfully.
 - Engines implement `IEngine` (`Engine.hpp`); the registry supports
-  register / get / has / list. No engineering engines ship yet.
+  register / get / has / list. Six real engines ship (math, cad, pcb,
+  firmware, vision, simulation); research and robotics are truthful
+  stubs refusing without fake results.
 - Jobs run `queued -> running -> completed|failed` with the same
   ToolResponse-style envelope as the Python backend.
 - Validation states `GENERATED | VALIDATED | VERIFIED | FAILED` stay
@@ -43,7 +45,8 @@ app/native/
     core/{Error,Result,Config,Logger,Paths,Uuid,Time,Json,ApplicationContext}.hpp
     fs/Filesystem.hpp
     cad/{FrameParams,Mesh,Builder,StlWriter,Validators}.hpp
-    engines/{Engine,EngineRegistry,MathEngine,CadEngine,StubEngines}.hpp
+    engines/{Engine,EngineRegistry,MathEngine,CadEngine,PcbEngine,
+             FirmwareEngine,VisionEngine,SimulationEngine,StubEngines}.hpp
     jobs/Job.hpp
     workflows/Workflow.hpp
     validation/ValidationResult.hpp
@@ -51,12 +54,11 @@ app/native/
     intelligence/{ToolCall,Intent,ModelRequest,ModelResponse,IModelProvider,
                    ModelProviderFactory,ExampleProvider,Planner}.hpp
     storage/{Database,Repositories}.hpp
-  src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,storage}/...
-  ui/MainWindow.{hpp,cpp}
-   tests/test_{main,error,registry,workflow,database,model_provider,paths_config,
-              jobs,job_lifecycle,uuid,serialization,filesystem,repositories,logging_config,
-              math_engine,cad_stubs,cad_generate,validation,provider_factory,
-              planner,request_pipeline,workflow_executor}.cpp
+  src/{core,fs,engines,jobs,workflows,validation,artifacts,intelligence,
+       storage,cad,pcb,firmware,vision,simulation,viewer}/...
+  ui/MainWindow.{hpp,cpp} + ui/sim/TimeSeriesWidget, ui/viewer/*
+   tests/test_*.cpp (41 suites: core, engines, jobs, workflow,
+              intelligence, pcb, firmware, vision, sim)
   third_party/{sqlite,json,doctest}/
   build/{debug,release}/ (gitignored)
 ```
@@ -219,25 +221,32 @@ rest marked `skipped`. Model refusal executes nothing.
   dependency-free mesh backend (`cad/FrameParams,Mesh,Builder,
   StlWriter,Validators`): 108-triangle validated geometry, binary STL +
   spec JSON artifacts via `JobManager`, STEP reported
-  `CAD_KERNEL_UNAVAILABLE`; Firmware/Vision/Research/Simulation/
-  Robotics remain stubs registering metadata and refusing without fake
-  results
+  `CAD_KERNEL_UNAVAILABLE`
+- `FirmwareEngine` (project/MCU/pin/peripheral config, Arduino-style
+  source generation, controlled Windows `CreateProcess` build),
+  `VisionEngine` (OpenCV-gated load/resize/grayscale/edge/stats with
+  truthful refusal when OpenCV is absent) and `SimulationEngine`
+  (kinematics + basic dynamics, CSV/JSON exports) are real;
+  Research/Robotics remain stubs registering metadata and refusing
+  without fake results
 - `PcbEngine` (`describe/create_board/add_component/add_net/place_component/validate_design/export`)
   over the tool-agnostic IR (`pcb/PcbDesign,Validators,KiCadExport`): starter footprints
   (ESP32-WROOM-32, IMU-QFN-24, SOT-223, 0603), bounds/overlap/clearance/power-net
   checks, self-verified KiCad 7/8 `.kicad_pcb` + design JSON artifacts via `JobManager`
 - Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
   `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
-- Qt `MainWindow` engine list (MATH/CAD/PCB implemented with capabilities +
-  last results vs scaffolded/unavailable) plus a deterministic Math
+- Qt `MainWindow` engine list (math/cad/pcb/firmware/vision/simulation
+  marked implemented with capabilities + last results vs
+  scaffolded/unavailable) plus a deterministic Math
   panel (evaluate/solve/linear/quadratic/convert/formula) submitting
   through `RequestPipeline` to the worker thread and rendering the
   persisted job (result/units/validation/errors/job id/execution time)
   plus a PCB workspace (board/component/net/place/validate/export forms
   chaining the live design JSON through the shared worker thread)
 - `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
-  check, refusal check, planner/model/provider checks),
-  `trinity_tests` via CTest
+  check, pcb/firmware checks, vision image-op check (OpenCV load or
+  truthful refusal), simulation linear-motion check, refusal check,
+  planner/model/provider checks), `trinity_tests` via CTest
 - Native Qt 6 3D viewer (`ui/viewer/ViewportWidget`, `ViewerController`,
   `ViewerPanel` over Qt-free `viewer/{RenderData,ViewerState,Measure,
   ArtifactLoader}` + `cad/StlReader`): real generated mesh only
@@ -276,7 +285,7 @@ rest marked `skipped`. Model refusal executes nothing.
 - CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
-- Real Firmware/Vision/Research/Simulation/Robotics implementations
+- Real Research/Robotics implementations
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,
   local, custom Trinity model — the factory + example + planner are
   ready; only the transport is missing)

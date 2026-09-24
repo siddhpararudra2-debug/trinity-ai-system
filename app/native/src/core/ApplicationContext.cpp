@@ -13,6 +13,10 @@
 #include "trinity/engines/StubEngines.hpp"
 #include "trinity/intelligence/ModelProviderFactory.hpp"
 
+#ifdef TRINITY_HAS_OPENCV
+#include <opencv2/core/version.hpp>
+#endif
+
 namespace trinity::core {
 
 ApplicationContext& ApplicationContext::instance() {
@@ -179,6 +183,49 @@ InitSummary ApplicationContext::summary() const {
                                 check.checks.value("expected_span_mm", 0.0)))) +
                             "mm";
                     }
+                } else if (cap.name == "pcb" && registry_->has("pcb")) {
+                    engines::EngineRequest demo;
+                    demo.engine = "pcb";
+                    demo.operation = "create_board";
+                    demo.parameters = core::Json{
+                        {"width_mm", 50.0},
+                        {"height_mm", 40.0},
+                        {"components", {{{"part", "esp32"}}, {{"part", "regulator"}}}}};
+                    const auto result = registry_->execute(demo);
+                    if (result.success) {
+                        entry.implemented = true;
+                        entry.lastResult =
+                            "50x40mm board: " +
+                            std::to_string(result.result.value("component_count", 0)) +
+                            " components";
+                    }
+                } else if (cap.name == "firmware" && registry_->has("firmware")) {
+                    engines::EngineRequest demo;
+                    demo.engine = "firmware";
+                    demo.operation = "create_project";
+                    demo.parameters = core::Json{{"name", "summary-demo"}};
+                    const auto created = registry_->execute(demo);
+                    if (created.success) {
+                        engines::EngineRequest mcuReq;
+                        mcuReq.engine = "firmware";
+                        mcuReq.operation = "select_mcu";
+                        mcuReq.parameters =
+                            core::Json{{"project", created.result["project"]},
+                                       {"mcu", "ESP32"}};
+                        const auto withMcu = registry_->execute(mcuReq);
+                        if (withMcu.success) {
+                            entry.implemented = true;
+                            entry.lastResult = "project created, mcu ESP32";
+                        }
+                    }
+                } else if (cap.name == "vision" && registry_->has("vision")) {
+                    // Real image ops exist only when the build has OpenCV;
+                    // otherwise VisionEngine refuses and stays unimplemented.
+#ifdef TRINITY_HAS_OPENCV
+                    entry.implemented = true;
+                    entry.lastResult = std::string("OpenCV ") + CV_VERSION +
+                                       " image ops enabled";
+#endif
                 } else if (cap.name == "simulation" && registry_->has("simulation")) {
                     engines::EngineRequest demo;
                     demo.engine = "simulation";
