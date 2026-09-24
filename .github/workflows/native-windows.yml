@@ -66,8 +66,6 @@ jobs:
   build-opencv:
     name: Build & Test (MSVC + Qt 6 + vcpkg OpenCV)
     runs-on: windows-latest
-    env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-binary-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +91,8 @@ jobs:
           }
           & (Join-Path $vcpkg 'bootstrap-vcpkg.bat') -disableMetrics
           "VCPKG_ROOT=$vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $binCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
+          "VCPKG_DEFAULT_BINARY_CACHE=$binCache" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Prepare vcpkg binary cache
         shell: pwsh
