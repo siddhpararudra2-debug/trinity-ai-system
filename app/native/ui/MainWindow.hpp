@@ -118,6 +118,9 @@ private slots:
     void handleResearchIndex();
     void handleResearchSearch();
     void handleResearchSummarize();
+    void handleRoboticsFk();
+    void handleRoboticsPlan();
+    void handleRoboticsExport();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
@@ -125,6 +128,7 @@ private slots:
     void refreshFwResult();
     void refreshSimResult();
     void refreshResearchResult();
+    void refreshRoboticsResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -207,12 +211,23 @@ private:
     TimeSeriesWidget* simAccChart_ = nullptr;
     std::string lastSimJobId_;
     // Research workspace: deterministic local index (index/search/summarize);
-    // no web access, no LLM — everything comes from indexed documents.
+    // empty inputs are reported inline without submitting a job.
     QLineEdit* researchTitle_ = nullptr;
     QTextEdit* researchText_ = nullptr;
     QLineEdit* researchQuery_ = nullptr;
     QTextEdit* researchOutput_ = nullptr;
     std::string lastResearchJobId_;
+
+    // Robotics workspace: DH forward kinematics, joint trajectory, URDF
+    // export; empty/malformed inputs are reported inline without submitting.
+    QLineEdit* robotName_ = nullptr;
+    QTextEdit* dhChain_ = nullptr;
+    QLineEdit* jointAngles_ = nullptr;
+    QLineEdit* startJoint_ = nullptr;
+    QLineEdit* goalJoint_ = nullptr;
+    QLineEdit* duration_ = nullptr;
+    QTextEdit* roboticsOutput_ = nullptr;
+    std::string lastRoboticsJobId_;
     jobs::JobWorker* worker_ = nullptr;
 
 public:

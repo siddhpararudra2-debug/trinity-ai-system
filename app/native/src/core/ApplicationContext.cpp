@@ -265,6 +265,21 @@ InitSummary ApplicationContext::summary() const {
                             " steps, " +
                             result.result["result"].value("method", std::string("closed_form"));
                     }
+                } else if (cap.name == "robotics" && registry_->has("robotics")) {
+                    engines::EngineRequest fkReq;
+                    fkReq.engine = "robotics";
+                    fkReq.operation = "forward_kinematics";
+                    fkReq.parameters =
+                        core::Json{{"joint_angles", core::Json::array({0.0, 0.0})}};
+                    const auto result = registry_->execute(fkReq);
+                    if (result.success) {
+                        const auto& pos = result.result["end_effector"]["position"];
+                        entry.implemented = true;
+                        entry.lastResult = "2-link FK: EE (" +
+                                           std::to_string(pos.value("x", 0.0)) + ", " +
+                                           std::to_string(pos.value("y", 0.0)) + ", " +
+                                           std::to_string(pos.value("z", 0.0)) + ") m";
+                    }
                 }
             } catch (...) {
             }

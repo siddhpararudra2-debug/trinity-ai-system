@@ -289,6 +289,16 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    ParseResult robotics = tryRoboticsRequest(text, lowered, "");
+    if (robotics.status != ParseStatus::Invalid || !robotics.errors.empty()) {
+        const bool noRobotics =
+            robotics.errors.size() == 1 &&
+            robotics.errors.front() == "__no_robotics_content__";
+        if (!noRobotics) {
+            return robotics;
+        }
+    }
+
     Intent intent = makeBaseIntent(text);
     ParseResult result;
     result.intent = intent;
@@ -300,8 +310,10 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         "evaluation (calculate, solve), simulation (simulate linear motion, projectile, "
         "constant acceleration, dynamics), firmware configuration (MCU, GPIO, UART, I2C, "
         "PWM), vision processing (resize, grayscale, edge detect), research (index "
-        "document, search documents, summarize results), explicit engine "
-        "requests (using math/cad/pcb/simulation/firmware/vision/research engine)");
+        "document, search documents, summarize results), robotics (forward "
+        "kinematics, joint trajectory, urdf export), explicit engine "
+        "requests (using math/cad/pcb/simulation/firmware/vision/research/robotics "
+        "engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -443,6 +455,27 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.missing = {"query", "title", "text"};
             result.errors.push_back(
                 "Explicit research engine request is missing a query, title, or text");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "robotics") {
+        ParseResult inner = tryRoboticsRequest(remainder.empty() ? text : remainder,
+                                               remainder.empty() ? lowered
+                                                                 : remainderLower,
+                                               "robotics");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_robotics_content__") {
+            Intent intent = makeBaseIntent(text);
+            intent.domain = "robotics";
+            intent.object = "robot";
+            intent.operation = "forward_kinematics";
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.8;
+            result.errors.clear();
             return result;
         }
         return inner;
@@ -1014,7 +1047,7 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
 
     const bool mentionsSim =
         contains(lowered, "simulate") || contains(lowered, "simulation") ||
-        contains(lowered, "projectile") || contains(lowered, "kinematics");
+        contains(lowered, "projectile");
     if (forcedDomain.empty() && !mentionsSim) {
         ParseResult sentinel;
         sentinel.intent = makeBaseIntent(text);
@@ -1976,6 +2009,194 @@ ParseResult RequirementParser::tryResearchRequest(const std::string& text,
         return result;
     }
     intent.parameters["query"] = query;
+    ParseResult result;
+    result.intent = intent;
+    result.status = ParseStatus::Valid;
+    result.intent.status = ParseStatus::Valid;
+    result.intent.confidence = 0.9;
+    return result;
+}
+
+ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
+                                                  const std::string& lowered,
+                                                  const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "robotics") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_robotics_content__");
+        return sentinel;
+    }
+
+    auto wordMatch = [&lowered](const std::string& word) {
+        return lowered.find(word) != std::string::npos;
+    };
+    static const std::regex kFkWord(R"(\bfk\b)", std::regex_constants::icase);
+    const bool hasFkWord = std::regex_search(text, kFkWord);
+    const bool hasDescribe = wordMatch("describe") || wordMatch("capabilit");
+    const bool hasRobot = wordMatch("robot");
+    const bool hasUrdf = wordMatch("urdf");
+    const bool hasTrajectory = wordMatch("trajectory") || wordMatch("joint space");
+    const bool hasFk = wordMatch("forward kinem") || wordMatch("kinematics") ||
+                       wordMatch("end effector") || wordMatch("end-effector") ||
+                       hasFkWord || wordMatch("joint angles") || wordMatch("dh param");
+    const bool hasRobotics = wordMatch("robotics") || hasUrdf || hasTrajectory || hasFk ||
+                             (hasDescribe && hasRobot);
+
+    if (forcedDomain.empty() && !hasRobotics) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_robotics_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "robotics";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    auto parseNumberList = [](std::string raw) -> std::vector<double> {
+        while (!raw.empty() && (raw.front() == '[' || raw.front() == ' ')) {
+            raw.erase(raw.begin());
+        }
+        while (!raw.empty() && (raw.back() == ']' || raw.back() == ' ' ||
+                                raw.back() == ',')) {
+            raw.pop_back();
+        }
+        std::vector<double> values;
+        std::string token;
+        auto flush = [&]() {
+            while (!token.empty() && token.front() == ' ') {
+                token.erase(token.begin());
+            }
+            while (!token.empty() && token.back() == ' ') {
+                token.pop_back();
+            }
+            if (!token.empty()) {
+                try {
+                    values.push_back(std::stod(token));
+                } catch (...) {
+                    values.clear();
+                }
+            }
+            token.clear();
+        };
+        for (const char c : raw) {
+            if (c == ',') {
+                flush();
+            } else {
+                token.push_back(c);
+            }
+        }
+        flush();
+        return values;
+    };
+    auto toJsonArray = [](const std::vector<double>& values) {
+        core::Json arr = core::Json::array();
+        for (const double value : values) {
+            arr.push_back(value);
+        }
+        return arr;
+    };
+    auto extractQuoted = [&text]() -> std::string {
+        static const std::regex kQuote(R"(["']([^"'\n]{1,})["'])",
+                                       std::regex_constants::icase);
+        std::smatch match;
+        if (std::regex_search(text, match, kQuote)) {
+            return trim(match[1].str());
+        }
+        return {};
+    };
+
+    if (hasDescribe && !hasUrdf && !hasTrajectory) {
+        intent.operation = "describe";
+        intent.object = "robot";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasUrdf) {
+        intent.operation = "export_urdf";
+        intent.object = "robot";
+        std::string name = extractQuoted();
+        if (name.empty()) {
+            static const std::regex kNamed(R"(named\s+([A-Za-z0-9_]+))",
+                                           std::regex_constants::icase);
+            std::smatch match;
+            if (std::regex_search(text, match, kNamed)) {
+                name = trim(match[1].str());
+            }
+        }
+        if (!name.empty()) {
+            intent.parameters["robot_name"] = name;
+        }
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasTrajectory) {
+        intent.operation = "plan_trajectory";
+        intent.object = "robot";
+        static const std::regex kFromTo(
+            R"(from\s+(\[?[-\d.,+\s]+\]?)\s+to\s+(\[?[-\d.,+\s]+\]?))",
+            std::regex_constants::icase);
+        std::smatch match;
+        const std::vector<double> start =
+            std::regex_search(text, match, kFromTo) ? parseNumberList(match[1].str())
+                                                    : std::vector<double>{};
+        const std::vector<double> goal =
+            std::regex_search(text, match, kFromTo) ? parseNumberList(match[2].str())
+                                                    : std::vector<double>{};
+        if (start.empty() || goal.empty()) {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"joint_start", "joint_goal"};
+            result.errors.push_back(
+                "Incomplete robotics request: trajectory needs 'from <joints> to <joints>'");
+            return result;
+        }
+        intent.parameters["joint_start"] = toJsonArray(start);
+        intent.parameters["joint_goal"] = toJsonArray(goal);
+        static const std::regex kDuration(
+            R"((\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s\b))", std::regex_constants::icase);
+        if (std::regex_search(text, match, kDuration)) {
+            try {
+                intent.parameters["duration_s"] = std::stod(match[1].str());
+            } catch (...) {
+            }
+        }
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    // Default robotics operation: forward kinematics.
+    intent.operation = "forward_kinematics";
+    intent.object = "robot";
+    static const std::regex kAngles(
+        R"((?:joint\s+angles?|angles?)\s*(?:of\s*)?=?\s*\[?([-\d.,\s]+))",
+        std::regex_constants::icase);
+    std::smatch match;
+    if (std::regex_search(text, match, kAngles)) {
+        const std::vector<double> angles = parseNumberList(match[1].str());
+        if (!angles.empty()) {
+            intent.parameters["joint_angles"] = toJsonArray(angles);
+        }
+    }
     ParseResult result;
     result.intent = intent;
     result.status = ParseStatus::Valid;

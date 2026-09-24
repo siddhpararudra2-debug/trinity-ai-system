@@ -24,7 +24,7 @@ void addCheck(validation::ValidationResult& out, const std::string& rule,
 bool isValidDomain(const std::string& domain) {
     return domain == "cad" || domain == "math" || domain == "pcb" ||
            domain == "firmware" || domain == "simulation" || domain == "vision" ||
-           domain == "research";
+           domain == "research" || domain == "robotics";
 }
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
@@ -70,6 +70,10 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
                operation == "list_documents" || operation == "clear_index" ||
                operation == "export_index";
     }
+    if (domain == "robotics") {
+        return operation == "describe" || operation == "forward_kinematics" ||
+               operation == "plan_trajectory" || operation == "export_urdf";
+    }
     return false;
 }
 
@@ -113,7 +117,8 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                                     {"supported",
                                      core::Json::array({"cad", "math", "pcb",
                                                         "firmware", "simulation",
-                                                        "vision", "research"})}});
+                                                        "vision", "research",
+                                                        "robotics"})}});
     } else {
         addCheck(out, "intent.domain", validation::Severity::Info, true,
                  "Domain '" + intent.domain + "' is supported");
@@ -433,6 +438,63 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         } else {
             ok = false;
         }
+    } else if (intent.domain == "robotics") {
+        bool typesOk = true;
+        for (const std::string& key : {"robot_name"}) {
+            if (intent.parameters.contains(key) && !intent.parameters[key].is_string()) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a string",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        for (const std::string& key :
+             {"duration_s", "dt", "radius_m"}) {
+            if (intent.parameters.contains(key) && !isFiniteNumber(intent.parameters[key])) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a finite number",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        for (const std::string& key :
+             {"joint_angles", "joint_start", "joint_goal"}) {
+            if (!intent.parameters.contains(key)) {
+                continue;
+            }
+            const core::Json& arr = intent.parameters[key];
+            bool arrOk = arr.is_array() && !arr.empty();
+            if (arrOk) {
+                for (const auto& item : arr) {
+                    if (!isFiniteNumber(item)) {
+                        arrOk = false;
+                        break;
+                    }
+                }
+            }
+            if (!arrOk) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a non-empty array of finite numbers",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        if (intent.parameters.contains("dh_params")) {
+            const core::Json& chain = intent.parameters["dh_params"];
+            const bool chainOk = chain.is_array() && !chain.empty();
+            if (!chainOk) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "dh_params must be a non-empty array",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        if (typesOk) {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Robotics parameters present");
+        } else {
+            ok = false;
+        }
     } else {
         addCheck(out, "intent.param_type", validation::Severity::Warning, true,
                  "Parameter type check skipped for unknown domain");
@@ -574,6 +636,8 @@ validation::ValidationResult IntentValidator::validate(
         engine = "vision";
     } else if (intent.domain == "research") {
         engine = "research";
+    } else if (intent.domain == "robotics") {
+        engine = "robotics";
     } else if (intent.domain == "simulation") {
         engine = "simulation";
     }

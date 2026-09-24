@@ -7,6 +7,7 @@
 #include "trinity/engines/MathEngine.hpp"
 #include "trinity/engines/PcbEngine.hpp"
 #include "trinity/engines/ResearchEngine.hpp"
+#include "trinity/engines/RoboticsEngine.hpp"
 #include "trinity/engines/SimulationEngine.hpp"
 #include "trinity/engines/VisionEngine.hpp"
 
@@ -48,11 +49,6 @@ validation::ValidationResult StubEngine::validate(const EngineResult& result) co
     return validation;
 }
 
-std::shared_ptr<StubEngine> makeRoboticsEngine() {
-    return std::make_shared<StubEngine>("robotics", "0.1.0",
-                                        std::vector<std::string>{"describe"});
-}
-
 void registerAllEngines(EngineRegistry& registry) {
     if (!registry.has("math")) {
         registry.registerEngine(std::make_shared<MathEngine>());
@@ -76,7 +72,7 @@ void registerAllEngines(EngineRegistry& registry) {
         registry.registerEngine(std::make_shared<SimulationEngine>());
     }
     if (!registry.has("robotics")) {
-        registry.registerEngine(makeRoboticsEngine());
+        registry.registerEngine(std::make_shared<RoboticsEngine>());
     }
 }
 

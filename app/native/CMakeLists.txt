@@ -86,6 +86,7 @@ set(TRINITY_CORE_SOURCES
     src/engines/VisionEngine.cpp
     src/engines/SimulationEngine.cpp
     src/engines/ResearchEngine.cpp
+    src/engines/RoboticsEngine.cpp
     src/simulation/Types.cpp
     src/simulation/Integrator.cpp
     src/simulation/Validators.cpp
@@ -195,6 +196,8 @@ if(TRINITY_BUILD_TESTS)
         tests/test_vision_pipeline.cpp
         tests/test_research_engine.cpp
         tests/test_research_pipeline.cpp
+    tests/test_robotics_engine.cpp
+    tests/test_robotics_pipeline.cpp
         tests/test_sim_kinematics.cpp
         tests/test_sim_dynamics.cpp
         tests/test_sim_validation.cpp

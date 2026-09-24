@@ -581,6 +581,60 @@ void MainWindow::buildUi() {
         "Research: job / hits / summary / validation / artifacts / errors…"));
     leftLayout->addWidget(researchOutput_);
 
+    // ---- Robotics workspace: deterministic DH kinematics (no physics, no LLM).
+    auto* roboticsHeader = new QLabel(QStringLiteral("Robotics (DH kinematics)"), leftPane);
+    roboticsHeader->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(roboticsHeader);
+
+    robotName_ = new QLineEdit(leftPane);
+    robotName_->setPlaceholderText(QStringLiteral("Robot name (for Export URDF)"));
+    leftLayout->addWidget(robotName_);
+
+    dhChain_ = new QTextEdit(leftPane);
+    dhChain_->setMinimumHeight(56);
+    dhChain_->setPlaceholderText(QStringLiteral(
+        "DH params JSON array, optional (default 2-link): "
+        "[{\"a\":1,\"alpha\":0,\"d\":0,\"theta_offset\":0}, …]"));
+    leftLayout->addWidget(dhChain_);
+
+    jointAngles_ = new QLineEdit(leftPane);
+    jointAngles_->setPlaceholderText(QStringLiteral(
+        "Joint angles rad, comma-separated (FK), e.g. 0, 0"));
+    leftLayout->addWidget(jointAngles_);
+
+    auto* trajectoryRow = new QHBoxLayout();
+    startJoint_ = new QLineEdit(leftPane);
+    startJoint_->setPlaceholderText(QStringLiteral("Start joints (Trajectory)"));
+    goalJoint_ = new QLineEdit(leftPane);
+    goalJoint_->setPlaceholderText(QStringLiteral("Goal joints (Trajectory)"));
+    duration_ = new QLineEdit(leftPane);
+    duration_->setPlaceholderText(QStringLiteral("Duration s"));
+    trajectoryRow->addWidget(startJoint_);
+    trajectoryRow->addWidget(goalJoint_);
+    trajectoryRow->addWidget(duration_);
+    leftLayout->addLayout(trajectoryRow);
+
+    auto* roboticsActionRow = new QHBoxLayout();
+    auto* roboticsFkButton = new QPushButton(QStringLiteral("Forward Kinematics"), leftPane);
+    auto* roboticsPlanButton = new QPushButton(QStringLiteral("Plan Trajectory"), leftPane);
+    auto* roboticsExportButton = new QPushButton(QStringLiteral("Export URDF"), leftPane);
+    roboticsActionRow->addWidget(roboticsFkButton);
+    roboticsActionRow->addWidget(roboticsPlanButton);
+    roboticsActionRow->addWidget(roboticsExportButton);
+    leftLayout->addLayout(roboticsActionRow);
+    connect(roboticsFkButton, &QPushButton::clicked, this, &MainWindow::handleRoboticsFk);
+    connect(roboticsPlanButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsPlan);
+    connect(roboticsExportButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsExport);
+
+    roboticsOutput_ = new QTextEdit(leftPane);
+    roboticsOutput_->setReadOnly(true);
+    roboticsOutput_->setMinimumHeight(140);
+    roboticsOutput_->setPlaceholderText(QStringLiteral(
+        "Robotics: job / end effector / trajectory / URDF path / validation / errors…"));
+    leftLayout->addWidget(roboticsOutput_);
+
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -1307,6 +1361,251 @@ void MainWindow::refreshResearchResult() {
     }
     if (researchOutput_->toPlainText() != report) {
         researchOutput_->setPlainText(report);
+    }
+}
+
+// --- Robotics workspace: deterministic DH kinematics on the shared worker.
+// Empty or malformed inputs are reported inline without submitting a job.
+namespace {
+
+bool roboticsNumberList(const QString& text, std::vector<double>& valuesOut) {
+    valuesOut.clear();
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return true;  // optional input left blank
+    }
+    const QStringList parts = trimmed.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    for (const QString& part : parts) {
+        bool ok = false;
+        const double value = part.trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(value)) {
+            return false;
+        }
+        valuesOut.push_back(value);
+    }
+    return !valuesOut.empty();
+}
+
+trinity::core::Json roboticsJsonArray(const std::vector<double>& values) {
+    trinity::core::Json arr = trinity::core::Json::array();
+    for (const double value : values) {
+        arr.push_back(value);
+    }
+    return arr;
+}
+
+}  // namespace
+
+void MainWindow::handleRoboticsFk() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    trinity::core::Json params = trinity::core::Json::object();
+    const QString chainText = dhChain_ != nullptr ? dhChain_->toPlainText().trimmed() : QString();
+    if (!chainText.isEmpty()) {
+        try {
+            const trinity::core::Json chain = trinity::core::Json::parse(chainText.toStdString());
+            if (!chain.is_array() || chain.empty()) {
+                roboticsOutput_->setPlainText(
+                    QStringLiteral("Robotics: DH params must be a non-empty JSON array"));
+                return;
+            }
+            params["dh_params"] = chain;
+        } catch (const std::exception& exc) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: DH params are not valid JSON: ") +
+                QString::fromStdString(exc.what()));
+            return;
+        }
+    }
+    std::vector<double> angles;
+    if (jointAngles_ != nullptr &&
+        !roboticsNumberList(jointAngles_->text(), angles)) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: joint angles must be comma-separated numbers"));
+        return;
+    }
+    if (!angles.empty()) {
+        params["joint_angles"] = roboticsJsonArray(angles);
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "forward_kinematics", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Forward kinematics submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics FK submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsPlan() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    std::vector<double> start;
+    std::vector<double> goal;
+    if (startJoint_ == nullptr || goalJoint_ == nullptr ||
+        !roboticsNumberList(startJoint_->text(), start) || start.empty() ||
+        !roboticsNumberList(goalJoint_->text(), goal) || goal.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: trajectory requires start and goal joint lists"));
+        return;
+    }
+    if (start.size() != goal.size()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: start and goal joint lists must match in length"));
+        return;
+    }
+    trinity::core::Json params = {{"joint_start", roboticsJsonArray(start)},
+                                  {"joint_goal", roboticsJsonArray(goal)}};
+    if (duration_ != nullptr && !duration_->text().trimmed().isEmpty()) {
+        bool ok = false;
+        const double seconds = duration_->text().trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(seconds) || seconds <= 0.0) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: duration must be a positive number of seconds"));
+            return;
+        }
+        params["duration_s"] = seconds;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "plan_trajectory", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Trajectory submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics trajectory submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsExport() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    trinity::core::Json params = trinity::core::Json::object();
+    const QString chainText = dhChain_ != nullptr ? dhChain_->toPlainText().trimmed() : QString();
+    if (!chainText.isEmpty()) {
+        try {
+            const trinity::core::Json chain = trinity::core::Json::parse(chainText.toStdString());
+            if (!chain.is_array() || chain.empty()) {
+                roboticsOutput_->setPlainText(
+                    QStringLiteral("Robotics: DH params must be a non-empty JSON array"));
+                return;
+            }
+            params["dh_params"] = chain;
+        } catch (const std::exception& exc) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: DH params are not valid JSON: ") +
+                QString::fromStdString(exc.what()));
+            return;
+        }
+    }
+    if (robotName_ != nullptr && !robotName_->text().trimmed().isEmpty()) {
+        params["robot_name"] = robotName_->text().trimmed().toStdString();
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "export_urdf", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("URDF export submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics export submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshRoboticsResult() {
+    if (roboticsOutput_ == nullptr || jobs_ == nullptr || lastRoboticsJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastRoboticsJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  %2/%3  •  %4\n")
+            .arg(shortId, QString::fromStdString(job.engine),
+                 QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& envelope = job.result;
+        if (envelope.contains("result") && envelope["result"].is_object()) {
+            const auto& res = envelope["result"];
+            if (res.contains("end_effector")) {
+                const auto& pos = res["end_effector"]["position"];
+                report += QStringLiteral("EE: (%1, %2, %3) m  chain=%4  angles=%5\n")
+                              .arg(pos.value("x", 0.0), 0, 'f', 4)
+                              .arg(pos.value("y", 0.0), 0, 'f', 4)
+                              .arg(pos.value("z", 0.0), 0, 'f', 4)
+                              .arg(QString::fromStdString(
+                                  res.value("chain_source", "?")))
+                              .arg(QString::fromStdString(
+                                  res.value("angles_source", "?")));
+            } else if (res.contains("start_reached")) {
+                report += QStringLiteral(
+                              "Trajectory: start=%1 goal=%2  samples=%3  final=(%4)  [%5]\n")
+                              .arg(res.value("start_reached", false) ? "reached" : "MISS")
+                              .arg(res.value("goal_reached", false) ? "reached" : "MISS")
+                              .arg(res.value("sample_count", 0LL))
+                              .arg(QString::fromStdString(
+                                  res.contains("final_positions")
+                                      ? res["final_positions"].dump()
+                                      : std::string("?")))
+                              .arg(QString::fromStdString(
+                                  res.value("integrator", "?")));
+            } else if (res.contains("path")) {
+                report += QStringLiteral("URDF: %1\n  sha256=%2  revolute=%3 joints=%4\n")
+                              .arg(QString::fromStdString(res.value("path", "")))
+                              .arg(QString::fromStdString(res.value("sha256", "")))
+                              .arg(res.value("revolute_joints", 0LL))
+                              .arg(res.value("joint_count", 0LL));
+            } else if (!res.is_null() && !res.empty()) {
+                report += QStringLiteral("Result: ") +
+                          QString::fromStdString(res.dump(2)) + QStringLiteral("\n");
+            }
+        }
+        if (envelope.contains("validation") && !envelope["validation"].is_null()) {
+            const auto& v = envelope["validation"];
+            report += QStringLiteral("Validation: ") +
+                      QString::fromStdString(v.value("status", "?")) + QStringLiteral(" — ") +
+                      QString::fromStdString(v.value("message", "")) + QStringLiteral("\n");
+        }
+        if (envelope.contains("errors") && envelope["errors"].is_array() &&
+            !envelope["errors"].empty()) {
+            std::string errs = envelope["errors"].dump(2);
+            if (errs.size() > 600) {
+                errs = errs.substr(0, 600) + "…";
+            }
+            report += QStringLiteral("Errors: ") + QString::fromStdString(errs) +
+                      QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Job error: ") + QString::fromStdString(err) +
+                  QStringLiteral("\n");
+    }
+    if (roboticsOutput_->toPlainText() != report) {
+        roboticsOutput_->setPlainText(report);
     }
 }
 
@@ -2128,6 +2427,7 @@ void MainWindow::refreshJobs() {
     refreshFwResult();
     refreshSimResult();
     refreshResearchResult();
+    refreshRoboticsResult();
 }
 
 void MainWindow::refreshWorkflows() {

@@ -76,6 +76,9 @@ private:
     ParseResult tryResearchRequest(const std::string& text,
                                    const std::string& lowered,
                                    const std::string& forcedDomain) const;
+    ParseResult tryRoboticsRequest(const std::string& text,
+                                   const std::string& lowered,
+                                   const std::string& forcedDomain) const;
 };
 
 }  // namespace trinity::intelligence

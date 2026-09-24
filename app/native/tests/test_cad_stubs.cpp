@@ -26,22 +26,24 @@ TEST_CASE("cad skeleton describes capabilities and refuses geometry") {
     CHECK_FALSE(refused.validation->passed());
 }
 
-TEST_CASE("domain stubs register metadata and refuse execution") {
+TEST_CASE("all eight engines register metadata and describe real capabilities") {
     trinity::engines::EngineRegistry registry;
     trinity::engines::registerAllEngines(registry);
     const auto listed = registry.list();
     CHECK(listed.size() == 8);
 
-    for (const char* name : {"robotics"}) {
+    // Every shipped domain is a real engine now: no stubbed domains remain.
+    // Math does not expose `describe`; it is covered by listCapabilities below.
+    for (const char* name :
+         {"cad", "pcb", "firmware", "simulation", "vision", "research",
+          "robotics"}) {
         CHECK(registry.has(name));
         trinity::engines::EngineRequest req;
         req.engine = name;
         req.operation = "describe";
         const auto result = registry.execute(req);
-        // Stubs never claim real work: success must stay false.
-        CHECK_FALSE(result.success);
-        REQUIRE_FALSE(result.errors.empty());
-        CHECK(result.errors.front().value("code", "") == "capability_unavailable");
+        CHECK(result.success);
+        REQUIRE(result.errors.empty());
     }
 
     // Research graduated to a real engine: describe succeeds.
@@ -54,6 +56,18 @@ TEST_CASE("domain stubs register metadata and refuse execution") {
         CHECK(result.success);
         REQUIRE(result.result.contains("capabilities"));
         CHECK(result.result["capabilities"].size() == 7);
+    }
+
+    // Robotics graduated to a real engine: describe succeeds.
+    {
+        CHECK(registry.has("robotics"));
+        trinity::engines::EngineRequest req;
+        req.engine = "robotics";
+        req.operation = "describe";
+        const auto result = registry.execute(req);
+        CHECK(result.success);
+        REQUIRE(result.result.contains("capabilities"));
+        CHECK(result.result["capabilities"].size() == 4);
     }
 
     // Vision graduated to a real engine: describe succeeds.

@@ -110,13 +110,15 @@ RouteResult IntentRouter::route(const Intent& intent,
         engine = "vision";
     } else if (intent.domain == "research") {
         engine = "research";
+    } else if (intent.domain == "robotics") {
+        engine = "robotics";
     } else if (intent.domain == "simulation") {
         engine = "simulation";
     } else {
         return reject(intent.domain, operation, "REJECTED",
                       "Unsupported domain '" + intent.domain +
                           "'; supported: cad, math, pcb, firmware, vision, simulation, "
-                          "research");
+                          "research, robotics");
     }
 
     if (!registry.has(engine)) {
@@ -280,6 +282,28 @@ RouteResult IntentRouter::route(const Intent& intent,
         core::Logger::instance().info(
             "intelligence", "intent routed",
             core::Json{{"intent_id", intent.intentId}, {"engine", "research"}});
+        return out;
+    }
+
+    // Robotics domain: structured parameters (joint arrays, dh_params,
+    // duration/dt, robot_name) pass through verbatim; the engine owns
+    // kinematics semantics.
+    if (intent.domain == "robotics") {
+        ToolCall call;
+        call.toolCallId = core::newUuid();
+        call.engine = "robotics";
+        call.operation = operation;
+        call.parameters = intent.parameters;
+        RouteResult out;
+        out.routed = true;
+        out.engine = "robotics";
+        out.operation = operation;
+        out.capability = operation;
+        out.status = "ROUTED";
+        out.toolCall = std::move(call);
+        core::Logger::instance().info(
+            "intelligence", "intent routed",
+            core::Json{{"intent_id", intent.intentId}, {"engine", "robotics"}});
         return out;
     }
 

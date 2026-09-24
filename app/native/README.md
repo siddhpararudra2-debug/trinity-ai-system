@@ -28,9 +28,9 @@ Deterministic core principles (ported from `src/`):
   `IModelProvider` is the seam for OpenAI / Anthropic / local / custom
   Trinity models. `NullModelProvider` refuses truthfully.
 - Engines implement `IEngine` (`Engine.hpp`); the registry supports
-  register / get / has / list. Seven real engines ship (math, cad, pcb,
-  firmware, vision, simulation, research); robotics is a truthful
-  stub refusing without fake results.
+  register / get / has / list. Eight real engines ship (math, cad, pcb,
+  firmware, vision, simulation, research, robotics); no stub domains
+  remain.
 - Jobs run `queued -> running -> completed|failed` with the same
   ToolResponse-style envelope as the Python backend.
 - Validation states `GENERATED | VALIDATED | VERIFIED | FAILED` stay
@@ -47,7 +47,7 @@ app/native/
     cad/{FrameParams,Mesh,Builder,StlWriter,Validators}.hpp
     engines/{Engine,EngineRegistry,MathEngine,CadEngine,PcbEngine,
              FirmwareEngine,VisionEngine,SimulationEngine,ResearchEngine,
-             StubEngines}.hpp
+             RoboticsEngine,StubEngines}.hpp
     jobs/Job.hpp
     workflows/Workflow.hpp
     validation/ValidationResult.hpp
@@ -227,12 +227,13 @@ rest marked `skipped`. Model refusal executes nothing.
   source generation, controlled Windows `CreateProcess` build),
   `VisionEngine` (OpenCV-gated load/resize/grayscale/edge/stats with
   truthful refusal when OpenCV is absent), `SimulationEngine`
-  (kinematics + basic dynamics, CSV/JSON exports) and `ResearchEngine`
+  (kinematics + basic dynamics, CSV/JSON exports), `ResearchEngine`
   (deterministic local index: index_document / search / summarize_results /
   list_documents / clear_index / export_index with ranked BM25-lite
-  scoring, extractive summaries and JSONL export — no web, no LLM) are
-  real; Robotics remains a stub registering metadata and refusing
-  without fake results
+  scoring, extractive summaries and JSONL export — no web, no LLM) and
+  `RoboticsEngine` (standard-DH forward kinematics, per-joint linear
+  trajectory integration via the deterministic simulator, URDF export
+  with SHA-256 — no dynamics, no collision, no IK) are all real
 - `PcbEngine` (`describe/create_board/add_component/add_net/place_component/validate_design/export`)
   over the tool-agnostic IR (`pcb/PcbDesign,Validators,KiCadExport`): starter footprints
   (ESP32-WROOM-32, IMU-QFN-24, SOT-223, 0603), bounds/overlap/clearance/power-net
@@ -240,17 +241,20 @@ rest marked `skipped`. Model refusal executes nothing.
 - Validation `GENERATED/VALIDATED/VERIFIED/INVALID` (+`FAILED` alias) with
   `ValidationMessage{rule,severity(INFO/WARNING/ERROR),passed,message,details}`
 - Qt `MainWindow` engine list (math/cad/pcb/firmware/vision/simulation/
-   research marked implemented with capabilities + last results vs
-   scaffolded/unavailable) plus a deterministic Math
+   research/robotics marked implemented with capabilities + last results
+   vs scaffolded/unavailable) plus a deterministic Math
   panel (evaluate/solve/linear/quadratic/convert/formula) submitting
   through `RequestPipeline` to the worker thread and rendering the
   persisted job (result/units/validation/errors/job id/execution time)
   plus a PCB workspace (board/component/net/place/validate/export forms
-  chaining the live design JSON through the shared worker thread)
+  chaining the live design JSON through the shared worker thread), a
+  Research workspace (index/search/summarize over the local index) and a
+  Robotics workspace (DH chain / joint angles / trajectory / URDF export
+  forms over the shared worker thread)
 - `Trinity.exe` (+ `--selftest`: 8 engines, math check, cad 108-triangle
   check, pcb/firmware checks, vision image-op check (OpenCV load or
   truthful refusal), simulation linear-motion check, research
-  index/search check, refusal check,
+  index/search check, robotics DH forward-kinematics check, refusal check,
   planner/model/provider checks), `trinity_tests` via CTest
 - Native Qt 6 3D viewer (`ui/viewer/ViewportWidget`, `ViewerController`,
   `ViewerPanel` over Qt-free `viewer/{RenderData,ViewerState,Measure,
@@ -290,7 +294,6 @@ rest marked `skipped`. Model refusal executes nothing.
 - CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
-- Real Robotics implementation
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,
   local, custom Trinity model — the factory + example + planner are
   ready; only the transport is missing)

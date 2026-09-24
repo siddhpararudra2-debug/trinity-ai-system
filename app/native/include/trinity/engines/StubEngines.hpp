@@ -1,9 +1,8 @@
 #pragma once
 
-// Domain stub engine: Robotics. Registers capability metadata and
-// refuses execution with structured CAPABILITY_UNAVAILABLE — never
-// fake results. (CAD, PCB, Firmware, Vision, Math, Research and
-// Simulation graduated to real engines.)
+// Generic scaffold engine used only inside tests (e.g. registry guard
+// coverage). All eight shipped domains — math, cad, pcb, firmware,
+// vision, research, simulation, robotics — are real engines.
 
 #include <string>
 #include <vector>
@@ -22,12 +21,10 @@ public:
     validation::ValidationResult validate(const EngineResult& result) const override;
 };
 
-std::shared_ptr<StubEngine> makeRoboticsEngine();
-
 class EngineRegistry;
 
 /// Register all engines: math + cad + pcb + firmware + vision +
-/// research + simulation + robotics stub. Idempotent per process:
+/// research + simulation + robotics. Idempotent per process:
 /// skips engines
 /// already registered (e.g. when ApplicationContext::initialize runs
 /// twice in tests).

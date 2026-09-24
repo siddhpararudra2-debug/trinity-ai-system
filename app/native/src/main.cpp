@@ -8,6 +8,7 @@
 // exits 0 on success so CI and operators can verify startup without
 // a display server.
 
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
@@ -246,6 +247,25 @@ int runSelftest() {
         researchOk = false;
     }
     std::cout << (researchOk ? "[PASS] " : "[FAIL] ") << "research_indexes_and_searches\n";
+    // Robotics must solve deterministic DH forward kinematics.
+    bool roboticsOk = false;
+    try {
+        trinity::engines::EngineRequest fkReq;
+        fkReq.engine = "robotics";
+        fkReq.operation = "forward_kinematics";
+        fkReq.parameters =
+            trinity::core::Json{{"joint_angles", trinity::core::Json::array({0.0, 0.0})}};
+        const auto fkResult = context.engines().execute(fkReq);
+        const auto& pos = fkResult.result["end_effector"]["position"];
+        roboticsOk = fkResult.success &&
+                     std::fabs(pos.value("x", 0.0) - 2.0) < 1e-6 &&
+                     std::fabs(pos.value("y", 0.0)) < 1e-6 &&
+                     std::fabs(pos.value("z", 0.0)) < 1e-6 &&
+                     fkResult.validation.has_value() && fkResult.validation->passed();
+    } catch (...) {
+        roboticsOk = false;
+    }
+    std::cout << (roboticsOk ? "[PASS] " : "[FAIL] ") << "robotics_forward_kinematics\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -270,7 +290,8 @@ int runSelftest() {
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
     allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && fwOk &&
-            visionOk && simOk && researchOk && modelOk && plannerOk && providerOk;
+            visionOk && simOk && researchOk && roboticsOk && modelOk && plannerOk &&
+            providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;
