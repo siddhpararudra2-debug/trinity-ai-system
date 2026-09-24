@@ -6,9 +6,9 @@
 // itself never needs editing beyond registration order.
 //
 // Canonical units (internal representation):
-//   length -> mm, angle -> deg, mass -> g, force -> N, pressure -> Pa.
-// The original value/unit strings are always preserved in
-// Intent::rawMetadata for traceability.
+//   length -> mm, angle -> deg, mass -> g, force -> N, pressure -> Pa,
+//   time -> s. The original value/unit strings are always preserved in
+//   Intent::rawMetadata for traceability.
 
 #include <string>
 #include <vector>
@@ -23,7 +23,7 @@ struct NormalizedQuantity {
     bool ok = false;
     double normalizedValue = 0.0;
     std::string canonicalUnit;
-    std::string category;  // "length" | "angle" | "mass" | "force" | "pressure"
+    std::string category;  // "length" | "angle" | "mass" | "force" | "pressure" | "time"
 };
 
 class UnitNormalizer {
@@ -61,6 +61,9 @@ private:
     ParseResult tryMathRequest(const std::string& text,
                                const std::string& lowered,
                                const std::string& forcedDomain) const;
+    ParseResult trySimulationRequest(const std::string& text,
+                                     const std::string& lowered,
+                                     const std::string& forcedDomain) const;
     ParseResult tryPcbRequest(const std::string& text,
                               const std::string& lowered,
                               const std::string& forcedDomain) const;

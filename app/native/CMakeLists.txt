@@ -84,6 +84,11 @@ set(TRINITY_CORE_SOURCES
     src/engines/PcbEngine.cpp
     src/engines/FirmwareEngine.cpp
     src/engines/VisionEngine.cpp
+    src/engines/SimulationEngine.cpp
+    src/simulation/Types.cpp
+    src/simulation/Integrator.cpp
+    src/simulation/Validators.cpp
+    src/simulation/Exports.cpp
     src/firmware/FirmwareProject.cpp
     src/firmware/McuDatabase.cpp
     src/firmware/CodeGen.cpp
@@ -98,6 +103,7 @@ set(TRINITY_CORE_SOURCES
     src/storage/Migrations.cpp
     src/storage/Repositories.cpp
     src/artifacts/Artifact.cpp
+    src/artifacts/Checksum.cpp
     src/jobs/Job.cpp
     src/jobs/JobWorker.cpp
     src/intelligence/RequestPipeline.cpp
@@ -109,8 +115,16 @@ target_include_directories(trinity_core
         include
         third_party/json
 )
-find_package(OpenCV REQUIRED)
-target_link_libraries(trinity_core PUBLIC trinity_sqlite ${OpenCV_LIBS})
+find_package(OpenCV QUIET)
+if(OpenCV_FOUND)
+    target_compile_definitions(trinity_core PUBLIC TRINITY_HAS_OPENCV)
+    target_include_directories(trinity_core PUBLIC ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(trinity_core PUBLIC ${OpenCV_LIBS})
+    message(STATUS "OpenCV found: ${OpenCV_VERSION} — VisionEngine image ops enabled")
+else()
+    message(WARNING "OpenCV not found — VisionEngine registered but image ops unavailable")
+endif()
+target_link_libraries(trinity_core PUBLIC trinity_sqlite)
 if(WIN32)
     target_link_libraries(trinity_core PUBLIC bcrypt shell32 ole32)
 endif()
@@ -123,6 +137,8 @@ if(TRINITY_WITH_QT)
         src/main.cpp
         ui/MainWindow.cpp
         ui/MainWindow.hpp
+        ui/sim/TimeSeriesWidget.cpp
+        ui/sim/TimeSeriesWidget.hpp
         ui/viewer/ViewportWidget.cpp
         ui/viewer/ViewportWidget.hpp
         ui/viewer/ViewerController.cpp
@@ -175,6 +191,14 @@ if(TRINITY_BUILD_TESTS)
         tests/test_vision_project.cpp
         tests/test_image_processor.cpp
         tests/test_vision_engine.cpp
+        tests/test_sim_kinematics.cpp
+        tests/test_sim_dynamics.cpp
+        tests/test_sim_validation.cpp
+        tests/test_sim_determinism.cpp
+        tests/test_sim_exports.cpp
+        tests/test_sim_pipeline.cpp
+        tests/test_sim_workflow.cpp
+        tests/test_sim_cancellation.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)

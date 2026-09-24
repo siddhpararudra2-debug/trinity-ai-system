@@ -149,6 +149,10 @@ NormalizedQuantity UnitNormalizer::normalize(double value, const std::string& un
         out = {true, value * 1000.0, "g", "mass"};
     } else if (u == "n" || u == "newton" || u == "newtons") {
         out = {true, value, "N", "force"};
+    } else if (u == "s" || u == "sec" || u == "secs" || u == "second" || u == "seconds") {
+        out = {true, value, "s", "time"};
+    } else if (u == "ms" || u == "millisecond" || u == "milliseconds") {
+        out = {true, value / 1000.0, "s", "time"};
     } else if (u == "pa" || u == "pascal" || u == "pascals" || u == "kpa" || u == "mpa") {
         if (u == "kpa") {
             out = {true, value * 1000.0, "Pa", "pressure"};
@@ -236,6 +240,15 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    ParseResult sim = trySimulationRequest(text, lowered, "");
+    if (sim.status != ParseStatus::Invalid || !sim.errors.empty()) {
+        const bool noSim =
+            sim.errors.size() == 1 && sim.errors.front() == "__no_simulation_content__";
+        if (!noSim) {
+            return sim;
+        }
+    }
+
     // Firmware before PCB: PCB's keyword list includes "esp32", which
     // must not steal "Generate firmware for ESP32 ..." requests.
     ParseResult firmware = tryFirmwareRequest(text, lowered, "");
@@ -274,9 +287,10 @@ ParseResult RequirementParser::parse(const std::string& text) const {
     result.errors.push_back(
         "No deterministic parser matched this requirement; supported: CAD generation "
         "(quadcopter frame, plate), PCB creation (board dimensions, parts), math "
-        "evaluation (calculate, solve), firmware configuration (MCU, GPIO, UART, I2C, "
+        "evaluation (calculate, solve), simulation (simulate linear motion, projectile, "
+        "constant acceleration, dynamics), firmware configuration (MCU, GPIO, UART, I2C, "
         "PWM), vision processing (resize, grayscale, edge detect), explicit engine "
-        "requests (using math/cad/pcb/firmware/vision engine)");
+        "requests (using math/cad/pcb/simulation/firmware/vision engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -396,6 +410,28 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.missing = {"path"};
             result.errors.push_back(
                 "Explicit vision engine request is missing an image path");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "simulation") {
+        ParseResult inner = trySimulationRequest(remainder.empty() ? text : remainder,
+                                                 remainder.empty() ? lowered
+                                                                   : remainderLower,
+                                                 "simulation");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_simulation_content__") {
+            Intent intent = makeBaseIntent(text);
+            intent.domain = "simulation";
+            intent.object = "simulation";
+            intent.operation = "describe";
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"model", "duration_s"};
+            result.errors.push_back(
+                "Explicit simulation engine request is missing a model or duration");
             return result;
         }
         return inner;
@@ -929,6 +965,247 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     core::Logger::instance().info(
         "intelligence", "requirement parsed",
         core::Json{{"domain", "math"}, {"operation", intent.operation}, {"status", "VALID"}});
+    return result;
+}
+
+ParseResult RequirementParser::trySimulationRequest(const std::string& text,
+                                                    const std::string& lowered,
+                                                    const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "simulation") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_simulation_content__");
+        return sentinel;
+    }
+
+    const bool mentionsSim =
+        contains(lowered, "simulate") || contains(lowered, "simulation") ||
+        contains(lowered, "projectile") || contains(lowered, "kinematics");
+    if (forcedDomain.empty() && !mentionsSim) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_simulation_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "simulation";
+    intent.object = "simulation";
+    intent.units = "s";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    const bool isProjectile = contains(lowered, "projectile");
+    const bool isDynamics =
+        contains(lowered, "dynamics") ||
+        (contains(lowered, "force") && contains(lowered, "mass")) ||
+        contains(lowered, "f = m") || contains(lowered, "f=ma") ||
+        contains(lowered, "newton");
+    const bool isLinearMotion = contains(lowered, "linear motion");
+    const bool isConstantAccel =
+        contains(lowered, "constant acceleration") ||
+        (contains(lowered, "acceleration") && !isProjectile && !isDynamics &&
+         !isLinearMotion);
+    const bool isLinear = isLinearMotion ||
+                          (contains(lowered, "motion") && !isProjectile && !isDynamics &&
+                           !isConstantAccel);
+
+    if (isProjectile) {
+        intent.operation = "simulate_projectile";
+        intent.object = "projectile";
+    } else if (isDynamics) {
+        intent.operation = "simulate_dynamics";
+        intent.object = "dynamics";
+    } else if (isLinear) {
+        intent.operation = "simulate_linear_motion";
+        intent.object = "linear_motion";
+    } else if (isConstantAccel) {
+        intent.operation = "simulate_constant_acceleration";
+        intent.object = "constant_acceleration";
+    } else if (mentionsSim) {
+        intent.operation = "simulate_linear_motion";
+        intent.object = "linear_motion";
+    }
+
+    static const std::regex kDuration(
+        R"((?:(?:for|duration|over)\s*=?\s*)(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|ms|milliseconds?)\b)",
+        std::regex_constants::icase);
+    static const std::regex kVelocity(
+        R"((?:initial\s+velocity|velocity|speed)\s*=?\s*(\d+(?:\.\d+)?)\s*(m/s(?:\^?2)?|mps)\b)",
+        std::regex_constants::icase);
+    static const std::regex kAccel(
+        R"((?:acceleration|accel\.?)\s*=?\s*(-?\d+(?:\.\d+)?)\s*(m/s(?:\^?2)?|mps2?)\b)",
+        std::regex_constants::icase);
+    static const std::regex kAngle(
+        R"((?:at\s+)?(\d+(?:\.\d+)?)\s*(deg|degrees?|rad|radians?)\b)",
+        std::regex_constants::icase);
+    static const std::regex kHeight(
+        R"((?:initial\s+height|height)\s*=?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|inches)\b)",
+        std::regex_constants::icase);
+    static const std::regex kMass(
+        R"((?:mass)\s*=?\s*(\d+(?:\.\d+)?)\s*(kg|g|kilogram|kilograms|gram|grams)\b)",
+        std::regex_constants::icase);
+    static const std::regex kForce(
+        R"((?:force)\s*=?\s*(\d+(?:\.\d+)?)\s*(N|newton|newtons)\b)",
+        std::regex_constants::icase);
+
+    core::Json originals = core::Json::array();
+    auto recordOriginal = [&](const std::smatch& m, const std::string& key,
+                              const NormalizedQuantity& q) {
+        core::Json entry = core::Json::object();
+        entry["value"] = m[1].str();
+        entry["unit"] = m[2].str();
+        entry["key"] = key;
+        if (q.ok) {
+            entry["normalized_value"] = q.normalizedValue;
+            entry["normalized_unit"] = q.canonicalUnit;
+            entry["category"] = q.category;
+        } else {
+            entry["error"] = "unsupported unit";
+        }
+        originals.push_back(entry);
+    };
+
+    std::smatch m;
+    if (std::regex_search(text, m, kDuration)) {
+        const double raw = std::stod(m[1].str());
+        const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
+        if (q.ok) {
+            intent.parameters["duration_s"] = q.normalizedValue;
+            recordOriginal(m, "duration_s", q);
+        } else {
+            core::Json entry = core::Json::object();
+            entry["value"] = m[1].str();
+            entry["unit"] = m[2].str();
+            entry["error"] = "unsupported unit";
+            originals.push_back(entry);
+        }
+    }
+
+    if (std::regex_search(text, m, kVelocity)) {
+        const double raw = std::stod(m[1].str());
+        const std::string unit = toLower(m[2].str());
+        double velocity = raw;
+        if (unit == "mm/s") velocity = raw / 1000.0;
+        if (std::isfinite(velocity)) {
+            intent.parameters["initial_velocity_m_s"] = velocity;
+            core::Json entry = core::Json::object();
+            entry["value"] = m[1].str();
+            entry["unit"] = m[2].str();
+            entry["key"] = "initial_velocity_m_s";
+            entry["normalized_value"] = velocity;
+            entry["normalized_unit"] = "m/s";
+            entry["category"] = "velocity";
+            originals.push_back(entry);
+        }
+    }
+
+    if (!isProjectile && std::regex_search(text, m, kAccel)) {
+        const double raw = std::stod(m[1].str());
+        const std::string unit = toLower(m[2].str());
+        double accel = raw;
+        if (unit == "mm/s2" || unit == "mm/s^2") accel = raw / 1000.0;
+        if (std::isfinite(accel)) {
+            intent.parameters["acceleration_m_s2"] = accel;
+            core::Json entry = core::Json::object();
+            entry["value"] = m[1].str();
+            entry["unit"] = m[2].str();
+            entry["key"] = "acceleration_m_s2";
+            entry["normalized_value"] = accel;
+            entry["normalized_unit"] = "m/s^2";
+            entry["category"] = "acceleration";
+            originals.push_back(entry);
+        }
+    }
+
+    if (isProjectile && std::regex_search(text, m, kAngle)) {
+        const double raw = std::stod(m[1].str());
+        const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
+        if (q.ok) {
+            intent.parameters["launch_angle_deg"] = q.normalizedValue;
+            recordOriginal(m, "launch_angle_deg", q);
+        }
+    }
+
+    if (isProjectile && std::regex_search(text, m, kHeight)) {
+        const double raw = std::stod(m[1].str());
+        const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
+        if (q.ok && q.category == "length") {
+            intent.parameters["initial_height_mm"] = q.normalizedValue;
+            recordOriginal(m, "initial_height_mm", q);
+        }
+    }
+
+    if (isDynamics && std::regex_search(text, m, kMass)) {
+        const double raw = std::stod(m[1].str());
+        const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
+        if (q.ok && q.category == "mass") {
+            intent.parameters["mass_g"] = q.normalizedValue;
+            recordOriginal(m, "mass_g", q);
+        }
+    }
+
+    if (isDynamics && std::regex_search(text, m, kForce)) {
+        const double raw = std::stod(m[1].str());
+        const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
+        if (q.ok && q.category == "force") {
+            intent.parameters["force_N"] = q.normalizedValue;
+            recordOriginal(m, "force_N", q);
+        }
+    }
+
+    if (!originals.empty()) {
+        intent.rawMetadata["original_quantities"] = originals;
+    }
+
+    ParseResult result;
+    result.intent = intent;
+
+    std::vector<std::string> missing;
+    if (!intent.parameters.contains("duration_s")) {
+        missing.push_back("duration_s");
+    }
+    if (intent.operation == "simulate_projectile" &&
+        !intent.parameters.contains("initial_velocity_m_s")) {
+        missing.push_back("initial_velocity_m_s");
+    }
+    if (intent.operation == "simulate_projectile" &&
+        !intent.parameters.contains("launch_angle_deg")) {
+        missing.push_back("launch_angle_deg");
+    }
+    if (intent.operation == "simulate_constant_acceleration" &&
+        !intent.parameters.contains("acceleration_m_s2")) {
+        missing.push_back("acceleration_m_s2");
+    }
+    if (intent.operation == "simulate_dynamics") {
+        if (!intent.parameters.contains("force_N")) {
+            missing.push_back("force_N");
+        }
+        if (!intent.parameters.contains("mass_g")) {
+            missing.push_back("mass_g");
+        }
+    }
+
+    if (!missing.empty()) {
+        result.status = ParseStatus::Incomplete;
+        result.intent.status = ParseStatus::Incomplete;
+        result.intent.missing = missing;
+        result.intent.confidence = 0.5;
+        result.errors.push_back("Incomplete simulation request: missing " +
+                                missing.front());
+        return result;
+    }
+
+    result.status = ParseStatus::Valid;
+    result.intent.status = ParseStatus::Valid;
+    result.intent.confidence = 0.9;
+    core::Logger::instance().info(
+        "intelligence", "requirement parsed",
+        core::Json{{"domain", "simulation"},
+                   {"operation", intent.operation},
+                   {"status", "VALID"}});
     return result;
 }
 

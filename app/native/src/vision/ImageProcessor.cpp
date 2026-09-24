@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
 
 #include "trinity/core/Error.hpp"
+
+#ifdef TRINITY_HAS_OPENCV
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
+#endif
 
 namespace trinity::vision {
 
@@ -41,20 +44,25 @@ void ImageProcessor::validateImagePath(const std::string& path) {
         throw core::RequestValidationError("Unsupported image format", 
             {{"path", path}, {"format", ext}});
     }
-    
-    // Validate it's actually readable by OpenCV
+#ifdef TRINITY_HAS_OPENCV
     if (!cv::haveImageReader(path)) {
         throw core::RequestValidationError("Image cannot be read or is corrupted", 
             {{"path", path}});
     }
-    
-    // Quick load just to check it's not totally broken. 
-    // Optimization: could just read header, but haveImageReader covers most cases.
-    // We'll trust haveImageReader to save time on huge images.
+#else
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build",
+        {{"path", path}});
+#endif
 }
 
 ImageMetadata ImageProcessor::loadImage(const std::string& path) {
     validateImagePath(path);
+#ifndef TRINITY_HAS_OPENCV
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build",
+        {{"path", path}});
+#else
     cv::Mat img = cv::imread(path, cv::IMREAD_UNCHANGED);
     if (img.empty()) {
         throw core::RequestValidationError("Failed to decode image data", {{"path", path}});
@@ -70,6 +78,7 @@ ImageMetadata ImageProcessor::loadImage(const std::string& path) {
     meta.format = ext;
     meta.sizeBytes = std::filesystem::file_size(path);
     return meta;
+#endif
 }
 
 ImageMetadata ImageProcessor::resizeImage(const std::string& srcPath, int width,
@@ -78,7 +87,12 @@ ImageMetadata ImageProcessor::resizeImage(const std::string& srcPath, int width,
         throw core::RequestValidationError("Invalid resize dimensions", 
             {{"width", width}, {"height", height}});
     }
-    
+#ifndef TRINITY_HAS_OPENCV
+    (void)srcPath;
+    (void)outputPath;
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build");
+#else
     cv::Mat src = cv::imread(srcPath, cv::IMREAD_UNCHANGED);
     if (src.empty()) {
         throw core::RequestValidationError("Failed to load source image for resize", {{"path", srcPath}});
@@ -101,10 +115,17 @@ ImageMetadata ImageProcessor::resizeImage(const std::string& srcPath, int width,
     meta.format = ext;
     meta.sizeBytes = std::filesystem::file_size(outputPath);
     return meta;
+#endif
 }
 
 ImageMetadata ImageProcessor::grayscale(const std::string& srcPath,
                                         const std::string& outputPath) {
+#ifndef TRINITY_HAS_OPENCV
+    (void)srcPath;
+    (void)outputPath;
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build");
+#else
     cv::Mat src = cv::imread(srcPath, cv::IMREAD_UNCHANGED);
     if (src.empty()) {
         throw core::RequestValidationError("Failed to load source image for grayscale", {{"path", srcPath}});
@@ -136,10 +157,19 @@ ImageMetadata ImageProcessor::grayscale(const std::string& srcPath,
     meta.format = ext;
     meta.sizeBytes = std::filesystem::file_size(outputPath);
     return meta;
+#endif
 }
 
 ImageMetadata ImageProcessor::edgeDetect(const std::string& srcPath, double low,
                                          double high, const std::string& outputPath) {
+#ifndef TRINITY_HAS_OPENCV
+    (void)srcPath;
+    (void)low;
+    (void)high;
+    (void)outputPath;
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build");
+#else
     cv::Mat src = cv::imread(srcPath, cv::IMREAD_GRAYSCALE);
     if (src.empty()) {
         throw core::RequestValidationError("Failed to load source image for edge detection", {{"path", srcPath}});
@@ -162,9 +192,15 @@ ImageMetadata ImageProcessor::edgeDetect(const std::string& srcPath, double low,
     meta.format = ext;
     meta.sizeBytes = std::filesystem::file_size(outputPath);
     return meta;
+#endif
 }
 
 ProcessedStats ImageProcessor::imageStatistics(const std::string& srcPath) {
+#ifndef TRINITY_HAS_OPENCV
+    (void)srcPath;
+    throw core::RequestValidationError(
+        "Image processing requires OpenCV, which is not available in this build");
+#else
     cv::Mat src = cv::imread(srcPath, cv::IMREAD_UNCHANGED);
     if (src.empty()) {
         throw core::RequestValidationError("Failed to load source image for statistics", {{"path", srcPath}});
@@ -206,6 +242,7 @@ ProcessedStats ImageProcessor::imageStatistics(const std::string& srcPath) {
     }
     
     return stats;
+#endif
 }
 
 }  // namespace trinity::vision

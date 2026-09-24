@@ -23,7 +23,7 @@ void addCheck(validation::ValidationResult& out, const std::string& rule,
 
 bool isValidDomain(const std::string& domain) {
     return domain == "cad" || domain == "math" || domain == "pcb" ||
-           domain == "firmware";
+           domain == "firmware" || domain == "simulation";
 }
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
@@ -48,6 +48,15 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
                operation == "configure_peripheral" ||
                operation == "generate_firmware" || operation == "validate_project" ||
                operation == "build";
+    }
+    if (domain == "simulation") {
+        return operation == "describe" || operation == "create_simulation" ||
+               operation == "run_simulation" || operation == "validate_simulation" ||
+               operation == "export_results" ||
+               operation == "simulate_linear_motion" ||
+               operation == "simulate_projectile" ||
+               operation == "simulate_constant_acceleration" ||
+               operation == "simulate_dynamics";
     }
     return false;
 }
@@ -91,7 +100,7 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                          core::Json{{"domain", intent.domain},
                                     {"supported",
                                      core::Json::array({"cad", "math", "pcb",
-                                                        "firmware"})}});
+                                                        "firmware", "simulation"})}});
     } else {
         addCheck(out, "intent.domain", validation::Severity::Info, true,
                  "Domain '" + intent.domain + "' is supported");
@@ -334,6 +343,43 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
         } else {
             ok = false;
         }
+    } else if (intent.domain == "simulation") {
+        const std::string op = intent.operation;
+        if (op == "describe") {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Simulation describe needs no parameters");
+        } else {
+            bool typesOk = true;
+            if (intent.parameters.contains("duration_s") &&
+                !isFiniteNumber(intent.parameters["duration_s"])) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "duration_s must be a finite number",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+            if (op == "simulate_projectile" || op == "simulate_constant_acceleration" ||
+                op == "simulate_dynamics" || op == "simulate_linear_motion" ||
+                op == "run_simulation" || op == "create_simulation") {
+                for (auto it = intent.parameters.begin(); it != intent.parameters.end();
+                     ++it) {
+                    if (!it.value().is_number()) {
+                        continue;
+                    }
+                    if (!std::isfinite(it.value().get<double>())) {
+                        typesOk = false;
+                        addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                                 "Simulation parameter '" + it.key() + "' must be finite",
+                                 core::Json{{"parameter", it.key()}});
+                    }
+                }
+            }
+            if (typesOk) {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Simulation parameters present");
+            } else {
+                ok = false;
+            }
+        }
     } else {
         addCheck(out, "intent.param_type", validation::Severity::Warning, true,
                  "Parameter type check skipped for unknown domain");
@@ -471,6 +517,8 @@ validation::ValidationResult IntentValidator::validate(
         engine = "pcb";
     } else if (intent.domain == "firmware") {
         engine = "firmware";
+    } else if (intent.domain == "simulation") {
+        engine = "simulation";
     }
     if (!engine.empty() && registry.has(engine)) {
         const std::vector<std::string> caps = registry.listCapabilities(engine);

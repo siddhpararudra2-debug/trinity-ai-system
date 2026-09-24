@@ -63,6 +63,7 @@ class WorkflowTableWidget;
 class ViewportWidget;
 class ViewerPanel;
 class ViewerController;
+class TimeSeriesWidget;
 
 struct EngineEntry {
     std::string name;
@@ -113,11 +114,13 @@ private slots:
     void handleFwGenerate();
     void handleFwValidate();
     void handleFwBuild();
+    void handleSimRun();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
     void refreshPcbResult();
     void refreshFwResult();
+    void refreshSimResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -186,6 +189,19 @@ private:
     core::Json lastFwProject_ = core::Json::object();
     bool hasFwProject_ = false;
     std::string lastFwJobId_;
+    // Simulation workspace: structured sim jobs + three time-series charts.
+    QComboBox* simModel_ = nullptr;
+    QLineEdit* simDuration_ = nullptr;
+    QLineEdit* simVelocity_ = nullptr;
+    QLineEdit* simAccel_ = nullptr;
+    QLineEdit* simAngle_ = nullptr;
+    QLineEdit* simMass_ = nullptr;
+    QLineEdit* simForce_ = nullptr;
+    QTextEdit* simOutput_ = nullptr;
+    TimeSeriesWidget* simPosChart_ = nullptr;
+    TimeSeriesWidget* simVelChart_ = nullptr;
+    TimeSeriesWidget* simAccChart_ = nullptr;
+    std::string lastSimJobId_;
     jobs::JobWorker* worker_ = nullptr;
 
 public:

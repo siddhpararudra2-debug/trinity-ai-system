@@ -179,6 +179,25 @@ InitSummary ApplicationContext::summary() const {
                                 check.checks.value("expected_span_mm", 0.0)))) +
                             "mm";
                     }
+                } else if (cap.name == "simulation" && registry_->has("simulation")) {
+                    engines::EngineRequest demo;
+                    demo.engine = "simulation";
+                    demo.operation = "simulate_linear_motion";
+                    demo.parameters = core::Json{
+                        {"duration_s", 1.0},
+                        {"initial_velocity_m_s", 2.0},
+                        {"acceleration_m_s2", 1.0},
+                        {"write_artifacts", false}};
+                    const auto result = registry_->execute(demo);
+                    if (result.success) {
+                        entry.implemented = true;
+                        entry.lastResult =
+                            "linear_motion: " +
+                            std::to_string(
+                                result.result["result"].value("step_count", 0LL)) +
+                            " steps, " +
+                            result.result["result"].value("method", std::string("closed_form"));
+                    }
                 }
             } catch (...) {
             }

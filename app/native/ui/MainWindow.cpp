@@ -35,6 +35,7 @@
 #include "viewer/ViewerController.hpp"
 #include "viewer/ViewerPanel.hpp"
 #include "viewer/ViewportWidget.hpp"
+#include "sim/TimeSeriesWidget.hpp"
 
 namespace trinity::ui {
 
@@ -477,6 +478,71 @@ void MainWindow::buildUi() {
         "Firmware: project / MCU / pins / peripherals / requirements / "
         "validation / generated files / build / artifacts / job / errors…"));
     leftLayout->addWidget(fwOutput_);
+
+    // ---- Simulation workspace: structured sim jobs + 3 time-series charts.
+    auto* simTitle = new QLabel(QStringLiteral("Simulation (deterministic)"), leftPane);
+    simTitle->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(simTitle);
+
+    simModel_ = new QComboBox(leftPane);
+    simModel_->addItem(QStringLiteral("Linear motion"));
+    simModel_->addItem(QStringLiteral("Projectile"));
+    simModel_->addItem(QStringLiteral("Constant acceleration"));
+    simModel_->addItem(QStringLiteral("Dynamics (F=m·a)"));
+    leftLayout->addWidget(simModel_);
+
+    auto* simRow1 = new QHBoxLayout();
+    simDuration_ = new QLineEdit(leftPane);
+    simDuration_->setPlaceholderText(QStringLiteral("Duration s (e.g. 5)"));
+    simDuration_->setText(QStringLiteral("5"));
+    simVelocity_ = new QLineEdit(leftPane);
+    simVelocity_->setPlaceholderText(QStringLiteral("v0 m/s (e.g. 10)"));
+    simVelocity_->setText(QStringLiteral("10"));
+    simAccel_ = new QLineEdit(leftPane);
+    simAccel_->setPlaceholderText(QStringLiteral("a m/s² (e.g. 2)"));
+    simAccel_->setText(QStringLiteral("2"));
+    simRow1->addWidget(simDuration_);
+    simRow1->addWidget(simVelocity_);
+    simRow1->addWidget(simAccel_);
+    leftLayout->addLayout(simRow1);
+
+    auto* simRow2 = new QHBoxLayout();
+    simAngle_ = new QLineEdit(leftPane);
+    simAngle_->setPlaceholderText(QStringLiteral("Angle deg (projectile)"));
+    simAngle_->setText(QStringLiteral("45"));
+    simMass_ = new QLineEdit(leftPane);
+    simMass_->setPlaceholderText(QStringLiteral("Mass g (dynamics)"));
+    simMass_->setText(QStringLiteral("1000"));
+    simForce_ = new QLineEdit(leftPane);
+    simForce_->setPlaceholderText(QStringLiteral("Force N (dynamics)"));
+    simForce_->setText(QStringLiteral("10"));
+    simRow2->addWidget(simAngle_);
+    simRow2->addWidget(simMass_);
+    simRow2->addWidget(simForce_);
+    leftLayout->addLayout(simRow2);
+
+    auto* simRunButton = new QPushButton(QStringLiteral("Run Simulation (async)"), leftPane);
+    simRunButton->setEnabled(pipeline_ != nullptr && worker_ != nullptr);
+    leftLayout->addWidget(simRunButton);
+    connect(simRunButton, &QPushButton::clicked, this, &MainWindow::handleSimRun);
+
+    simOutput_ = new QTextEdit(leftPane);
+    simOutput_->setReadOnly(true);
+    simOutput_->setMinimumHeight(120);
+    simOutput_->setPlaceholderText(QStringLiteral(
+        "Simulation: job / method / steps / validation / artifacts / errors…"));
+    leftLayout->addWidget(simOutput_);
+
+    simPosChart_ = new TimeSeriesWidget(leftPane);
+    simPosChart_->setMinimumHeight(140);
+    leftLayout->addWidget(simPosChart_);
+    simVelChart_ = new TimeSeriesWidget(leftPane);
+    simVelChart_->setMinimumHeight(140);
+    leftLayout->addWidget(simVelChart_);
+    simAccChart_ = new TimeSeriesWidget(leftPane);
+    simAccChart_->setMinimumHeight(140);
+    leftLayout->addWidget(simAccChart_);
+
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -823,6 +889,217 @@ void MainWindow::refreshMathResult() {
     report += timing;
     if (mathOutput_->toPlainText() != report) {
         mathOutput_->setPlainText(report);
+    }
+}
+
+// --- Simulation workspace: structured sim jobs on the shared worker.
+
+namespace {
+
+bool simNumber(const QString& text, double& valueOut) {
+    bool ok = false;
+    const double value = text.trimmed().toDouble(&ok);
+    if (!ok || !std::isfinite(value)) {
+        return false;
+    }
+    valueOut = value;
+    return true;
+}
+
+std::string simOperationForIndex(int index) {
+    switch (index) {
+        case 1:
+            return "simulate_projectile";
+        case 2:
+            return "simulate_constant_acceleration";
+        case 3:
+            return "simulate_dynamics";
+        default:
+            return "simulate_linear_motion";
+    }
+}
+
+}  // namespace
+
+void MainWindow::handleSimRun() {
+    if (simModel_ == nullptr || simDuration_ == nullptr || simOutput_ == nullptr ||
+        worker_ == nullptr) {
+        return;
+    }
+    double duration = 0.0;
+    if (!simNumber(simDuration_->text(), duration) || duration <= 0.0) {
+        simOutput_->setPlainText(QStringLiteral("Simulation: duration_s must be a positive number"));
+        return;
+    }
+    const std::string op = simOperationForIndex(simModel_->currentIndex());
+    trinity::core::Json params = {{"duration_s", duration}, {"dt", 0.01}};
+
+    if (op == "simulate_linear_motion" || op == "simulate_constant_acceleration") {
+        double v0 = 0.0;
+        if (simVelocity_ != nullptr && !simVelocity_->text().trimmed().isEmpty()) {
+            if (!simNumber(simVelocity_->text(), v0)) {
+                simOutput_->setPlainText(QStringLiteral("Simulation: velocity must be a number"));
+                return;
+            }
+        }
+        params["initial_velocity_m_s"] = v0;
+        double accel = 0.0;
+        if (simAccel_ != nullptr && !simAccel_->text().trimmed().isEmpty()) {
+            if (!simNumber(simAccel_->text(), accel)) {
+                simOutput_->setPlainText(QStringLiteral("Simulation: acceleration must be a number"));
+                return;
+            }
+        }
+        if (op == "simulate_constant_acceleration" && accel == 0.0) {
+            simOutput_->setPlainText(
+                QStringLiteral("Simulation: constant acceleration requires a non-zero a"));
+            return;
+        }
+        params["acceleration_m_s2"] = accel;
+    } else if (op == "simulate_projectile") {
+        double v0 = 0.0;
+        if (simVelocity_ == nullptr || !simNumber(simVelocity_->text(), v0) || v0 <= 0.0) {
+            simOutput_->setPlainText(
+                QStringLiteral("Simulation: projectile requires a positive initial velocity"));
+            return;
+        }
+        double angle = 45.0;
+        if (simAngle_ != nullptr && !simAngle_->text().trimmed().isEmpty()) {
+            if (!simNumber(simAngle_->text(), angle)) {
+                simOutput_->setPlainText(QStringLiteral("Simulation: angle must be a number"));
+                return;
+            }
+        }
+        params["initial_velocity_m_s"] = v0;
+        params["launch_angle_deg"] = angle;
+    } else {
+        double massG = 0.0;
+        double forceN = 0.0;
+        if (simMass_ == nullptr || !simNumber(simMass_->text(), massG) || massG <= 0.0) {
+            simOutput_->setPlainText(
+                QStringLiteral("Simulation: dynamics requires a positive mass in grams"));
+            return;
+        }
+        if (simForce_ == nullptr || !simNumber(simForce_->text(), forceN)) {
+            simOutput_->setPlainText(QStringLiteral("Simulation: dynamics requires a force in N"));
+            return;
+        }
+        params["mass_g"] = massG;
+        params["force_N"] = forceN;
+        double v0 = 0.0;
+        if (simVelocity_ != nullptr && !simVelocity_->text().trimmed().isEmpty()) {
+            if (simNumber(simVelocity_->text(), v0)) {
+                params["initial_velocity_m_s"] = v0;
+            }
+        }
+    }
+
+    try {
+        lastSimJobId_ = worker_->submit("simulation", op, params);
+        simOutput_->setPlainText(QStringLiteral("Simulation submitted (%1), job %2…")
+                                     .arg(QString::fromStdString(op),
+                                          QString::fromStdString(lastSimJobId_)));
+        if (simPosChart_ != nullptr) simPosChart_->clear();
+        if (simVelChart_ != nullptr) simVelChart_->clear();
+        if (simAccChart_ != nullptr) simAccChart_->clear();
+    } catch (const std::exception& exc) {
+        simOutput_->setPlainText(QStringLiteral("Simulation submit failed: ") +
+                                 QString::fromStdString(exc.what()));
+        lastSimJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshSimResult() {
+    if (simOutput_ == nullptr || jobs_ == nullptr || lastSimJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastSimJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  %2/%3  •  %4\n")
+            .arg(shortId, QString::fromStdString(job.engine),
+                 QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& result = job.result;
+        if (result.contains("result") && result["result"].is_object()) {
+            const auto& sim = result["result"];
+            report += QStringLiteral("Method: %1  Steps: %2  Samples: %3  Downsampled: %4\n")
+                          .arg(QString::fromStdString(sim.value("method", "")),
+                               QString::number(sim.value("step_count", 0LL)),
+                               QString::number(sim.value("sample_count", 0LL)),
+                               sim.value("downsampled", false) ? QStringLiteral("yes")
+                                                               : QStringLiteral("no"));
+            if (result.contains("checks") && result["checks"].is_object()) {
+                const auto& checks = result["checks"];
+                report += QStringLiteral("Checks: ok=%1 — %2\n")
+                              .arg(checks.value("ok", false) ? QStringLiteral("true")
+                                                             : QStringLiteral("false"),
+                                   QString::fromStdString(checks.value("message", "")));
+            }
+            if (sim.contains("samples") && sim["samples"].is_array()) {
+                std::vector<SeriesPoint> pos;
+                std::vector<SeriesPoint> vel;
+                std::vector<SeriesPoint> acc;
+                const auto& samples = sim["samples"];
+                const size_t n = samples.size();
+                const size_t stride = n > 4000 ? (n / 4000) : 1;
+                pos.reserve(n / stride + 1);
+                vel.reserve(n / stride + 1);
+                acc.reserve(n / stride + 1);
+                for (size_t i = 0; i < n; i += stride) {
+                    const auto& s = samples[i];
+                    const double t = s.value("t", 0.0);
+                    pos.push_back({t, s["position"].value("x", 0.0)});
+                    vel.push_back({t, s["velocity"].value("x", 0.0)});
+                    acc.push_back({t, s["acceleration"].value("x", 0.0)});
+                }
+                if (n > 0 && stride > 1) {
+                    const auto& last = samples[n - 1];
+                    const double t = last.value("t", 0.0);
+                    pos.push_back({t, last["position"].value("x", 0.0)});
+                    vel.push_back({t, last["velocity"].value("x", 0.0)});
+                    acc.push_back({t, last["acceleration"].value("x", 0.0)});
+                }
+                if (simPosChart_ != nullptr) {
+                    simPosChart_->setSeries(pos, QStringLiteral("Position x (m)"),
+                                            QStringLiteral("t (s)"),
+                                            QStringLiteral("m"));
+                }
+                if (simVelChart_ != nullptr) {
+                    simVelChart_->setSeries(vel, QStringLiteral("Velocity x (m/s)"),
+                                            QStringLiteral("t (s)"),
+                                            QStringLiteral("m/s"));
+                }
+                if (simAccChart_ != nullptr) {
+                    simAccChart_->setSeries(acc, QStringLiteral("Acceleration x (m/s²)"),
+                                            QStringLiteral("t (s)"),
+                                            QStringLiteral("m/s²"));
+                }
+            }
+        }
+        if (result.contains("checks") && !result.contains("result")) {
+            report += QStringLiteral("Checks: ") +
+                      QString::fromStdString(result["checks"].dump(2)) + QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Error: ") + QString::fromStdString(err) + QStringLiteral("\n");
+    }
+    if (simOutput_->toPlainText() != report) {
+        simOutput_->setPlainText(report);
     }
 }
 
@@ -1642,6 +1919,7 @@ void MainWindow::refreshJobs() {
     refreshMathResult();
     refreshPcbResult();
     refreshFwResult();
+    refreshSimResult();
 }
 
 void MainWindow::refreshWorkflows() {

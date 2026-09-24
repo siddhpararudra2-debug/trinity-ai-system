@@ -6,6 +6,7 @@
 #include "trinity/engines/FirmwareEngine.hpp"
 #include "trinity/engines/MathEngine.hpp"
 #include "trinity/engines/PcbEngine.hpp"
+#include "trinity/engines/SimulationEngine.hpp"
 #include "trinity/engines/VisionEngine.hpp"
 
 namespace trinity::engines {
@@ -51,11 +52,6 @@ std::shared_ptr<StubEngine> makeResearchEngine() {
                                         std::vector<std::string>{"describe"});
 }
 
-std::shared_ptr<StubEngine> makeSimulationEngine() {
-    return std::make_shared<StubEngine>("simulation", "0.1.0",
-                                        std::vector<std::string>{"describe"});
-}
-
 std::shared_ptr<StubEngine> makeRoboticsEngine() {
     return std::make_shared<StubEngine>("robotics", "0.1.0",
                                         std::vector<std::string>{"describe"});
@@ -81,7 +77,7 @@ void registerAllEngines(EngineRegistry& registry) {
         registry.registerEngine(makeResearchEngine());
     }
     if (!registry.has("simulation")) {
-        registry.registerEngine(makeSimulationEngine());
+        registry.registerEngine(std::make_shared<SimulationEngine>());
     }
     if (!registry.has("robotics")) {
         registry.registerEngine(makeRoboticsEngine());

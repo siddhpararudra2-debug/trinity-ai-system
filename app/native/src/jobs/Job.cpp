@@ -429,7 +429,7 @@ core::Json JobManager::executeJob(const std::string& jobId,
     {
         std::lock_guard<std::mutex> lock(mutex_);
         job = getLocked(jobId);
-        if (cancelRequested_.count(jobId) != 0) {
+        if (job.status == JobStatus::Cancelled || cancelRequested_.count(jobId) != 0) {
             if (canTransition(job.status, JobStatus::Cancelled)) {
                 setStatusLocked(job, JobStatus::Cancelled);
                 job.progress = 1.0;
@@ -502,6 +502,12 @@ core::Json JobManager::executeJob(const std::string& jobId,
         request.parameters = job.input.is_null() ? job.request : job.input;
         if (request.parameters.is_null()) {
             request.parameters = core::Json::object();
+        }
+        if (token) {
+            request.cancelCheck = [token]() { return token->isCancelled(); };
+        } else {
+            const std::string id = jobId;
+            request.cancelCheck = [this, id]() { return isCancellationRequested(id); };
         }
         engineResult = registry_->execute(request);
         engineResult.jobId = jobId;
@@ -695,6 +701,7 @@ bool JobManager::cancel(const std::string& jobId) {
     std::lock_guard<std::mutex> lock(mutex_);
     Job job = getLocked(jobId);
     if (job.status == JobStatus::Queued) {
+        cancelRequested_.insert(jobId);
         setStatusLocked(job, JobStatus::Cancelled);
         job.progress = 1.0;
         persistLocked(job);

@@ -4,7 +4,6 @@
 #include <iostream>
 
 #include "trinity/core/Error.hpp"
-#include "trinity/core/Paths.hpp"
 #include "trinity/core/Uuid.hpp"
 #include "trinity/vision/ImageProcessor.hpp"
 
@@ -14,6 +13,7 @@ VisionEngine::VisionEngine() {
     name_ = "vision";
     version_ = "1.0";
     capabilities_ = {
+        "describe",
         "load_image",
         "resize_image",
         "grayscale",
@@ -48,6 +48,15 @@ std::string VisionEngine::resolveImagePath(const core::Json& params) {
 }
 
 EngineResult VisionEngine::execute(const EngineRequest& request) {
+    if (request.operation == "describe") {
+        EngineResult out = successResult(
+            request, {{"engine", name_},
+                      {"version", version_},
+                      {"capabilities", capabilities_},
+                      {"supported_formats", supportedFormats()}});
+        out.validation = validate(out);
+        return out;
+    }
     requireCapability(request);
 
     try {
@@ -73,8 +82,8 @@ EngineResult VisionEngine::execute(const EngineRequest& request) {
 
 validation::ValidationResult VisionEngine::validate(const EngineResult& result) const {
     validation::ValidationResult v;
-    v.engine = name_;
     v.operation = result.operation;
+    v.checks = {{"engine", name_}, {"operation", result.operation}};
 
     if (result.failed()) {
         v.status = validation::ValidationStatus::Invalid;
@@ -116,8 +125,8 @@ EngineResult VisionEngine::executeResizeImage(const EngineRequest& request) {
     
     vision::ImageMetadata inMeta = vision::ImageProcessor::loadImage(path);
     
-    std::string outName = "resized_" + core::Uuid::v4() + "." + inMeta.format;
-    std::string outPath = (std::filesystem::path(core::Paths::scratchDir()) / outName).string();
+    std::string outName = "resized_" + core::newUuid() + "." + inMeta.format;
+    std::string outPath = (std::filesystem::path(std::filesystem::temp_directory_path()) / outName).string();
     
     vision::ImageMetadata outMeta = vision::ImageProcessor::resizeImage(path, width, height, outPath);
     
@@ -140,8 +149,8 @@ EngineResult VisionEngine::executeGrayscale(const EngineRequest& request) {
     
     vision::ImageMetadata inMeta = vision::ImageProcessor::loadImage(path);
     
-    std::string outName = "grayscale_" + core::Uuid::v4() + "." + inMeta.format;
-    std::string outPath = (std::filesystem::path(core::Paths::scratchDir()) / outName).string();
+    std::string outName = "grayscale_" + core::newUuid() + "." + inMeta.format;
+    std::string outPath = (std::filesystem::path(std::filesystem::temp_directory_path()) / outName).string();
     
     vision::ImageMetadata outMeta = vision::ImageProcessor::grayscale(path, outPath);
     
@@ -168,8 +177,8 @@ EngineResult VisionEngine::executeEdgeDetect(const EngineRequest& request) {
     vision::ImageMetadata inMeta = vision::ImageProcessor::loadImage(path);
     
     // Canny output is best saved as PNG to avoid compression artifacts.
-    std::string outName = "edges_" + core::Uuid::v4() + ".png";
-    std::string outPath = (std::filesystem::path(core::Paths::scratchDir()) / outName).string();
+    std::string outName = "edges_" + core::newUuid() + ".png";
+    std::string outPath = (std::filesystem::path(std::filesystem::temp_directory_path()) / outName).string();
     
     vision::ImageMetadata outMeta = vision::ImageProcessor::edgeDetect(path, low, high, outPath);
     

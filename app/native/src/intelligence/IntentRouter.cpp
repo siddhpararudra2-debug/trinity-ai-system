@@ -108,10 +108,12 @@ RouteResult IntentRouter::route(const Intent& intent,
         engine = "firmware";
     } else if (intent.domain == "vision") {
         engine = "vision";
+    } else if (intent.domain == "simulation") {
+        engine = "simulation";
     } else {
         return reject(intent.domain, operation, "REJECTED",
                       "Unsupported domain '" + intent.domain +
-                          "'; supported: cad, math, pcb, firmware, vision");
+                          "'; supported: cad, math, pcb, firmware, vision, simulation");
     }
 
     if (!registry.has(engine)) {
@@ -212,6 +214,27 @@ RouteResult IntentRouter::route(const Intent& intent,
         core::Logger::instance().info(
             "intelligence", "intent routed",
             core::Json{{"intent_id", intent.intentId}, {"engine", "firmware"}});
+        return out;
+    }
+
+    // Simulation domain: structured parameters pass through verbatim;
+    // the engine owns integration semantics.
+    if (intent.domain == "simulation") {
+        ToolCall call;
+        call.toolCallId = core::newUuid();
+        call.engine = "simulation";
+        call.operation = operation;
+        call.parameters = intent.parameters;
+        RouteResult out;
+        out.routed = true;
+        out.engine = "simulation";
+        out.operation = operation;
+        out.capability = operation;
+        out.status = "ROUTED";
+        out.toolCall = std::move(call);
+        core::Logger::instance().info(
+            "intelligence", "intent routed",
+            core::Json{{"intent_id", intent.intentId}, {"engine", "simulation"}});
         return out;
     }
 

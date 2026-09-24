@@ -8,7 +8,12 @@
 // EngineResult.pendingArtifacts holds (temp_path, type) pairs for files
 // an engine wrote to scratch; the JobManager promotes them through the
 // artifact manager so storage/artifacts/ keeps a single writer.
+//
+// EngineRequest::cancelCheck is an optional cooperative probe (not
+// serialized). Long-running engines (simulation) poll it between steps
+// and return a non-success result when it reports cancellation.
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -37,6 +42,9 @@ struct EngineRequest {
     std::string engine;
     std::string operation;
     core::Json parameters = core::Json::object();
+    // Cooperative cancellation probe; empty when not applicable.
+    // Never serialized — in-process only.
+    std::function<bool()> cancelCheck;
 
     core::Json toJson() const;
     static EngineRequest fromJson(const core::Json& json);

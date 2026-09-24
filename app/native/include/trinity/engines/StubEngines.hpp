@@ -1,9 +1,9 @@
 #pragma once
 
-// Domain stub engines: Firmware, Vision, Research, Simulation,
-// Robotics. Each registers capability metadata and refuses execution
-// with structured CAPABILITY_UNAVAILABLE — never fake results.
-// (The PCB domain graduated to a real engine: see PcbEngine.)
+// Domain stub engines: Research, Robotics. Each registers capability
+// metadata and refuses execution with structured CAPABILITY_UNAVAILABLE
+// — never fake results. (CAD, PCB, Firmware, Vision, Math and
+// Simulation graduated to real engines.)
 
 #include <string>
 #include <vector>
@@ -24,14 +24,14 @@ public:
 
 std::shared_ptr<StubEngine> makeVisionEngine();
 std::shared_ptr<StubEngine> makeResearchEngine();
-std::shared_ptr<StubEngine> makeSimulationEngine();
 std::shared_ptr<StubEngine> makeRoboticsEngine();
 
 class EngineRegistry;
 
-/// Register all Phase-2 engines: math + cad + pcb + five domain stubs.
-/// Idempotent per process: skips engines already registered (e.g. when
-/// ApplicationContext::initialize runs twice in tests).
+/// Register all Phase-2 engines: math + cad + pcb + firmware + vision +
+/// simulation + two domain stubs. Idempotent per process: skips engines
+/// already registered (e.g. when ApplicationContext::initialize runs
+/// twice in tests).
 void registerAllEngines(EngineRegistry& registry);
 
 }  // namespace trinity::engines
