@@ -108,12 +108,15 @@ RouteResult IntentRouter::route(const Intent& intent,
         engine = "firmware";
     } else if (intent.domain == "vision") {
         engine = "vision";
+    } else if (intent.domain == "research") {
+        engine = "research";
     } else if (intent.domain == "simulation") {
         engine = "simulation";
     } else {
         return reject(intent.domain, operation, "REJECTED",
                       "Unsupported domain '" + intent.domain +
-                          "'; supported: cad, math, pcb, firmware, vision, simulation");
+                          "'; supported: cad, math, pcb, firmware, vision, simulation, "
+                          "research");
     }
 
     if (!registry.has(engine)) {
@@ -256,6 +259,27 @@ RouteResult IntentRouter::route(const Intent& intent,
         core::Logger::instance().info(
             "intelligence", "intent routed",
             core::Json{{"intent_id", intent.intentId}, {"engine", "vision"}});
+        return out;
+    }
+
+    // Research domain: structured parameters (query/title/text/limit/...)
+    // pass through verbatim; the engine owns indexing and ranking.
+    if (intent.domain == "research") {
+        ToolCall call;
+        call.toolCallId = core::newUuid();
+        call.engine = "research";
+        call.operation = operation;
+        call.parameters = intent.parameters;
+        RouteResult out;
+        out.routed = true;
+        out.engine = "research";
+        out.operation = operation;
+        out.capability = operation;
+        out.status = "ROUTED";
+        out.toolCall = std::move(call);
+        core::Logger::instance().info(
+            "intelligence", "intent routed",
+            core::Json{{"intent_id", intent.intentId}, {"engine", "research"}});
         return out;
     }
 

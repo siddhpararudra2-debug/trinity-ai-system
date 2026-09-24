@@ -115,12 +115,16 @@ private slots:
     void handleFwValidate();
     void handleFwBuild();
     void handleSimRun();
+    void handleResearchIndex();
+    void handleResearchSearch();
+    void handleResearchSummarize();
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
     void refreshPcbResult();
     void refreshFwResult();
     void refreshSimResult();
+    void refreshResearchResult();
     void refreshWorkflows();
     void refreshArtifacts();
     void refreshLogs();
@@ -202,6 +206,13 @@ private:
     TimeSeriesWidget* simVelChart_ = nullptr;
     TimeSeriesWidget* simAccChart_ = nullptr;
     std::string lastSimJobId_;
+    // Research workspace: deterministic local index (index/search/summarize);
+    // no web access, no LLM — everything comes from indexed documents.
+    QLineEdit* researchTitle_ = nullptr;
+    QTextEdit* researchText_ = nullptr;
+    QLineEdit* researchQuery_ = nullptr;
+    QTextEdit* researchOutput_ = nullptr;
+    std::string lastResearchJobId_;
     jobs::JobWorker* worker_ = nullptr;
 
 public:

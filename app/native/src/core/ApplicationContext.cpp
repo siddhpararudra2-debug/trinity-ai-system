@@ -226,6 +226,26 @@ InitSummary ApplicationContext::summary() const {
                     entry.lastResult = std::string("OpenCV ") + CV_VERSION +
                                        " image ops enabled";
 #endif
+                } else if (cap.name == "research" && registry_->has("research")) {
+                    engines::EngineRequest indexReq;
+                    indexReq.engine = "research";
+                    indexReq.operation = "index_document";
+                    indexReq.parameters = core::Json{
+                        {"doc_id", "summary-demo"},
+                        {"title", "Trinity research demo"},
+                        {"text", "Deterministic local research index demo entry."}};
+                    registry_->execute(indexReq);  // duplicate id on repeat calls is fine
+                    engines::EngineRequest searchReq;
+                    searchReq.engine = "research";
+                    searchReq.operation = "search";
+                    searchReq.parameters =
+                        core::Json{{"query", "deterministic index"}, {"limit", 3}};
+                    const auto found = registry_->execute(searchReq);
+                    if (found.success && found.result.value("hit_count", 0) > 0) {
+                        entry.implemented = true;
+                        entry.lastResult = std::to_string(found.result.value("hit_count", 0)) +
+                                           " hit(s) for 'deterministic index'";
+                    }
                 } else if (cap.name == "simulation" && registry_->has("simulation")) {
                     engines::EngineRequest demo;
                     demo.engine = "simulation";

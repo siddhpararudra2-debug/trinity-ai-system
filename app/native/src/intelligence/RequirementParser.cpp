@@ -279,6 +279,16 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         }
     }
 
+    ParseResult research = tryResearchRequest(text, lowered, "");
+    if (research.status != ParseStatus::Invalid || !research.errors.empty()) {
+        const bool noResearch =
+            research.errors.size() == 1 &&
+            research.errors.front() == "__no_research_content__";
+        if (!noResearch) {
+            return research;
+        }
+    }
+
     Intent intent = makeBaseIntent(text);
     ParseResult result;
     result.intent = intent;
@@ -289,8 +299,9 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         "(quadcopter frame, plate), PCB creation (board dimensions, parts), math "
         "evaluation (calculate, solve), simulation (simulate linear motion, projectile, "
         "constant acceleration, dynamics), firmware configuration (MCU, GPIO, UART, I2C, "
-        "PWM), vision processing (resize, grayscale, edge detect), explicit engine "
-        "requests (using math/cad/pcb/simulation/firmware/vision engine)");
+        "PWM), vision processing (resize, grayscale, edge detect), research (index "
+        "document, search documents, summarize results), explicit engine "
+        "requests (using math/cad/pcb/simulation/firmware/vision/research engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
                                      core::Json{{"request", trimmed}});
     return result;
@@ -410,6 +421,28 @@ ParseResult RequirementParser::tryExplicitEngine(const std::string& text,
             result.intent.missing = {"path"};
             result.errors.push_back(
                 "Explicit vision engine request is missing an image path");
+            return result;
+        }
+        return inner;
+    }
+    if (engine == "research") {
+        ParseResult inner = tryResearchRequest(remainder.empty() ? text : remainder,
+                                               remainder.empty() ? lowered
+                                                                 : remainderLower,
+                                               "research");
+        if (inner.status == ParseStatus::Invalid && !inner.errors.empty() &&
+            inner.errors.front() == "__no_research_content__") {
+            Intent intent = makeBaseIntent(text);
+            intent.domain = "research";
+            intent.object = "query";
+            intent.operation = "search";
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"query", "title", "text"};
+            result.errors.push_back(
+                "Explicit research engine request is missing a query, title, or text");
             return result;
         }
         return inner;
@@ -1729,6 +1762,220 @@ ParseResult RequirementParser::tryVisionRequest(const std::string& text,
         intent.parameters["path"] = m2[1].str();
     }
 
+    ParseResult result;
+    result.intent = intent;
+    result.status = ParseStatus::Valid;
+    result.intent.status = ParseStatus::Valid;
+    result.intent.confidence = 0.9;
+    return result;
+}
+
+ParseResult RequirementParser::tryResearchRequest(const std::string& text,
+                                                  const std::string& lowered,
+                                                  const std::string& forcedDomain) const {
+    if (!forcedDomain.empty() && forcedDomain != "research") {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_research_content__");
+        return sentinel;
+    }
+
+    const bool hasResearch = contains(lowered, "research") ||
+                             contains(lowered, "literature") ||
+                             contains(lowered, "papers");
+    const bool hasSummar = contains(lowered, "summar");
+    const bool hasIndexKeyword = contains(lowered, "index") || contains(lowered, "add document") ||
+                                 contains(lowered, "add a document") ||
+                                 contains(lowered, "store document") ||
+                                 contains(lowered, "store the document");
+    const bool hasDocument =
+        contains(lowered, "document") || contains(lowered, "doc ") ||
+        contains(lowered, "note") || contains(lowered, "text");
+    const bool hasIndex = hasIndexKeyword && hasDocument;
+    const bool hasClear = contains(lowered, "clear") && contains(lowered, "index");
+    const bool hasList =
+        (contains(lowered, "list") || contains(lowered, "show") ||
+         contains(lowered, "what documents")) &&
+        (contains(lowered, "document") || contains(lowered, "indexed"));
+    const bool hasExport = contains(lowered, "export") && contains(lowered, "index");
+    const bool hasSearch =
+        contains(lowered, "search") || contains(lowered, "look up") ||
+        contains(lowered, "query the") ||
+        (contains(lowered, "find") && (contains(lowered, "document") ||
+                                       contains(lowered, "papers") ||
+                                       contains(lowered, "notes")));
+    const bool hasDescribe = contains(lowered, "describe") || contains(lowered, "capabilit");
+
+    if (forcedDomain.empty() && !hasResearch && !hasSummar && !hasIndex && !hasClear &&
+        !hasList && !hasExport && !hasSearch && !hasDescribe) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_research_content__");
+        return sentinel;
+    }
+
+    Intent intent = makeBaseIntent(text);
+    intent.domain = "research";
+    intent.priority = detectPriority(lowered);
+    intent.outputs = detectOutputs(lowered);
+
+    auto extractQuoted = [&text]() -> std::string {
+        static const std::regex kQuote(R"(["']([^"'\n]{1,})["'])",
+                                       std::regex_constants::icase);
+        std::smatch match;
+        if (std::regex_search(text, match, kQuote)) {
+            return trim(match[1].str());
+        }
+        return {};
+    };
+    auto extractAllQuoted = [&text]() -> std::vector<std::string> {
+        static const std::regex kQuote(R"(["']([^"'\n]{1,})["'])",
+                                       std::regex_constants::icase);
+        std::vector<std::string> found;
+        for (std::sregex_iterator it(text.begin(), text.end(), kQuote), end; it != end; ++it) {
+            found.push_back(trim((*it)[1].str()));
+        }
+        return found;
+    };
+    auto extractAfterKeywords = [&text]() -> std::string {
+        // Requires an explicit preposition so "Search the index" stays
+        // incomplete instead of inventing a query from stray words.
+        static const std::regex kAfter(
+            R"((?:for|about|on|query)\s+(?:documents?|papers?|notes?|results?|information)?\s*(?:about|on|that|which)?\s*(.+)$)",
+            std::regex_constants::icase);
+        std::smatch match;
+        if (std::regex_search(text, match, kAfter) && match[1].matched) {
+            std::string query = trim(match[1].str());
+            while (!query.empty() && (query.back() == '"' || query.back() == '\'' ||
+                                      query.back() == '.' || query.back() == '?' ||
+                                      query.back() == '!')) {
+                query.pop_back();
+            }
+            query = trim(query);
+            if (!query.empty()) {
+                return query;
+            }
+        }
+        return {};
+    };
+
+    if (hasDescribe && !hasSummar && !hasSearch && !hasIndex) {
+        intent.operation = "describe";
+        intent.object = "document";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasSummar) {
+        intent.operation = "summarize_results";
+        intent.object = "query";
+        const std::string quoted = extractQuoted();
+        const std::string query = quoted.empty() ? extractAfterKeywords() : quoted;
+        if (query.empty()) {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"query"};
+            result.errors.push_back("Incomplete research request: summarize is missing a query");
+            return result;
+        }
+        intent.parameters["query"] = query;
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasClear) {
+        intent.operation = "clear_index";
+        intent.object = "index";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasExport) {
+        intent.operation = "export_index";
+        intent.object = "index";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasList) {
+        intent.operation = "list_documents";
+        intent.object = "document";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasIndex) {
+        intent.operation = "index_document";
+        intent.object = "document";
+        const std::vector<std::string> quoted = extractAllQuoted();
+        if (quoted.empty()) {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"title", "text"};
+            result.errors.push_back(
+                "Incomplete research request: index document needs a quoted title and text");
+            return result;
+        }
+        intent.parameters["title"] = quoted[0];
+        if (quoted.size() >= 2) {
+            intent.parameters["text"] = quoted[1];
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Incomplete;
+        result.intent.status = ParseStatus::Incomplete;
+        result.intent.missing = {"text"};
+        result.errors.push_back("Incomplete research request: index document is missing text");
+        return result;
+    }
+
+    // Default research operation: search.
+    intent.operation = "search";
+    intent.object = "query";
+    const std::string quotedQuery = extractQuoted();
+    const std::string query = quotedQuery.empty() ? extractAfterKeywords() : quotedQuery;
+    if (query.empty()) {
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Incomplete;
+        result.intent.status = ParseStatus::Incomplete;
+        result.intent.missing = {"query"};
+        result.errors.push_back("Incomplete research request: search is missing a query");
+        return result;
+    }
+    intent.parameters["query"] = query;
     ParseResult result;
     result.intent = intent;
     result.status = ParseStatus::Valid;

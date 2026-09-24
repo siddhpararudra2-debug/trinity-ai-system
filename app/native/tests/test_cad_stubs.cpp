@@ -32,7 +32,7 @@ TEST_CASE("domain stubs register metadata and refuse execution") {
     const auto listed = registry.list();
     CHECK(listed.size() == 8);
 
-    for (const char* name : {"research", "robotics"}) {
+    for (const char* name : {"robotics"}) {
         CHECK(registry.has(name));
         trinity::engines::EngineRequest req;
         req.engine = name;
@@ -42,6 +42,18 @@ TEST_CASE("domain stubs register metadata and refuse execution") {
         CHECK_FALSE(result.success);
         REQUIRE_FALSE(result.errors.empty());
         CHECK(result.errors.front().value("code", "") == "capability_unavailable");
+    }
+
+    // Research graduated to a real engine: describe succeeds.
+    {
+        CHECK(registry.has("research"));
+        trinity::engines::EngineRequest req;
+        req.engine = "research";
+        req.operation = "describe";
+        const auto result = registry.execute(req);
+        CHECK(result.success);
+        REQUIRE(result.result.contains("capabilities"));
+        CHECK(result.result["capabilities"].size() == 7);
     }
 
     // Vision graduated to a real engine: describe succeeds.

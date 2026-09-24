@@ -23,7 +23,8 @@ void addCheck(validation::ValidationResult& out, const std::string& rule,
 
 bool isValidDomain(const std::string& domain) {
     return domain == "cad" || domain == "math" || domain == "pcb" ||
-           domain == "firmware" || domain == "simulation";
+           domain == "firmware" || domain == "simulation" || domain == "vision" ||
+           domain == "research";
 }
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
@@ -57,6 +58,17 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
                operation == "simulate_projectile" ||
                operation == "simulate_constant_acceleration" ||
                operation == "simulate_dynamics";
+    }
+    if (domain == "vision") {
+        return operation == "describe" || operation == "load_image" ||
+               operation == "resize_image" || operation == "grayscale" ||
+               operation == "edge_detect" || operation == "image_statistics";
+    }
+    if (domain == "research") {
+        return operation == "describe" || operation == "index_document" ||
+               operation == "search" || operation == "summarize_results" ||
+               operation == "list_documents" || operation == "clear_index" ||
+               operation == "export_index";
     }
     return false;
 }
@@ -100,7 +112,8 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                          core::Json{{"domain", intent.domain},
                                     {"supported",
                                      core::Json::array({"cad", "math", "pcb",
-                                                        "firmware", "simulation"})}});
+                                                        "firmware", "simulation",
+                                                        "vision", "research"})}});
     } else {
         addCheck(out, "intent.domain", validation::Severity::Info, true,
                  "Domain '" + intent.domain + "' is supported");
@@ -380,6 +393,46 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                 ok = false;
             }
         }
+    } else if (intent.domain == "vision") {
+        bool typesOk = true;
+        for (const std::string& key : {"width", "height"}) {
+            if (intent.parameters.contains(key) && !isFiniteNumber(intent.parameters[key])) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a finite number",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        if (typesOk) {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Vision parameters present");
+        } else {
+            ok = false;
+        }
+    } else if (intent.domain == "research") {
+        bool typesOk = true;
+        for (const std::string& key : {"query", "title", "text", "source", "doc_id"}) {
+            if (intent.parameters.contains(key) && !intent.parameters[key].is_string()) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a string",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        for (const std::string& key : {"limit", "max_sentences"}) {
+            if (intent.parameters.contains(key) && !isFiniteNumber(intent.parameters[key])) {
+                typesOk = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         std::string(key) + " must be a finite number",
+                         core::Json{{"parameters", intent.parameters}});
+            }
+        }
+        if (typesOk) {
+            addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                     "Research parameters present");
+        } else {
+            ok = false;
+        }
     } else {
         addCheck(out, "intent.param_type", validation::Severity::Warning, true,
                  "Parameter type check skipped for unknown domain");
@@ -517,6 +570,10 @@ validation::ValidationResult IntentValidator::validate(
         engine = "pcb";
     } else if (intent.domain == "firmware") {
         engine = "firmware";
+    } else if (intent.domain == "vision") {
+        engine = "vision";
+    } else if (intent.domain == "research") {
+        engine = "research";
     } else if (intent.domain == "simulation") {
         engine = "simulation";
     }

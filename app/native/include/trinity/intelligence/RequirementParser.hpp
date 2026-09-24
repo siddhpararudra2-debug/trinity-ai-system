@@ -73,6 +73,9 @@ private:
     ParseResult tryVisionRequest(const std::string& text,
                                  const std::string& lowered,
                                  const std::string& forcedDomain) const;
+    ParseResult tryResearchRequest(const std::string& text,
+                                   const std::string& lowered,
+                                   const std::string& forcedDomain) const;
 };
 
 }  // namespace trinity::intelligence

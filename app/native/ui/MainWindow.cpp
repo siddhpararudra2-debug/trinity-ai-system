@@ -543,6 +543,44 @@ void MainWindow::buildUi() {
     simAccChart_->setMinimumHeight(140);
     leftLayout->addWidget(simAccChart_);
 
+    // ---- Research workspace: deterministic local index (no web, no LLM).
+    auto* researchHeader = new QLabel(QStringLiteral("Research (local index)"), leftPane);
+    researchHeader->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: 600;"));
+    leftLayout->addWidget(researchHeader);
+
+    researchTitle_ = new QLineEdit(leftPane);
+    researchTitle_->setPlaceholderText(QStringLiteral("Document title (for Index)"));
+    leftLayout->addWidget(researchTitle_);
+
+    researchText_ = new QTextEdit(leftPane);
+    researchText_->setMinimumHeight(60);
+    researchText_->setPlaceholderText(QStringLiteral("Document body text (for Index)"));
+    leftLayout->addWidget(researchText_);
+
+    researchQuery_ = new QLineEdit(leftPane);
+    researchQuery_->setPlaceholderText(QStringLiteral("Query (for Search / Summarize)"));
+    leftLayout->addWidget(researchQuery_);
+
+    auto* researchActionRow = new QHBoxLayout();
+    auto* researchIndexButton = new QPushButton(QStringLiteral("Index"), leftPane);
+    auto* researchSearchButton = new QPushButton(QStringLiteral("Search"), leftPane);
+    auto* researchSummarizeButton = new QPushButton(QStringLiteral("Summarize"), leftPane);
+    researchActionRow->addWidget(researchIndexButton);
+    researchActionRow->addWidget(researchSearchButton);
+    researchActionRow->addWidget(researchSummarizeButton);
+    leftLayout->addLayout(researchActionRow);
+    connect(researchIndexButton, &QPushButton::clicked, this, &MainWindow::handleResearchIndex);
+    connect(researchSearchButton, &QPushButton::clicked, this, &MainWindow::handleResearchSearch);
+    connect(researchSummarizeButton, &QPushButton::clicked, this,
+            &MainWindow::handleResearchSummarize);
+
+    researchOutput_ = new QTextEdit(leftPane);
+    researchOutput_->setReadOnly(true);
+    researchOutput_->setMinimumHeight(140);
+    researchOutput_->setPlaceholderText(QStringLiteral(
+        "Research: job / hits / summary / validation / artifacts / errors…"));
+    leftLayout->addWidget(researchOutput_);
+
     leftLayout->addStretch(1);
     leftScroll->setWidget(leftPane);
     mainSplitter->addWidget(leftScroll);
@@ -1100,6 +1138,175 @@ void MainWindow::refreshSimResult() {
     }
     if (simOutput_->toPlainText() != report) {
         simOutput_->setPlainText(report);
+    }
+}
+
+// --- Research workspace: deterministic local index on the shared worker.
+// Empty inputs are reported inline without submitting a job.
+void MainWindow::handleResearchIndex() {
+    if (researchTitle_ == nullptr || researchText_ == nullptr || researchOutput_ == nullptr ||
+        worker_ == nullptr) {
+        return;
+    }
+    const QString title = researchTitle_->text().trimmed();
+    const QString body = researchText_->toPlainText().trimmed();
+    if (title.isEmpty() || body.isEmpty()) {
+        researchOutput_->setPlainText(
+            QStringLiteral("Research: index requires a document title and text"));
+        return;
+    }
+    trinity::core::Json params = {{"title", title.toStdString()},
+                                  {"text", body.toStdString()}};
+    try {
+        lastResearchJobId_ = worker_->submit("research", "index_document", params);
+        researchOutput_->setPlainText(
+            QStringLiteral("Index submitted (%1), job %2…")
+                .arg(QStringLiteral("index_document"),
+                     QString::fromStdString(lastResearchJobId_)));
+    } catch (const std::exception& exc) {
+        researchOutput_->setPlainText(QStringLiteral("Research index submit failed: ") +
+                                      QString::fromStdString(exc.what()));
+        lastResearchJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleResearchSearch() {
+    if (researchQuery_ == nullptr || researchOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const QString query = researchQuery_->text().trimmed();
+    if (query.isEmpty()) {
+        researchOutput_->setPlainText(QStringLiteral("Research: search requires a query"));
+        return;
+    }
+    trinity::core::Json params = {{"query", query.toStdString()}};
+    try {
+        lastResearchJobId_ = worker_->submit("research", "search", params);
+        researchOutput_->setPlainText(
+            QStringLiteral("Search submitted (%1), job %2…")
+                .arg(QStringLiteral("search"), QString::fromStdString(lastResearchJobId_)));
+    } catch (const std::exception& exc) {
+        researchOutput_->setPlainText(QStringLiteral("Research search submit failed: ") +
+                                      QString::fromStdString(exc.what()));
+        lastResearchJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleResearchSummarize() {
+    if (researchQuery_ == nullptr || researchOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const QString query = researchQuery_->text().trimmed();
+    if (query.isEmpty()) {
+        researchOutput_->setPlainText(QStringLiteral("Research: summarize requires a query"));
+        return;
+    }
+    trinity::core::Json params = {{"query", query.toStdString()}};
+    try {
+        lastResearchJobId_ = worker_->submit("research", "summarize_results", params);
+        researchOutput_->setPlainText(
+            QStringLiteral("Summarize submitted (%1), job %2…")
+                .arg(QStringLiteral("summarize_results"),
+                     QString::fromStdString(lastResearchJobId_)));
+    } catch (const std::exception& exc) {
+        researchOutput_->setPlainText(QStringLiteral("Research summarize submit failed: ") +
+                                      QString::fromStdString(exc.what()));
+        lastResearchJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshResearchResult() {
+    if (researchOutput_ == nullptr || jobs_ == nullptr || lastResearchJobId_.empty()) {
+        return;
+    }
+    trinity::jobs::Job job;
+    try {
+        job = jobs_->get(lastResearchJobId_);
+    } catch (...) {
+        return;
+    }
+    const QString shortId = QString::fromStdString(
+        job.jobId.size() > 8 ? job.jobId.substr(0, 8) : job.jobId);
+    QString report =
+        QStringLiteral("Job: %1  •  %2/%3  •  %4\n")
+            .arg(shortId, QString::fromStdString(job.engine),
+                 QString::fromStdString(job.operation),
+                 QString::fromStdString(toString(job.status)));
+
+    if (!job.result.is_null() && job.result.is_object()) {
+        const auto& envelope = job.result;
+        if (envelope.contains("result") && envelope["result"].is_object()) {
+            const auto& res = envelope["result"];
+            if (res.contains("hit_count")) {
+                report += QStringLiteral("Hits: %1 / %2 documents\n")
+                              .arg(res.value("hit_count", 0LL))
+                              .arg(res.value("total_documents", 0LL));
+                if (res.contains("hits") && res["hits"].is_array()) {
+                    const auto& hits = res["hits"];
+                    const size_t shown = hits.size() < 10 ? hits.size() : 10;
+                    for (size_t i = 0; i < shown; ++i) {
+                        const auto& hit = hits[i];
+                        report += QStringLiteral("  #%1 %2  score=%3  «%4»\n      %5\n")
+                                      .arg(hit.value("rank", 0LL))
+                                      .arg(QString::fromStdString(hit.value("doc_id", "")))
+                                      .arg(hit.value("score", 0.0), 0, 'f', 4)
+                                      .arg(QString::fromStdString(hit.value("title", "")))
+                                      .arg(QString::fromStdString(hit.value("snippet", "")));
+                    }
+                }
+            }
+            if (res.contains("summary") && res["summary"].is_array()) {
+                report += QStringLiteral("Summary sentences: %1\n")
+                              .arg(static_cast<qint64>(res["summary"].size()));
+                for (const auto& line : res["summary"]) {
+                    report += QStringLiteral("  [%1] %2\n")
+                                  .arg(QString::fromStdString(line.value("title", "")))
+                                  .arg(QString::fromStdString(line.value("sentence", "")));
+                }
+            }
+            if (res.contains("document_count") && !res.contains("hit_count") &&
+                !res.contains("summary")) {
+                report += QStringLiteral("Result: ") +
+                          QString::fromStdString(res.dump(2)) + QStringLiteral("\n");
+            } else if (!res.contains("hit_count") && !res.contains("summary")) {
+                report += QStringLiteral("Result: ") +
+                          QString::fromStdString(res.dump(2)) + QStringLiteral("\n");
+            }
+            if (res.contains("index_path")) {
+                report += QStringLiteral("Artifact: ") +
+                          QString::fromStdString(res.value("index_path", "")) +
+                          QStringLiteral("\n");
+            }
+        }
+        if (envelope.contains("validation") && !envelope["validation"].is_null()) {
+            const auto& v = envelope["validation"];
+            report += QStringLiteral("Validation: ") +
+                      QString::fromStdString(v.value("status", "?")) + QStringLiteral(" — ") +
+                      QString::fromStdString(v.value("message", "")) + QStringLiteral("\n");
+        }
+        if (envelope.contains("errors") && envelope["errors"].is_array() &&
+            !envelope["errors"].empty()) {
+            std::string errs = envelope["errors"].dump(2);
+            if (errs.size() > 600) {
+                errs = errs.substr(0, 600) + "…";
+            }
+            report += QStringLiteral("Errors: ") + QString::fromStdString(errs) +
+                      QStringLiteral("\n");
+        }
+    }
+    if (!job.error.is_null()) {
+        std::string err = job.error.dump();
+        if (err.size() > 300) {
+            err = err.substr(0, 300) + "…";
+        }
+        report += QStringLiteral("Job error: ") + QString::fromStdString(err) +
+                  QStringLiteral("\n");
+    }
+    if (researchOutput_->toPlainText() != report) {
+        researchOutput_->setPlainText(report);
     }
 }
 
@@ -1920,6 +2127,7 @@ void MainWindow::refreshJobs() {
     refreshPcbResult();
     refreshFwResult();
     refreshSimResult();
+    refreshResearchResult();
 }
 
 void MainWindow::refreshWorkflows() {

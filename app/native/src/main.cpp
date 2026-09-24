@@ -223,6 +223,29 @@ int runSelftest() {
         simOk = false;
     }
     std::cout << (simOk ? "[PASS] " : "[FAIL] ") << "simulation_runs_linear_motion\n";
+    // Research must index a document and return it from a deterministic search.
+    bool researchOk = false;
+    try {
+        trinity::engines::EngineRequest indexReq;
+        indexReq.engine = "research";
+        indexReq.operation = "index_document";
+        indexReq.parameters = trinity::core::Json{
+            {"doc_id", "selftest-note"},
+            {"title", "Selftest note"},
+            {"text", "Trinity research engine indexes documents deterministically."}};
+        const auto indexed = context.engines().execute(indexReq);
+        trinity::engines::EngineRequest searchReq;
+        searchReq.engine = "research";
+        searchReq.operation = "search";
+        searchReq.parameters = trinity::core::Json{{"query", "indexes documents"}};
+        const auto found = context.engines().execute(searchReq);
+        researchOk = indexed.success && found.success &&
+                     found.result.value("hit_count", 0) == 1 &&
+                     found.validation.has_value() && found.validation->passed();
+    } catch (...) {
+        researchOk = false;
+    }
+    std::cout << (researchOk ? "[PASS] " : "[FAIL] ") << "research_indexes_and_searches\n";
     // Model seam must refuse truthfully without an LLM.
     trinity::intelligence::ModelRequest request;
     request.prompt = "selftest";
@@ -247,7 +270,7 @@ int runSelftest() {
             context.model().info().providerId);
     std::cout << (providerOk ? "[PASS] " : "[FAIL] ") << "provider_selection_valid\n";
     allOk = allOk && missOk && mathOk && refuseOk && cadOk && pcbOk && fwOk &&
-            visionOk && simOk && modelOk && plannerOk && providerOk;
+            visionOk && simOk && researchOk && modelOk && plannerOk && providerOk;
     (void)summary;
     context.shutdown();
     return allOk ? 0 : 1;
