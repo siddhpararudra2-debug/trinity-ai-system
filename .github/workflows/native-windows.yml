@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & Test (MSVC + Qt 6)
+    name: Build & Test (MSVC + Qt 6, no OpenCV)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +59,79 @@ jobs:
 
       - name: Selftest
         working-directory: app/native/build/debug/Debug
+        env:
+          TRINITY_STORAGE_ROOT: ${{ runner.temp }}/trinity-data
+        run: ./Trinity.exe --selftest
+
+  build-opencv:
+    name: Build & Test (MSVC + Qt 6 + vcpkg OpenCV)
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-binary-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkg) {
+            $vcpkg = Join-Path $env:RUNNER_TEMP 'vcpkg'
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkg
+          }
+          & (Join-Path $vcpkg 'bootstrap-vcpkg.bat') -disableMetrics
+          "VCPKG_ROOT=$vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-opencv4-${{ runner.os }}-
+
+      - name: Configure
+        working-directory: app/native
+        run: cmake --preset windows-debug-vcpkg -DCMAKE_PREFIX_PATH="$env:Qt6_Dir"
+
+      - name: Verify OpenCV found
+        working-directory: app/native
+        shell: pwsh
+        run: |
+          $entry = (Get-Content build/debug-vcpkg/CMakeCache.txt) |
+            Where-Object { $_ -match '^OpenCV_DIR:PATH=' } | Select-Object -First 1
+          if (-not $entry -or $entry -match 'NOTFOUND') {
+            Write-Error "OpenCV was not found by CMake — the vcpkg leg must build WITH OpenCV"
+            exit 1
+          }
+          Write-Host "OpenCV_DIR: $entry"
+
+      - name: Build
+        working-directory: app/native
+        run: cmake --build --preset windows-debug-vcpkg
+
+      - name: Test
+        working-directory: app/native
+        run: ctest --preset windows-debug-vcpkg
+
+      - name: Selftest
+        working-directory: app/native/build/debug-vcpkg/Debug
         env:
           TRINITY_STORAGE_ROOT: ${{ runner.temp }}/trinity-data
         run: ./Trinity.exe --selftest

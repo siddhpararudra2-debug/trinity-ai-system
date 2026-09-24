@@ -3,18 +3,10 @@
   "version": "0.1.0",
   "description": "Trinity AI Engineering Operating System - native core",
   "dependencies": [
-    "opencv4"
-  ],
-  "features": {
-    "opencv-minimal": {
-      "description": "Core image processing modules for VisionEngine",
-      "dependencies": [
-        {
-          "name": "opencv4",
-          "features": ["core", "imgcodecs", "imgproc"]
-        }
-      ]
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["fs", "jpeg", "png", "thread"]
     }
-  },
-  "default-features": ["opencv-minimal"]
+  ]
 }
