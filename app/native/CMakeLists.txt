@@ -204,3 +204,18 @@ if(TRINITY_BUILD_TESTS)
     target_link_libraries(trinity_tests PRIVATE trinity_core)
     add_test(NAME trinity_tests COMMAND trinity_tests)
 endif()
+
+# ------------------------------------------------------------------- OpenCV runtime DLLs
+if(OpenCV_FOUND AND WIN32)
+    set(_OPENCV_BIN_DIR "${OpenCV_DIR}/${OpenCV_ARCH}/${OpenCV_RUNTIME}/bin")
+    set(_OPENCV_WORLD_DLL "${_OPENCV_BIN_DIR}/opencv_world${OpenCV_VERSION_MAJOR}${OpenCV_VERSION_MINOR}0$<$<CONFIG:Debug>:d>.dll")
+    foreach(_tgt IN ITEMS Trinity trinity_tests)
+        if(TARGET ${_tgt})
+            add_custom_command(TARGET ${_tgt} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${_OPENCV_WORLD_DLL}"
+                    "$<TARGET_FILE_DIR:${_tgt}>"
+                COMMENT "Copying OpenCV runtime DLL for ${_tgt}")
+        endif()
+    endforeach()
+endif()

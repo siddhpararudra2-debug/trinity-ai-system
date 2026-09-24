@@ -49,7 +49,8 @@ TEST_CASE("VisionEngine operations") {
         
         EngineResult res = engine.execute(req);
         CHECK(res.success);
-        CHECK(res.result["output"].is_null()); // no output image generated
+        CHECK(res.result["output"]["path"] == "");  // load_image generates no output file
+        CHECK(res.result["input"]["metadata"]["width"] == 100);  // image actually loaded
     }
     
     SUBCASE("Resize Image") {
