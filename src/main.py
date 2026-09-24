@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.routes import router
-from src.core.config import ensure_storage_layout, settings
+from src.core.config import ensure_storage_layout, resolve_cors_origins, settings
 from src.core.errors import TrinityError
 from src.core.logging_config import configure_logging, get_logger
 from src.db.database import init_db
@@ -33,11 +33,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.api_title, version=settings.api_version, lifespan=lifespan)
 
-# V1 dev-friendly CORS: local frontend needs cross-origin access.
-# TODO(prod): lock allow_origins to explicit domains before any network exposure.
+# V1 dev CORS: the local frontend needs cross-origin access with zero setup.
+# Gate (src/core/config.py: resolve_cors_origins): development may use the
+# wildcard; TRINITY_ENV=production refuses wildcard/empty origins at startup
+# unless TRINITY_CORS_ORIGINS lists explicit domains.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=resolve_cors_origins(settings.environment, settings.cors_origins),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
