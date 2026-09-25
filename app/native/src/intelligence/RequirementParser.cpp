@@ -2345,11 +2345,14 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     if (hasIkWord) {
         intent.operation = "inverse_kinematics";
         intent.object = "robot";
-        static const std::regex kPoint(
-            R"(\b(?:point|target|position)\s*\(?\s*([-\d.,\s]+(?:\s+and\s+[-\d.,\s]+)*))",
-            std::regex_constants::icase);
+        // Normalize spoken separators before matching so the capture uses a
+        // plain character class (robust across std::regex implementations).
+        static const std::regex kAndComma(R"(\s+and\s+)", std::regex_constants::icase);
+        const std::string pointText = std::regex_replace(text, kAndComma, ",");
+        static const std::regex kPoint(R"(\b(?:point|target|position)\s*\(?\s*([-\d.,\s]+))",
+                                       std::regex_constants::icase);
         std::smatch match;
-        if (!std::regex_search(text, match, kPoint)) {
+        if (!std::regex_search(pointText, match, kPoint)) {
             ParseResult result;
             result.intent = intent;
             result.status = ParseStatus::Incomplete;
@@ -2403,11 +2406,15 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     // Default robotics operation: forward kinematics.
     intent.operation = "forward_kinematics";
     intent.object = "robot";
+    // Normalize spoken separators before matching so the capture uses a
+    // plain character class (robust across std::regex implementations).
+    static const std::regex kAnglesAnd(R"(\s+and\s+)", std::regex_constants::icase);
+    const std::string angleText = std::regex_replace(text, kAnglesAnd, ",");
     static const std::regex kAngles(
-        R"((?:joint\s+angles?|angles?)\s*(?:of\s*)?=?\s*\[?([-\d.,\s]+(?:\s+and\s+[-\d.,\s]+)*))",
+        R"((?:joint\s+angles?|angles?)\s*(?:of\s*)?=?\s*\[?([-\d.,\s]+))",
         std::regex_constants::icase);
     std::smatch match;
-    if (std::regex_search(text, match, kAngles)) {
+    if (std::regex_search(angleText, match, kAngles)) {
         std::vector<double> angles = parseNumberList(match[1].str());
         if (!angles.empty()) {
             static const std::regex kDegrees(R"(\bdegrees?\b)", std::regex_constants::icase);
