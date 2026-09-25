@@ -31,6 +31,13 @@ cad::Mesh rebuildMeshFromJobResult(const core::Json& jobResult);
 /// Rebuild from a spec JSON object (params.toJson() shape or flat params).
 cad::Mesh rebuildMeshFromSpec(const core::Json& spec);
 
+/// Synthesize a robot arm mesh from a RoboticsEngine FK/IK result payload
+/// (IR `frames` object + `frame_order`, or legacy DH `frames` array with
+/// `end_effector`). Links become oriented boxes between consecutive
+/// frames with joint cubes at each frame — visualization only, never
+/// analysis geometry. Throws on bad input.
+cad::Mesh buildRobotMeshFromResult(const core::Json& result);
+
 /// Load a mesh from a managed artifact file on disk, with integrity checks:
 /// file must exist, size must be > 0 and match metadata when provided,
 /// extension must be a supported mesh format (.stl) or spec (.json).

@@ -311,7 +311,8 @@ ParseResult RequirementParser::parse(const std::string& text) const {
         "constant acceleration, dynamics), firmware configuration (MCU, GPIO, UART, I2C, "
         "PWM), vision processing (resize, grayscale, edge detect), research (index "
         "document, search documents, summarize results), robotics (forward "
-        "kinematics, joint trajectory, urdf export), explicit engine "
+        "kinematics, inverse kinematics, create robot, joint trajectory, urdf "
+        "export), explicit engine "
         "requests (using math/cad/pcb/simulation/firmware/vision/research/robotics "
         "engine)");
     core::Logger::instance().warning("intelligence", "requirement parse invalid",
@@ -812,6 +813,21 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
     const bool isBareArith = std::regex_match(trim(text), kBareArith);
 
     if (!hasSolve && !hasEval && !isBareArith && !hasConvert && !hasFormula) {
+        ParseResult sentinel;
+        sentinel.intent = makeBaseIntent(text);
+        sentinel.status = ParseStatus::Invalid;
+        sentinel.errors.push_back("__no_math_content__");
+        return sentinel;
+    }
+
+    // Robotics kinematics text ("solve inverse kinematics ...", "compute
+    // forward kinematics for joint angles ...") must fall through to the
+    // robotics parser, not be treated as a math expression.
+    static const std::regex kRoboticsClaim(
+        R"(\b(kinematics|urdf|manipulator)\b|\b(fk|ik)\b|joint\s+angles?\b|"
+        R"(end[\s-]effector|dh\s+param|\d+\s*[-\s]\s*(?:link|joint)s?\b|\barm\b))",
+        std::regex_constants::icase);
+    if (std::regex_search(text, kRoboticsClaim)) {
         ParseResult sentinel;
         sentinel.intent = makeBaseIntent(text);
         sentinel.status = ParseStatus::Invalid;
@@ -1340,13 +1356,15 @@ ParseResult RequirementParser::tryPcbRequest(const std::string& text,
         sentinel.errors.push_back("__no_pcb_content__");
         return sentinel;
     }
+    // Word-boundary tokens: plain substrings would steal unrelated text
+    // ("mpu" inside "compute", "imu" inside "simulate").
+    static const std::regex kPcbTokens(R"(\b(imu|mpu|ldo|esp32|kicad))",
+                                       std::regex_constants::icase);
     const bool mentionsPcb =
-        contains(lowered, "pcb") || contains(lowered, "kicad") ||
-        contains(lowered, "circuit board") || contains(lowered, "board") ||
-        contains(lowered, "footprint") || contains(lowered, "esp32") ||
-        contains(lowered, "imu") || contains(lowered, "mpu") ||
+        contains(lowered, "pcb") || contains(lowered, "circuit board") ||
+        contains(lowered, "board") || contains(lowered, "footprint") ||
         contains(lowered, "regulator") || contains(lowered, "ams1117") ||
-        contains(lowered, "ldo");
+        std::regex_search(lowered, kPcbTokens);
     if (forcedDomain.empty() && !mentionsPcb) {
         ParseResult sentinel;
         sentinel.intent = makeBaseIntent(text);
@@ -2088,6 +2106,14 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     };
     static const std::regex kFkWord(R"(\bfk\b)", std::regex_constants::icase);
     const bool hasFkWord = std::regex_search(text, kFkWord);
+    static const std::regex kIkWord(R"(\b(ik|inverse\s+kinematics?)\b)",
+                                    std::regex_constants::icase);
+    const bool hasIkWord = std::regex_search(text, kIkWord);
+    static const std::regex kLinkPhrase(R"(\d+\s*[-\s]\s*(?:link|joint)s?\b)",
+                                        std::regex_constants::icase);
+    const bool hasLinkPhrase = std::regex_search(text, kLinkPhrase);
+    static const std::regex kArmWord(R"(\b(arm|manipulator)\b)", std::regex_constants::icase);
+    const bool hasArmWord = std::regex_search(text, kArmWord);
     const bool hasDescribe = wordMatch("describe") || wordMatch("capabilit");
     const bool hasRobot = wordMatch("robot");
     const bool hasUrdf = wordMatch("urdf");
@@ -2095,8 +2121,13 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     const bool hasFk = wordMatch("forward kinem") || wordMatch("kinematics") ||
                        wordMatch("end effector") || wordMatch("end-effector") ||
                        hasFkWord || wordMatch("joint angles") || wordMatch("dh param");
+    const bool hasCreate = wordMatch("create") || wordMatch("design") || wordMatch("build") ||
+                           wordMatch("make");
+    const bool hasGenerate = wordMatch("generate") || wordMatch("interpolat") ||
+                             wordMatch("produce");
     const bool hasRobotics = wordMatch("robotics") || hasUrdf || hasTrajectory || hasFk ||
-                             (hasDescribe && hasRobot);
+                             (hasDescribe && hasRobot) || hasLinkPhrase || hasArmWord ||
+                             hasIkWord;
 
     if (forcedDomain.empty() && !hasRobotics) {
         ParseResult sentinel;
@@ -2112,6 +2143,9 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     intent.outputs = detectOutputs(lowered);
 
     auto parseNumberList = [](std::string raw) -> std::vector<double> {
+        // "30 and 45" → "30,45" so list parsing handles spoken separators.
+        raw = std::regex_replace(
+            raw, std::regex(R"(\s+and\s+)", std::regex_constants::icase), ",");
         while (!raw.empty() && (raw.front() == '[' || raw.front() == ' ')) {
             raw.erase(raw.begin());
         }
@@ -2199,7 +2233,7 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
     }
 
     if (hasTrajectory) {
-        intent.operation = "plan_trajectory";
+        intent.operation = hasGenerate ? "generate_trajectory" : "plan_trajectory";
         intent.object = "robot";
         static const std::regex kFromTo(
             R"(from\s+(\[?[-\d.,+\s]+\]?)\s+to\s+(\[?[-\d.,+\s]+\]?))",
@@ -2239,16 +2273,155 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
         return result;
     }
 
+    if (hasCreate && !hasUrdf && !hasTrajectory && !hasIkWord && !hasFk &&
+        (hasLinkPhrase || hasArmWord || hasRobot)) {
+        intent.operation = "create_robot";
+        intent.object = "robot_arm";
+        std::smatch match;
+        bool haveCount = false;
+        static const std::regex kCount(R"((\d+)\s*[-\s]?\s*(?:link|joint)s?\b)",
+                                       std::regex_constants::icase);
+        if (std::regex_search(text, match, kCount)) {
+            try {
+                intent.parameters["link_count"] = std::stol(match[1].str());
+                haveCount = true;
+            } catch (...) {
+            }
+        }
+        bool haveLength = false;
+        static const std::regex kLength(R"((\d+(?:\.\d+)?)\s*(mm|cm|meters|meter|m)\b)",
+                                        std::regex_constants::icase);
+        if (std::regex_search(text, match, kLength)) {
+            try {
+                const double value = std::stod(match[1].str());
+                std::string unit = match[2].str();
+                for (char& c : unit) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                if (unit == "mm") {
+                    intent.parameters["link_length_mm"] = value;
+                } else if (unit == "cm") {
+                    intent.parameters["link_length_mm"] = value * 10.0;
+                } else {
+                    intent.parameters["link_length_m"] = value;
+                }
+                haveLength = true;
+            } catch (...) {
+            }
+        }
+        static const std::regex kNamed(R"(named\s+([A-Za-z0-9_]+))",
+                                       std::regex_constants::icase);
+        if (std::regex_search(text, match, kNamed)) {
+            intent.parameters["robot_name"] = trim(match[1].str());
+        }
+        intent.assumptions.push_back(
+            "new joints default to revolute about the z axis (axis_source default_001)");
+        ParseResult result;
+        result.intent = intent;
+        if (!haveCount) {
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"link_count"};
+            result.errors.push_back(
+                "Incomplete robotics request: create_robot needs a link or joint count "
+                "(e.g. '2-link', '3-joint')");
+            return result;
+        }
+        if (!haveLength) {
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"link_length_m"};
+            result.errors.push_back(
+                "Incomplete robotics request: create_robot needs a link length "
+                "(e.g. 'with 100 mm links')");
+            return result;
+        }
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
+    if (hasIkWord) {
+        intent.operation = "inverse_kinematics";
+        intent.object = "robot";
+        static const std::regex kPoint(
+            R"(\b(?:point|target|position)\s*\(?\s*([-\d.,\s]+(?:\s+and\s+[-\d.,\s]+)*))",
+            std::regex_constants::icase);
+        std::smatch match;
+        if (!std::regex_search(text, match, kPoint)) {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"target_xyz_mm"};
+            result.errors.push_back(
+                "Incomplete robotics request: inverse kinematics needs a target position "
+                "(e.g. 'reach the point 200, 0, 150')");
+            return result;
+        }
+        const std::string captured = trim(match[1].str());
+        const std::vector<double> point = parseNumberList(captured);
+        if (point.size() < 3) {
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Incomplete;
+            result.intent.status = ParseStatus::Incomplete;
+            result.intent.missing = {"target_z_mm"};
+            result.errors.push_back(
+                "Incomplete robotics request: inverse kinematics target needs x, y and z "
+                "coordinates");
+            return result;
+        }
+        static const std::regex kMillimeters(R"(\bmm\b)", std::regex_constants::icase);
+        static const std::regex kMetersWord(R"(\bm\b)", std::regex_constants::icase);
+        const bool explicitMm = std::regex_search(captured, kMillimeters);
+        const bool explicitM = !explicitMm && std::regex_search(captured, kMetersWord);
+        core::Json target = core::Json::array();
+        target.push_back(point[0]);
+        target.push_back(point[1]);
+        target.push_back(point[2]);
+        if (explicitM) {
+            intent.parameters["target_xyz_m"] = target;
+        } else {
+            intent.parameters["target_xyz_mm"] = target;
+            if (!explicitMm) {
+                intent.assumptions.push_back(
+                    "target position numbers interpreted as millimeters (no unit given)");
+            }
+        }
+        intent.rawMetadata["target_point_original"] = toJsonArray(point);
+        intent.rawMetadata["original_units"] = explicitM ? "meters" : "millimeters";
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Valid;
+        result.intent.status = ParseStatus::Valid;
+        result.intent.confidence = 0.9;
+        return result;
+    }
+
     // Default robotics operation: forward kinematics.
     intent.operation = "forward_kinematics";
     intent.object = "robot";
     static const std::regex kAngles(
-        R"((?:joint\s+angles?|angles?)\s*(?:of\s*)?=?\s*\[?([-\d.,\s]+))",
+        R"((?:joint\s+angles?|angles?)\s*(?:of\s*)?=?\s*\[?([-\d.,\s]+(?:\s+and\s+[-\d.,\s]+)*))",
         std::regex_constants::icase);
     std::smatch match;
     if (std::regex_search(text, match, kAngles)) {
-        const std::vector<double> angles = parseNumberList(match[1].str());
+        std::vector<double> angles = parseNumberList(match[1].str());
         if (!angles.empty()) {
+            static const std::regex kDegrees(R"(\bdegrees?\b)", std::regex_constants::icase);
+            const bool degrees = std::regex_search(text, kDegrees) ||
+                                 text.find('°') != std::string::npos;
+            if (degrees) {
+                intent.rawMetadata["joint_angles_original"] = toJsonArray(angles);
+                intent.rawMetadata["original_units"] = "degrees";
+                intent.assumptions.push_back(
+                    "joint angles converted from degrees to radians for the engine");
+                for (double& angle : angles) {
+                    angle *= 3.14159265358979323846 / 180.0;
+                }
+            }
             intent.parameters["joint_angles"] = toJsonArray(angles);
         }
     }

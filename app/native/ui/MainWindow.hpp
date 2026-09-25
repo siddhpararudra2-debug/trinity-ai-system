@@ -121,6 +121,13 @@ private slots:
     void handleRoboticsFk();
     void handleRoboticsPlan();
     void handleRoboticsExport();
+    void handleRoboticsCreate();
+    void handleRoboticsSetState();
+    void handleRoboticsComputeFk();
+    void handleRoboticsIk();
+    void handleRoboticsGenerate();
+    void handleRoboticsValidate();
+    std::string roboticsProjectId() const;
     void handleDemoWorkflow();
     void refreshJobs();
     void refreshMathResult();
@@ -219,15 +226,24 @@ private:
     std::string lastResearchJobId_;
 
     // Robotics workspace: DH forward kinematics, joint trajectory, URDF
-    // export; empty/malformed inputs are reported inline without submitting.
+    // export, plus the IR model chain (create -> state -> FK/IK ->
+    // trajectory -> validate); empty/malformed inputs are reported inline
+    // without submitting.
     QLineEdit* robotName_ = nullptr;
     QTextEdit* dhChain_ = nullptr;
     QLineEdit* jointAngles_ = nullptr;
     QLineEdit* startJoint_ = nullptr;
     QLineEdit* goalJoint_ = nullptr;
     QLineEdit* duration_ = nullptr;
+    QLineEdit* robotLinkCount_ = nullptr;
+    QLineEdit* robotLinkLength_ = nullptr;
+    QLineEdit* robotTarget_ = nullptr;
+    QLineEdit* robotProject_ = nullptr;
     QTextEdit* roboticsOutput_ = nullptr;
     std::string lastRoboticsJobId_;
+    std::string lastRoboticsViewerJobId_;
+    std::string lastRoboticsProjectId_;
+    bool hasRoboticsProject_ = false;
     jobs::JobWorker* worker_ = nullptr;
 
 public:

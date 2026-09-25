@@ -36,7 +36,7 @@ TEST_CASE("robotics describes capabilities") {
     REQUIRE(out.success);
     CHECK(out.result["engine"] == "robotics");
     REQUIRE(out.result["capabilities"].is_array());
-    CHECK(out.result["capabilities"].size() == 4);
+    CHECK(out.result["capabilities"].size() == 12);
     REQUIRE(out.validation.has_value());
     CHECK(out.validation->passed());
 }
@@ -182,7 +182,7 @@ TEST_CASE("robotics export_urdf reuses the last FK chain when no chain is given"
 
 TEST_CASE("robotics refuses unknown operations without faking results") {
     RoboticsEngine engine;
-    for (const std::string& op : {"inverse_kinematics", "path_planning", "simulate"}) {
+    for (const std::string& op : {"path_planning", "simulate", "collision_check"}) {
         const auto out = engine.execute(makeReq(op, {}));
         CHECK_FALSE(out.success);
         REQUIRE_FALSE(out.errors.empty());

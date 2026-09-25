@@ -67,7 +67,7 @@ TEST_CASE("all eight engines register metadata and describe real capabilities") 
         const auto result = registry.execute(req);
         CHECK(result.success);
         REQUIRE(result.result.contains("capabilities"));
-        CHECK(result.result["capabilities"].size() == 4);
+        CHECK(result.result["capabilities"].size() == 12);
     }
 
     // Vision graduated to a real engine: describe succeeds.

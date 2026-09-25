@@ -91,6 +91,10 @@ set(TRINITY_CORE_SOURCES
     src/simulation/Integrator.cpp
     src/simulation/Validators.cpp
     src/simulation/Exports.cpp
+    src/robotics/Types.cpp
+    src/robotics/Kinematics.cpp
+    src/robotics/Validators.cpp
+    src/robotics/Exports.cpp
     src/firmware/FirmwareProject.cpp
     src/firmware/McuDatabase.cpp
     src/firmware/CodeGen.cpp
@@ -198,6 +202,12 @@ if(TRINITY_BUILD_TESTS)
         tests/test_research_pipeline.cpp
     tests/test_robotics_engine.cpp
     tests/test_robotics_pipeline.cpp
+    tests/test_robotics_intent.cpp
+    tests/test_robotics_chain.cpp
+    tests/test_robotics_ir.cpp
+    tests/test_robotics_ik.cpp
+    tests/test_robotics_trajectory.cpp
+    tests/test_robotics_exports.cpp
         tests/test_sim_kinematics.cpp
         tests/test_sim_dynamics.cpp
         tests/test_sim_validation.cpp

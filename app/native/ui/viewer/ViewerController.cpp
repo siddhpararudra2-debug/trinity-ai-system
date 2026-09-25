@@ -161,6 +161,18 @@ void ViewerController::openJob(const std::string& jobId) {
             } catch (...) {
                 rebuilt = false;  // fall through to file path
             }
+            // Robotics FK/IK jobs carry FK frames instead of a CAD spec:
+            // synthesize the arm mesh from the in-memory frames.
+            try {
+                if (!rebuilt && job.engine == "robotics" && !job.result.is_null() &&
+                    job.result.is_object() && job.result.contains("frames")) {
+                    loaded.mesh = viewer::buildRobotMeshFromResult(job.result);
+                    loaded.source = "memory";
+                    rebuilt = true;
+                }
+            } catch (...) {
+                rebuilt = false;  // fall through to file path
+            }
             std::string artifactId;
             artifacts::Artifact meta;
             // Attach the first STL/spec artifact for metadata + validation.

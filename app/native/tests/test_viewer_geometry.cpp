@@ -6,6 +6,7 @@
 #include "trinity/cad/Builder.hpp"
 #include "trinity/cad/FrameParams.hpp"
 #include "trinity/cad/Mesh.hpp"
+#include "trinity/viewer/ArtifactLoader.hpp"
 #include "trinity/viewer/Measure.hpp"
 #include "trinity/viewer/RenderData.hpp"
 #include "trinity/viewer/ViewerState.hpp"
@@ -135,4 +136,71 @@ TEST_CASE("viewer: measurement uses actual model coordinates") {
     CHECK(d[1] == doctest::Approx(4.0));
     CHECK(d[2] == doctest::Approx(12.0));
     CHECK(trinity::viewer::measureDistance(b, b) == doctest::Approx(0.0));
+}
+
+TEST_CASE("viewer: robot mesh synthesized from IR FK frames") {
+    using trinity::core::Json;
+    auto pose = [](double x, double y, double z) {
+        return Json{{"position", {{"x", x}, {"y", y}, {"z", z}}},
+                    {"rotation",
+                     Json::array({Json::array({1.0, 0.0, 0.0}),
+                                  Json::array({0.0, 1.0, 0.0}),
+                                  Json::array({0.0, 0.0, 1.0})})}};
+    };
+    const Json result = {
+        {"frame_order", Json::array({"world", "base_link", "link_1", "link_2", "tool0"})},
+        {"frames",
+         {{"world", pose(0.0, 0.0, 0.0)},
+          {"base_link", pose(0.0, 0.0, 0.0)},
+          {"link_1", pose(0.0, 0.0, 0.0)},
+          {"link_2", pose(0.086603, 0.05, 0.0)},
+          {"tool0", pose(0.183195, 0.075882, 0.0)}}},
+        {"end_effector", pose(0.183195, 0.075882, 0.0)}};
+    const auto mesh = trinity::viewer::buildRobotMeshFromResult(result);
+    CHECK_FALSE(mesh.empty());
+    const auto bbox = mesh.boundingBox();
+    CHECK(bbox.max[0] >= 0.18);
+    CHECK(bbox.min[0] <= 0.0);
+    CHECK(bbox.max[1] >= 0.07);
+    // The mesh flows through the same render path as CAD geometry.
+    const auto render = trinity::viewer::buildRenderData(mesh);
+    CHECK(render.valid);
+    CHECK(render.triangleCount() == mesh.triangleCount());
+}
+
+TEST_CASE("viewer: robot mesh synthesized from legacy DH frames") {
+    using trinity::core::Json;
+    const Json result = {
+        {"frames",
+         Json::array(
+             {Json{{"index", 1},
+                   {"name", "link_1"},
+                   {"position", {{"x", 1.0}, {"y", 0.0}, {"z", 0.0}}}},
+              Json{{"index", 2},
+                   {"name", "link_2"},
+                   {"position", {{"x", 2.0}, {"y", 0.0}, {"z", 0.0}}}}})},
+        {"end_effector",
+         {{"position", {{"x", 2.0}, {"y", 0.0}, {"z", 0.0}}},
+          {"rotation",
+           Json::array({Json::array({1.0, 0.0, 0.0}), Json::array({0.0, 1.0, 0.0}),
+                        Json::array({0.0, 0.0, 1.0})})}}}};
+    const auto mesh = trinity::viewer::buildRobotMeshFromResult(result);
+    CHECK_FALSE(mesh.empty());
+    const auto bbox = mesh.boundingBox();
+    CHECK(bbox.max[0] >= 2.0);
+    CHECK(bbox.min[0] <= 0.0);
+}
+
+TEST_CASE("viewer: robot mesh synthesis rejects bad input truthfully") {
+    using trinity::core::Json;
+    CHECK_THROWS(trinity::viewer::buildRobotMeshFromResult(Json::object()));
+    CHECK_THROWS(trinity::viewer::buildRobotMeshFromResult(Json{{"frames", Json::object()}}));
+    CHECK_THROWS(trinity::viewer::buildRobotMeshFromResult(Json{{"frames", Json::array()}}));
+    Json singleFrame = Json::object();
+    Json onlyFrame = Json::object();
+    onlyFrame["position"] = Json{{"x", 1.0}, {"y", 0.0}, {"z", 0.0}};
+    singleFrame["frames"] = Json::object();
+    singleFrame["frames"]["only"] = onlyFrame;
+    singleFrame["frame_order"] = Json::array({"only"});
+    CHECK_THROWS(trinity::viewer::buildRobotMeshFromResult(singleFrame));
 }

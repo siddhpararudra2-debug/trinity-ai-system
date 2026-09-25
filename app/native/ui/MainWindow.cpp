@@ -630,6 +630,52 @@ void MainWindow::buildUi() {
     connect(roboticsExportButton, &QPushButton::clicked, this,
             &MainWindow::handleRoboticsExport);
 
+    auto* roboticsIrHeader = new QLabel(
+        QStringLiteral("Robot model (create → state → FK/IK → trajectory)"), leftPane);
+    roboticsIrHeader->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: 600;"));
+    leftLayout->addWidget(roboticsIrHeader);
+
+    auto* roboticsIrRow = new QHBoxLayout();
+    robotLinkCount_ = new QLineEdit(leftPane);
+    robotLinkCount_->setPlaceholderText(QStringLiteral("Links (Create)"));
+    robotLinkLength_ = new QLineEdit(leftPane);
+    robotLinkLength_->setPlaceholderText(QStringLiteral("Link mm (Create)"));
+    robotTarget_ = new QLineEdit(leftPane);
+    robotTarget_->setPlaceholderText(QStringLiteral("IK target x,y,z m"));
+    robotProject_ = new QLineEdit(leftPane);
+    robotProject_->setPlaceholderText(QStringLiteral("Project id (auto)"));
+    roboticsIrRow->addWidget(robotLinkCount_);
+    roboticsIrRow->addWidget(robotLinkLength_);
+    roboticsIrRow->addWidget(robotTarget_);
+    roboticsIrRow->addWidget(robotProject_);
+    leftLayout->addLayout(roboticsIrRow);
+
+    auto* roboticsIrActions = new QHBoxLayout();
+    auto* roboticsCreateButton = new QPushButton(QStringLiteral("Create Robot"), leftPane);
+    auto* roboticsStateButton = new QPushButton(QStringLiteral("Set Joint State"), leftPane);
+    auto* roboticsIrFkButton = new QPushButton(QStringLiteral("Compute FK"), leftPane);
+    auto* roboticsIkButton = new QPushButton(QStringLiteral("Solve IK"), leftPane);
+    auto* roboticsGenButton = new QPushButton(QStringLiteral("Generate Trajectory"), leftPane);
+    auto* roboticsValidateButton = new QPushButton(QStringLiteral("Validate Robot"), leftPane);
+    roboticsIrActions->addWidget(roboticsCreateButton);
+    roboticsIrActions->addWidget(roboticsStateButton);
+    roboticsIrActions->addWidget(roboticsIrFkButton);
+    roboticsIrActions->addWidget(roboticsIkButton);
+    roboticsIrActions->addWidget(roboticsGenButton);
+    roboticsIrActions->addWidget(roboticsValidateButton);
+    leftLayout->addLayout(roboticsIrActions);
+    connect(roboticsCreateButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsCreate);
+    connect(roboticsStateButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsSetState);
+    connect(roboticsIrFkButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsComputeFk);
+    connect(roboticsIkButton, &QPushButton::clicked, this, &MainWindow::handleRoboticsIk);
+    connect(roboticsGenButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsGenerate);
+    connect(roboticsValidateButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsValidate);
+
     roboticsOutput_ = new QTextEdit(leftPane);
     roboticsOutput_->setReadOnly(true);
     roboticsOutput_->setMinimumHeight(140);
@@ -1531,8 +1577,236 @@ void MainWindow::handleRoboticsExport() {
     refreshJobs();
 }
 
-void MainWindow::refreshRoboticsResult() {
-    if (roboticsOutput_ == nullptr || jobs_ == nullptr || lastRoboticsJobId_.empty()) {
+// --- Robotics IR model chain: project id captured from results chains
+// create -> state -> FK/IK -> trajectory -> validate. Submit failures
+// clear the pending job id so the poller cannot report a stale job.
+std::string MainWindow::roboticsProjectId() const {
+    const QString overrideText =
+        robotProject_ != nullptr ? robotProject_->text().trimmed() : QString();
+    if (!overrideText.isEmpty()) {
+        return overrideText.toStdString();
+    }
+    return hasRoboticsProject_ ? lastRoboticsProjectId_ : std::string();
+}
+
+void MainWindow::handleRoboticsCreate() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    trinity::core::Json params = trinity::core::Json::object();
+    if (robotName_ != nullptr && !robotName_->text().trimmed().isEmpty()) {
+        params["robot_name"] = robotName_->text().trimmed().toStdString();
+    }
+    bool ok = false;
+    const int links =
+        robotLinkCount_ != nullptr ? robotLinkCount_->text().trimmed().toInt(&ok) : 0;
+    if (!ok || links < 1) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: Create needs a link count of 1 or more"));
+        return;
+    }
+    params["link_count"] = links;
+    if (robotLinkLength_ != nullptr && !robotLinkLength_->text().trimmed().isEmpty()) {
+        bool lenOk = false;
+        const double mm = robotLinkLength_->text().trimmed().toDouble(&lenOk);
+        if (!lenOk || !std::isfinite(mm) || mm < 0.0) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: link length must be a non-negative number (mm)"));
+            return;
+        }
+        params["link_length_mm"] = mm;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "create_robot", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robot create submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics create submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsSetState() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    std::vector<double> angles;
+    if (jointAngles_ == nullptr || !roboticsNumberList(jointAngles_->text(), angles) ||
+        angles.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: joint state needs comma-separated joint values"));
+        return;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit(
+            "robotics", "set_joint_state",
+            {{"project_id", projectId}, {"joint_positions", roboticsJsonArray(angles)}});
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Joint state submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics state submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsComputeFk() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    trinity::core::Json params = {{"project_id", projectId}};
+    std::vector<double> angles;
+    if (jointAngles_ != nullptr && !jointAngles_->text().trimmed().isEmpty()) {
+        if (!roboticsNumberList(jointAngles_->text(), angles)) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: joint angles must be comma-separated numbers"));
+            return;
+        }
+        if (!angles.empty()) {
+            params["joint_positions"] = roboticsJsonArray(angles);
+        }
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "compute_forward_kinematics", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Model FK submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics FK submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsIk() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    std::vector<double> target;
+    if (robotTarget_ == nullptr || !roboticsNumberList(robotTarget_->text(), target) ||
+        target.size() != 3) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: IK needs a target of 3 numbers (x,y,z in meters)"));
+        return;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit(
+            "robotics", "inverse_kinematics",
+            {{"project_id", projectId}, {"target_xyz_m", roboticsJsonArray(target)}});
+        roboticsOutput_->setPlainText(QStringLiteral("IK submitted, job %1…")
+                                          .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(QStringLiteral("Robotics IK submit failed: ") +
+                                      QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsGenerate() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    std::vector<double> start;
+    std::vector<double> goal;
+    if (startJoint_ == nullptr || goalJoint_ == nullptr ||
+        !roboticsNumberList(startJoint_->text(), start) || start.empty() ||
+        !roboticsNumberList(goalJoint_->text(), goal) || goal.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: trajectory requires start and goal joint lists"));
+        return;
+    }
+    if (start.size() != goal.size()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: start and goal joint lists must match in length"));
+        return;
+    }
+    trinity::core::Json params = {{"project_id", projectId},
+                                  {"joint_start", roboticsJsonArray(start)},
+                                  {"joint_goal", roboticsJsonArray(goal)}};
+    if (duration_ != nullptr && !duration_->text().trimmed().isEmpty()) {
+        bool ok = false;
+        const double seconds = duration_->text().trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(seconds) || seconds <= 0.0) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: duration must be a positive number of seconds"));
+            return;
+        }
+        params["duration_s"] = seconds;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "generate_trajectory", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Model trajectory submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics trajectory submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsValidate() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "validate_robot",
+                                             {{"project_id", projectId}});
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robot validation submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics validation submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || jobs_ == nullptr || lastRoboticsJobId_.empty()) {
         return;
     }
     trinity::jobs::Job job;
@@ -1553,34 +1827,100 @@ void MainWindow::refreshRoboticsResult() {
         const auto& envelope = job.result;
         if (envelope.contains("result") && envelope["result"].is_object()) {
             const auto& res = envelope["result"];
+            if (res.contains("project_id") && res["project_id"].is_string()) {
+                const std::string seen = res["project_id"].get<std::string>();
+                if (!seen.empty()) {
+                    lastRoboticsProjectId_ = seen;
+                    hasRoboticsProject_ = true;
+                    if (robotProject_ != nullptr &&
+                        robotProject_->text().trimmed().isEmpty()) {
+                        robotProject_->setText(QString::fromStdString(seen));
+                    }
+                }
+            }
             if (res.contains("end_effector")) {
                 const auto& pos = res["end_effector"]["position"];
+                const std::string chainSource =
+                    res.value("chain_source", res.value("method", "?"));
+                const std::string anglesSource = res.value(
+                    "angles_source", res.value("joint_positions_source", "?"));
                 report += QStringLiteral("EE: (%1, %2, %3) m  chain=%4  angles=%5\n")
                               .arg(pos.value("x", 0.0), 0, 'f', 4)
                               .arg(pos.value("y", 0.0), 0, 'f', 4)
                               .arg(pos.value("z", 0.0), 0, 'f', 4)
-                              .arg(QString::fromStdString(
-                                  res.value("chain_source", "?")))
-                              .arg(QString::fromStdString(
-                                  res.value("angles_source", "?")));
+                              .arg(QString::fromStdString(chainSource))
+                              .arg(QString::fromStdString(anglesSource));
+                if (res.contains("ik") && res["ik"].is_object()) {
+                    const auto& ik = res["ik"];
+                    report += QStringLiteral("IK: converged=%1 iters=%2 err=%3 tol=%4 "
+                                             "within_limits=%5%6\n")
+                                  .arg(ik.value("converged", false) ? "yes" : "no")
+                                  .arg(ik.value("iterations", 0LL))
+                                  .arg(ik.value("final_error_m", 0.0), 0, 'g', 4)
+                                  .arg(ik.value("tolerance_m", 0.0), 0, 'g', 2)
+                                  .arg(ik.value("within_limits", false) ? "yes" : "no")
+                                  .arg(ik.contains("message")
+                                           ? QStringLiteral(" note=") +
+                                                 QString::fromStdString(
+                                                     ik.value("message", ""))
+                                           : QString());
+                }
             } else if (res.contains("start_reached")) {
+                const std::string finalStr = res.contains("goal_positions")
+                                                 ? res["goal_positions"].dump()
+                                                 : (res.contains("final_positions")
+                                                        ? res["final_positions"].dump()
+                                                        : "?");
+                const std::string methodStr =
+                    res.value("method", res.value("integrator", "?"));
                 report += QStringLiteral(
                               "Trajectory: start=%1 goal=%2  samples=%3  final=(%4)  [%5]\n")
                               .arg(res.value("start_reached", false) ? "reached" : "MISS")
                               .arg(res.value("goal_reached", false) ? "reached" : "MISS")
                               .arg(res.value("sample_count", 0LL))
-                              .arg(QString::fromStdString(
-                                  res.contains("final_positions")
-                                      ? res["final_positions"].dump()
-                                      : std::string("?")))
-                              .arg(QString::fromStdString(
-                                  res.value("integrator", "?")));
+                              .arg(QString::fromStdString(finalStr))
+                              .arg(QString::fromStdString(methodStr));
             } else if (res.contains("path")) {
                 report += QStringLiteral("URDF: %1\n  sha256=%2  revolute=%3 joints=%4\n")
                               .arg(QString::fromStdString(res.value("path", "")))
                               .arg(QString::fromStdString(res.value("sha256", "")))
                               .arg(res.value("revolute_joints", 0LL))
                               .arg(res.value("joint_count", 0LL));
+            } else if (res.contains("model_validation") ||
+                       res.contains("state_validation") ||
+                       res.contains("joint_state_validation")) {
+                const std::string pid = res.value("project_id", "");
+                report += QStringLiteral("Robot: %1  project=%2  joints=%3 actuated=%4 "
+                                         "links=%5\n")
+                              .arg(QString::fromStdString(res.value("robot_name", "?")))
+                              .arg(QString::fromStdString(
+                                  pid.size() > 8 ? pid.substr(0, 8) : pid))
+                              .arg(res.value("joint_count", 0LL))
+                              .arg(res.value("actuated_joint_count", 0LL))
+                              .arg(res.value("link_count", 0LL));
+                if (res.contains("model_validation")) {
+                    report += QStringLiteral("Model valid: %1\n")
+                                  .arg(res["model_validation"].value("passed", false)
+                                           ? "yes"
+                                           : "NO");
+                }
+                const std::string stateKey = res.contains("state_validation")
+                                                 ? "state_validation"
+                                                 : "joint_state_validation";
+                if (res.contains(stateKey)) {
+                    std::string positions =
+                        res.contains("positions") ? res["positions"].dump() : "?";
+                    if (positions.size() > 160) {
+                        positions = positions.substr(0, 160) + "…";
+                    }
+                    report += QStringLiteral("State: %1  valid: %2\n")
+                                  .arg(QString::fromStdString(positions))
+                                  .arg(res[stateKey].value("passed", false) ? "yes" : "NO");
+                }
+                if (res.contains("passed") && res["passed"].is_boolean()) {
+                    report += QStringLiteral("Overall: %1\n")
+                                  .arg(res.value("passed", false) ? "PASS" : "FAIL");
+                }
             } else if (!res.is_null() && !res.empty()) {
                 report += QStringLiteral("Result: ") +
                           QString::fromStdString(res.dump(2)) + QStringLiteral("\n");
@@ -1612,6 +1952,16 @@ void MainWindow::refreshRoboticsResult() {
     }
     if (roboticsOutput_->toPlainText() != report) {
         roboticsOutput_->setPlainText(report);
+    }
+    // Show the arm in the 3D viewer once per completed FK/IK job: the mesh
+    // is synthesized from the in-memory FK frames (no new renderer).
+    if (viewerController_ != nullptr && job.jobId == lastRoboticsJobId_ &&
+        job.jobId != lastRoboticsViewerJobId_ &&
+        job.status == trinity::jobs::JobStatus::Completed &&
+        (job.operation == "compute_forward_kinematics" ||
+         job.operation == "inverse_kinematics" || job.operation == "forward_kinematics")) {
+        lastRoboticsViewerJobId_ = job.jobId;
+        viewerController_->openJob(job.jobId);
     }
 }
 

@@ -72,7 +72,11 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
     }
     if (domain == "robotics") {
         return operation == "describe" || operation == "forward_kinematics" ||
-               operation == "plan_trajectory" || operation == "export_urdf";
+               operation == "compute_forward_kinematics" || operation == "plan_trajectory" ||
+               operation == "generate_trajectory" || operation == "export_urdf" ||
+               operation == "create_robot" || operation == "add_link" ||
+               operation == "add_joint" || operation == "set_joint_state" ||
+               operation == "inverse_kinematics" || operation == "validate_robot";
     }
     return false;
 }
