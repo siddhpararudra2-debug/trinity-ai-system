@@ -201,6 +201,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_sim_kinematics.cpp
         tests/test_sim_dynamics.cpp
         tests/test_sim_validation.cpp
+        tests/test_sim_ir.cpp
         tests/test_sim_determinism.cpp
         tests/test_sim_exports.cpp
         tests/test_sim_pipeline.cpp

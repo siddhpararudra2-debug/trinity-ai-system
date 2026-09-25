@@ -132,3 +132,102 @@ TEST_CASE("downsampled kinematics skips closed-form sample agreement") {
     CHECK(checks.finite);
     CHECK(checks.timeMonotonic);
 }
+
+TEST_CASE("validateProject rejects time step exceeding duration") {
+    auto p = baseProject();
+    p.dt = 2.0;
+    p.durationS = 1.0;
+    const auto check = validateProject(p);
+    CHECK_FALSE(check.ok);
+    CHECK(check.error.find("dt must not exceed") != std::string::npos);
+}
+
+TEST_CASE("validateProject rejects zero and negative dt and duration") {
+    auto p = baseProject();
+    p.dt = -0.1;
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.dt = 0.0;
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.durationS = -1.0;
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.durationS = 0.0;
+    CHECK_FALSE(validateProject(p).ok);
+}
+
+TEST_CASE("validateProject rejects non-finite mass, force, and gravity") {
+    auto p = baseProject();
+    p.type = "basic_dynamics";
+    p.model = "force_mass";
+    p.massKg = std::numeric_limits<double>::infinity();
+    auto check = validateProject(p);
+    CHECK_FALSE(check.ok);
+    CHECK(check.error.find("finite") != std::string::npos);
+
+    p = baseProject();
+    p.type = "basic_dynamics";
+    p.model = "force_mass";
+    p.massKg = 1.0;
+    p.forceN.x = std::numeric_limits<double>::quiet_NaN();
+    check = validateProject(p);
+    CHECK_FALSE(check.ok);
+    CHECK(check.error.find("force_N") != std::string::npos);
+
+    p = baseProject();
+    p.gravity = std::numeric_limits<double>::infinity();
+    CHECK_FALSE(validateProject(p).ok);
+}
+
+TEST_CASE("validateProject rejects non-finite position and velocity") {
+    auto p = baseProject();
+    p.initial.position.y = std::numeric_limits<double>::infinity();
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.initial.velocity.z = std::numeric_limits<double>::quiet_NaN();
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.initial.acceleration.x = std::numeric_limits<double>::infinity();
+    CHECK_FALSE(validateProject(p).ok);
+    p = baseProject();
+    p.initial.t = std::numeric_limits<double>::quiet_NaN();
+    CHECK_FALSE(validateProject(p).ok);
+}
+
+TEST_CASE("validateProject returns structured per-rule messages") {
+    const auto ok = validateProject(baseProject());
+    REQUIRE(ok.ok);
+    REQUIRE(ok.rules.is_array());
+    REQUIRE(ok.rules.size() > 0);
+    bool sawTimeStepRule = false;
+    bool allPassed = true;
+    for (const auto& item : ok.rules) {
+        CHECK(item.contains("rule"));
+        CHECK(item.contains("passed"));
+        CHECK(item.contains("message"));
+        if (item.value("rule", "") == "project.time_step_within_duration") {
+            sawTimeStepRule = true;
+        }
+        if (!item.value("passed", false)) {
+            allPassed = false;
+        }
+    }
+    CHECK(sawTimeStepRule);
+    CHECK(allPassed);
+
+    auto bad = baseProject();
+    bad.dt = 5.0;
+    bad.durationS = 1.0;
+    const auto failed = validateProject(bad);
+    REQUIRE_FALSE(failed.ok);
+    bool sawFailedRule = false;
+    for (const auto& item : failed.rules) {
+        if (item.value("rule", "") == "project.time_step_within_duration") {
+            sawFailedRule = true;
+            CHECK_FALSE(item.value("passed", true));
+            CHECK(item.value("message", "").find("dt must not exceed") != std::string::npos);
+        }
+    }
+    CHECK(sawFailedRule);
+}

@@ -374,6 +374,36 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                 addCheck(out, "intent.param_type", validation::Severity::Error, false,
                          "duration_s must be a finite number",
                          core::Json{{"parameters", intent.parameters}});
+            } else if (intent.parameters.contains("duration_s") &&
+                       intent.parameters["duration_s"].get<double>() <= 0.0) {
+                typesOk = false;
+                addCheck(out, "intent.range", validation::Severity::Error, false,
+                         "duration_s must be positive",
+                         core::Json{{"parameter", "duration_s"}});
+            }
+            if (intent.parameters.contains("dt_s")) {
+                if (!isFiniteNumber(intent.parameters["dt_s"])) {
+                    typesOk = false;
+                    addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                             "dt_s must be a finite number",
+                             core::Json{{"parameter", "dt_s"}});
+                } else if (intent.parameters["dt_s"].get<double>() <= 0.0) {
+                    typesOk = false;
+                    addCheck(out, "intent.range", validation::Severity::Error, false,
+                             "dt_s must be positive",
+                             core::Json{{"parameter", "dt_s"}});
+                }
+            }
+            if (intent.parameters.contains("duration_s") &&
+                intent.parameters.contains("dt_s") && isFiniteNumber(intent.parameters["dt_s"]) &&
+                isFiniteNumber(intent.parameters["duration_s"]) &&
+                intent.parameters["dt_s"].get<double>() >
+                    intent.parameters["duration_s"].get<double>()) {
+                typesOk = false;
+                addCheck(out, "intent.range", validation::Severity::Error, false,
+                         "dt_s must not exceed duration_s",
+                         core::Json{{"dt_s", intent.parameters["dt_s"]},
+                                    {"duration_s", intent.parameters["duration_s"]}});
             }
             if (op == "simulate_projectile" || op == "simulate_constant_acceleration" ||
                 op == "simulate_dynamics" || op == "simulate_linear_motion" ||

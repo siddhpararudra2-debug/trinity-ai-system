@@ -1,9 +1,11 @@
 #include <doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 
 #include "trinity/artifacts/Artifact.hpp"
+#include "trinity/artifacts/Checksum.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
 #include "trinity/engines/SimulationEngine.hpp"
 #include "trinity/engines/StubEngines.hpp"
@@ -112,4 +114,117 @@ TEST_CASE("explicit simulation engine keyword routes through simulation") {
     } else {
         CHECK(out.jobId.empty());
     }
+}
+
+TEST_CASE("spec request: 1 kg object under 10 N for 5 seconds runs dynamics") {
+    Fixture fx;
+    auto out = fx.pipeline->executeSync(
+        "Simulate a 1 kg object under 10 N of force for 5 seconds");
+    REQUIRE(out.success);
+    CHECK(out.routing.routed);
+    CHECK(out.routing.engine == "simulation");
+    CHECK(out.routing.operation == "simulate_dynamics");
+    const auto& result = out.engineEnvelope["result"];
+    REQUIRE(result.contains("project"));
+    REQUIRE(result.contains("result"));
+    CHECK(result["project"]["mass_kg"] == doctest::Approx(1.0));
+    CHECK(result["project"]["force_N"]["x"] == doctest::Approx(10.0));
+    CHECK(result["project"]["duration_s"] == doctest::Approx(5.0));
+    CHECK(result["result"]["method"] == "semi_implicit_euler");
+    // a = F/m = 10 m/s^2; semi-implicit Euler velocity is exact for
+    // constant acceleration: v = a * t = 10 * 5 = 50 m/s.
+    CHECK(result["result"]["final_state"]["velocity"]["x"] == doctest::Approx(50.0));
+    CHECK(result["checks"]["ok"] == true);
+    auto job = fx.jobs->get(out.jobId);
+    CHECK(trinity::jobs::toString(job.status) == "completed");
+}
+
+TEST_CASE("spec request: 5 m/s for 10 seconds runs linear motion") {
+    Fixture fx;
+    auto out = fx.pipeline->executeSync(
+        "Simulate an object moving with 5 m/s velocity for 10 seconds");
+    REQUIRE(out.success);
+    CHECK(out.routing.operation == "simulate_linear_motion");
+    const auto& result = out.engineEnvelope["result"];
+    REQUIRE(result.contains("result"));
+    CHECK(result["result"]["method"] == "closed_form");
+    CHECK(result["result"]["final_state"]["position"]["x"] == doctest::Approx(50.0));
+    CHECK(result["result"]["final_state"]["velocity"]["x"] == doctest::Approx(5.0));
+    CHECK(result["checks"]["ok"] == true);
+}
+
+TEST_CASE("spec request: projectile with velocity but no duration reports missing") {
+    Fixture fx;
+    auto out = fx.pipeline->executeSync(
+        "Simulate projectile motion with initial velocity 20 m/s");
+    CHECK_FALSE(out.success);
+    CHECK(out.jobId.empty());
+    CHECK(fx.jobs->listRecent(10).empty());
+    CHECK(trinity::intelligence::toString(out.intent.status) == "INCOMPLETE");
+    const auto& missing = out.intent.missing;
+    const bool hasDuration =
+        std::find(missing.begin(), missing.end(), "duration_s") != missing.end();
+    CHECK(hasDuration);
+    // Explicit input was extracted, never invented away.
+    CHECK(out.intent.parameters.contains("initial_velocity_m_s"));
+    CHECK(out.intent.parameters["initial_velocity_m_s"] == doctest::Approx(20.0));
+}
+
+TEST_CASE("spec request: 3D motion with 0.01 s time step extracts dt and reports missing") {
+    Fixture fx;
+    auto out = fx.pipeline->executeSync(
+        "Run a 3D motion simulation with 0.01 second time step");
+    CHECK_FALSE(out.success);
+    CHECK(out.jobId.empty());
+    CHECK(trinity::intelligence::toString(out.intent.status) == "INCOMPLETE");
+    const auto& missing = out.intent.missing;
+    const bool hasDuration =
+        std::find(missing.begin(), missing.end(), "duration_s") != missing.end();
+    CHECK(hasDuration);
+    REQUIRE(out.intent.parameters.contains("dt_s"));
+    CHECK(out.intent.parameters["dt_s"] == doctest::Approx(0.01));
+}
+
+TEST_CASE("simulation job persists artifacts with SHA-256 and validations in SQLite") {
+    Fixture fx;
+    auto out = fx.pipeline->executeSync(
+        "Simulate linear motion for 1 second with initial velocity 5 m/s");
+    REQUIRE(out.success);
+    const auto& artifacts = out.engineEnvelope["artifacts"];
+    REQUIRE(artifacts.is_array());
+    REQUIRE(artifacts.size() == 2);
+
+    int csvSeen = 0;
+    int jsonSeen = 0;
+    for (const auto& entry : artifacts) {
+        const std::string artifactId = entry.value("artifact_id", "");
+        REQUIRE_FALSE(artifactId.empty());
+        const auto artifact = fx.artifacts->get(artifactId);
+        CHECK(artifact.artifactId == artifactId);
+        CHECK(artifact.jobId == out.jobId);
+        REQUIRE(std::filesystem::exists(artifact.path));
+        const long long onDisk = static_cast<long long>(
+            std::filesystem::file_size(artifact.path));
+        CHECK(artifact.sizeBytes == onDisk);
+        CHECK(onDisk > 0);
+        // SHA-256 stored at registration must match the bytes on disk.
+        CHECK(artifact.checksum == trinity::artifacts::sha256File(artifact.path));
+        CHECK(artifact.checksum.size() == 64);
+        CHECK(entry.value("checksum", "") == artifact.checksum);
+        if (artifact.type == "csv") ++csvSeen;
+        if (artifact.type == "json") ++jsonSeen;
+    }
+    CHECK(csvSeen == 1);
+    CHECK(jsonSeen == 1);
+
+    // SQLite persistence: artifacts + validations rows exist.
+    const auto artifactRows = fx.db->queryParams(
+        "SELECT artifact_id, checksum FROM artifacts WHERE job_id = ?", {out.jobId});
+    CHECK(artifactRows.size() == 2);
+    const auto validationRows =
+        fx.db->queryParams("SELECT status FROM validations WHERE job_id = ?",
+                           {out.jobId});
+    REQUIRE(validationRows.size() == 1);
+    // Real verification checks ran (finite + monotonic + closed form).
+    CHECK(validationRows[0][0] == "VERIFIED");
 }

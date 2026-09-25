@@ -1064,9 +1064,37 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
     intent.outputs = detectOutputs(lowered);
 
     const bool isProjectile = contains(lowered, "projectile");
+
+    // Quantity probes (number+unit anywhere in the text) so requests
+    // like "a 1 kg object under 10 N of force" or "5 m/s velocity" are
+    // recognized even when the quantity word is absent or follows the
+    // number. Group layout is always (value, unit).
+    static const std::regex kMassQty(
+        R"((\d+(?:\.\d+)?)\s*(kilograms?|kg|grams?|g)\b)",
+        std::regex_constants::icase);
+    static const std::regex kForceQty(
+        R"((\d+(?:\.\d+)?)\s*(newtons?|N)\b)",
+        std::regex_constants::icase);
+    static const std::regex kVelocityQty(
+        R"((\d+(?:\.\d+)?)\s*(m/s(?!\^?\d)|mps)\b)",
+        std::regex_constants::icase);
+    static const std::regex kAccelQty(
+        R"((-?\d+(?:\.\d+)?)\s*(m/s\^?2|mps2)\b)",
+        std::regex_constants::icase);
+    static const std::regex kTimeStepLeading(
+        R"((?:time\s*step|dt)\s*=?\s*(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|ms|milliseconds?)\b)",
+        std::regex_constants::icase);
+    static const std::regex kTimeStepTrailing(
+        R"((\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|ms|milliseconds?)\s*time\s*step\b)",
+        std::regex_constants::icase);
+
+    const bool hasMassQuantity = std::regex_search(text, kMassQty);
+    const bool hasForceQuantity = std::regex_search(text, kForceQty);
+
     const bool isDynamics =
         contains(lowered, "dynamics") ||
         (contains(lowered, "force") && contains(lowered, "mass")) ||
+        (hasMassQuantity && hasForceQuantity) ||
         contains(lowered, "f = m") || contains(lowered, "f=ma") ||
         contains(lowered, "newton");
     const bool isLinearMotion = contains(lowered, "linear motion");
@@ -1110,12 +1138,6 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
     static const std::regex kHeight(
         R"((?:initial\s+height|height)\s*=?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|inches)\b)",
         std::regex_constants::icase);
-    static const std::regex kMass(
-        R"((?:mass)\s*=?\s*(\d+(?:\.\d+)?)\s*(kg|g|kilogram|kilograms|gram|grams)\b)",
-        std::regex_constants::icase);
-    static const std::regex kForce(
-        R"((?:force)\s*=?\s*(\d+(?:\.\d+)?)\s*(N|newton|newtons)\b)",
-        std::regex_constants::icase);
 
     core::Json originals = core::Json::array();
     auto recordOriginal = [&](const std::smatch& m, const std::string& key,
@@ -1150,7 +1172,36 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
         }
     }
 
-    if (std::regex_search(text, m, kVelocity)) {
+    // Time step ("dt 0.01 s", "0.01 second time step"): explicit user
+    // inputs are extracted, never invented. Milliseconds convert to s.
+    const bool sawTimeStep =
+        std::regex_search(text, m, kTimeStepLeading) ||
+        std::regex_search(text, m, kTimeStepTrailing);
+    if (sawTimeStep) {
+        const double raw = std::stod(m[1].str());
+        const std::string unit = toLower(m[2].str());
+        double seconds = raw;
+        if (unit == "ms" || unit == "millisecond" || unit == "milliseconds") {
+            seconds = raw / 1000.0;
+        }
+        if (std::isfinite(seconds) && seconds > 0.0) {
+            intent.parameters["dt_s"] = seconds;
+            core::Json entry = core::Json::object();
+            entry["value"] = m[1].str();
+            entry["unit"] = m[2].str();
+            entry["key"] = "dt_s";
+            entry["normalized_value"] = seconds;
+            entry["normalized_unit"] = "s";
+            entry["category"] = "time";
+            originals.push_back(entry);
+        }
+    }
+
+    bool sawVelocity = std::regex_search(text, m, kVelocity);
+    if (!sawVelocity) {
+        sawVelocity = std::regex_search(text, m, kVelocityQty);
+    }
+    if (sawVelocity) {
         const double raw = std::stod(m[1].str());
         const std::string unit = toLower(m[2].str());
         double velocity = raw;
@@ -1168,7 +1219,11 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
         }
     }
 
-    if (!isProjectile && std::regex_search(text, m, kAccel)) {
+    bool sawAccel = !isProjectile && std::regex_search(text, m, kAccel);
+    if (!sawAccel && !isProjectile) {
+        sawAccel = std::regex_search(text, m, kAccelQty);
+    }
+    if (sawAccel) {
         const double raw = std::stod(m[1].str());
         const std::string unit = toLower(m[2].str());
         double accel = raw;
@@ -1204,7 +1259,7 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
         }
     }
 
-    if (isDynamics && std::regex_search(text, m, kMass)) {
+    if (isDynamics && std::regex_search(text, m, kMassQty)) {
         const double raw = std::stod(m[1].str());
         const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
         if (q.ok && q.category == "mass") {
@@ -1213,7 +1268,7 @@ ParseResult RequirementParser::trySimulationRequest(const std::string& text,
         }
     }
 
-    if (isDynamics && std::regex_search(text, m, kForce)) {
+    if (isDynamics && std::regex_search(text, m, kForceQty)) {
         const double raw = std::stod(m[1].str());
         const NormalizedQuantity q = UnitNormalizer::normalize(raw, m[2].str());
         if (q.ok && q.category == "force") {

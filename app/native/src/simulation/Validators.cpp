@@ -39,51 +39,61 @@ long long validateStepCount(double dt, double durationS) {
 }
 
 ProjectValidation validateProject(const SimulationProject& project) {
-    if (project.type.empty() || project.model.empty()) {
-        return {false, "Simulation type and model are required"};
-    }
-    if (!std::isfinite(project.dt) || project.dt <= 0.0) {
-        return {false, "dt must be a positive finite number"};
-    }
-    if (!std::isfinite(project.durationS) || project.durationS <= 0.0) {
-        return {false, "duration_s must be a positive finite number"};
-    }
-    if (project.durationS > kMaxDurationS) {
-        return {false, "duration_s exceeds the supported maximum of 3600 seconds"};
-    }
-    if (!finiteState(project.initial)) {
-        return {false, "Initial state must be finite"};
-    }
-    if (!finiteVec(project.forceN)) {
-        return {false, "force_N must be finite"};
-    }
-    if (!std::isfinite(project.massKg)) {
-        return {false, "mass_kg must be finite"};
-    }
-    if (!std::isfinite(project.gravity)) {
-        return {false, "gravity must be finite"};
-    }
+    ProjectValidation out;
+    core::Json rules = core::Json::array();
+    std::string firstError;
+    auto rule = [&](const std::string& name, bool passed, const std::string& message) {
+        rules.push_back(core::Json{{"rule", name}, {"passed", passed}, {"message", message}});
+        if (!passed && firstError.empty()) {
+            firstError = message;
+        }
+    };
+
+    rule("project.type_model_required",
+         !project.type.empty() && !project.model.empty(),
+         "Simulation type and model are required");
+    rule("project.dt_positive", std::isfinite(project.dt) && project.dt > 0.0,
+         "dt must be a positive finite number");
+    rule("project.duration_positive",
+         std::isfinite(project.durationS) && project.durationS > 0.0,
+         "duration_s must be a positive finite number");
+    rule("project.duration_max", project.durationS <= kMaxDurationS,
+         "duration_s exceeds the supported maximum of 3600 seconds");
+    rule("project.time_step_within_duration", project.dt <= project.durationS,
+         "dt must not exceed duration_s");
+    rule("project.initial_finite", finiteState(project.initial),
+         "Initial state must be finite");
+    rule("project.force_finite", finiteVec(project.forceN), "force_N must be finite");
+    rule("project.mass_finite", std::isfinite(project.massKg), "mass_kg must be finite");
+    rule("project.gravity_finite", std::isfinite(project.gravity), "gravity must be finite");
+
     if (project.type == "basic_dynamics") {
-        if (project.massKg <= 0.0) {
-            return {false, "mass_kg must be positive for basic_dynamics"};
-        }
-        if (project.model != "force_mass") {
-            return {false, "basic_dynamics only supports model 'force_mass'"};
-        }
+        rule("project.mass_positive", project.massKg > 0.0,
+             "mass_kg must be positive for basic_dynamics");
+        rule("project.force_mass_model", project.model == "force_mass",
+             "basic_dynamics only supports model 'force_mass'");
     } else if (project.type == "kinematics") {
-        if (project.model != "linear_motion" && project.model != "projectile" &&
-            project.model != "constant_acceleration") {
-            return {false, "kinematics supports linear_motion, projectile, constant_acceleration"};
-        }
+        rule("project.kinematics_model",
+             project.model == "linear_motion" || project.model == "projectile" ||
+                 project.model == "constant_acceleration",
+             "kinematics supports linear_motion, projectile, constant_acceleration");
     } else {
-        return {false, "Unsupported simulation type '" + project.type +
-                           "'; supported: kinematics, basic_dynamics"};
+        rule("project.supported_type", false,
+             "Unsupported simulation type '" + project.type +
+                 "'; supported: kinematics, basic_dynamics");
     }
-    const long long steps = validateStepCount(project.dt, project.durationS);
-    if (steps < 0) {
-        return {false, "Step count exceeds the supported maximum (1000000)"};
+    if (project.objects.size() > 1) {
+        rule("project.single_object", false,
+             "V1 supports exactly one simulation object per project");
     }
-    return {true, ""};
+
+    rule("project.step_count", validateStepCount(project.dt, project.durationS) >= 0,
+         "Step count exceeds the supported maximum (1000000)");
+
+    out.ok = firstError.empty();
+    out.error = firstError;
+    out.rules = std::move(rules);
+    return out;
 }
 
 ResultChecks validateResult(const SimulationProject& project, const SimulationResult& result) {

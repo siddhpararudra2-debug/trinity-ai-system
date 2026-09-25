@@ -12,6 +12,8 @@ namespace trinity::simulation {
 struct ProjectValidation {
     bool ok = false;
     std::string error;
+    /// Structured per-rule outcomes: [{rule, passed, message}, ...].
+    core::Json rules = core::Json::array();
 };
 
 struct ResultChecks {

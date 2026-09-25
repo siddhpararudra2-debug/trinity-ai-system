@@ -522,7 +522,9 @@ void MainWindow::buildUi() {
     leftLayout->addLayout(simRow2);
 
     auto* simRunButton = new QPushButton(QStringLiteral("Run Simulation (async)"), leftPane);
-    simRunButton->setEnabled(pipeline_ != nullptr && worker_ != nullptr);
+    // worker_ is injected later via setWorkerService(); only the pipeline is
+    // known at construction. handleSimRun() guards worker_ at click time.
+    simRunButton->setEnabled(pipeline_ != nullptr);
     leftLayout->addWidget(simRunButton);
     connect(simRunButton, &QPushButton::clicked, this, &MainWindow::handleSimRun);
 
@@ -1018,9 +1020,16 @@ void MainWindow::handleSimRun() {
         worker_ == nullptr) {
         return;
     }
+    // Validation errors must stay visible: clearing lastSimJobId_ stops the
+    // refresh timer from overwriting the message with the previous job's
+    // report on the next tick.
+    const auto fail = [this](const QString& message) {
+        lastSimJobId_.clear();
+        simOutput_->setPlainText(message);
+    };
     double duration = 0.0;
     if (!simNumber(simDuration_->text(), duration) || duration <= 0.0) {
-        simOutput_->setPlainText(QStringLiteral("Simulation: duration_s must be a positive number"));
+        fail(QStringLiteral("Simulation: duration_s must be a positive number"));
         return;
     }
     const std::string op = simOperationForIndex(simModel_->currentIndex());
@@ -1030,7 +1039,7 @@ void MainWindow::handleSimRun() {
         double v0 = 0.0;
         if (simVelocity_ != nullptr && !simVelocity_->text().trimmed().isEmpty()) {
             if (!simNumber(simVelocity_->text(), v0)) {
-                simOutput_->setPlainText(QStringLiteral("Simulation: velocity must be a number"));
+                fail(QStringLiteral("Simulation: velocity must be a number"));
                 return;
             }
         }
@@ -1038,27 +1047,25 @@ void MainWindow::handleSimRun() {
         double accel = 0.0;
         if (simAccel_ != nullptr && !simAccel_->text().trimmed().isEmpty()) {
             if (!simNumber(simAccel_->text(), accel)) {
-                simOutput_->setPlainText(QStringLiteral("Simulation: acceleration must be a number"));
+                fail(QStringLiteral("Simulation: acceleration must be a number"));
                 return;
             }
         }
         if (op == "simulate_constant_acceleration" && accel == 0.0) {
-            simOutput_->setPlainText(
-                QStringLiteral("Simulation: constant acceleration requires a non-zero a"));
+            fail(QStringLiteral("Simulation: constant acceleration requires a non-zero a"));
             return;
         }
         params["acceleration_m_s2"] = accel;
     } else if (op == "simulate_projectile") {
         double v0 = 0.0;
         if (simVelocity_ == nullptr || !simNumber(simVelocity_->text(), v0) || v0 <= 0.0) {
-            simOutput_->setPlainText(
-                QStringLiteral("Simulation: projectile requires a positive initial velocity"));
+            fail(QStringLiteral("Simulation: projectile requires a positive initial velocity"));
             return;
         }
         double angle = 45.0;
         if (simAngle_ != nullptr && !simAngle_->text().trimmed().isEmpty()) {
             if (!simNumber(simAngle_->text(), angle)) {
-                simOutput_->setPlainText(QStringLiteral("Simulation: angle must be a number"));
+                fail(QStringLiteral("Simulation: angle must be a number"));
                 return;
             }
         }
@@ -1068,12 +1075,11 @@ void MainWindow::handleSimRun() {
         double massG = 0.0;
         double forceN = 0.0;
         if (simMass_ == nullptr || !simNumber(simMass_->text(), massG) || massG <= 0.0) {
-            simOutput_->setPlainText(
-                QStringLiteral("Simulation: dynamics requires a positive mass in grams"));
+            fail(QStringLiteral("Simulation: dynamics requires a positive mass in grams"));
             return;
         }
         if (simForce_ == nullptr || !simNumber(simForce_->text(), forceN)) {
-            simOutput_->setPlainText(QStringLiteral("Simulation: dynamics requires a force in N"));
+            fail(QStringLiteral("Simulation: dynamics requires a force in N"));
             return;
         }
         params["mass_g"] = massG;

@@ -148,3 +148,95 @@ TEST_CASE("engine run_simulation with write_artifacts false has no pending files
     REQUIRE(result.success);
     CHECK(result.pendingArtifacts.empty());
 }
+
+TEST_CASE("writeJson emits spec export keys and bounded sample preview") {
+    auto project = makeProject();
+    project.parameters = {{"dt", 0.05, "s"}, {"duration_s", 0.5, "s"}};
+    const auto outcome = integrate(project);
+    REQUIRE(outcome.success);
+    const fs::path dir = fs::temp_directory_path() / "trinity-sim-export-keys";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const std::string path = (dir / "out.json").string();
+
+    const trinity::core::Json validation = {
+        {"ok", true},
+        {"rules", trinity::core::Json::array({{{"rule", "project.time_step_within_duration"},
+                                               {"passed", true},
+                                               {"message", "dt within duration"}}})}};
+    const trinity::core::Json refs = trinity::core::Json::array(
+        {{{"artifact_id", "art-1"}, {"type", "csv"}, {"path", "a.csv"}}});
+    writeJson(path, project, outcome.result, validation, refs);
+
+    const trinity::core::Json doc = trinity::core::Json::parse(readAll(path));
+
+    REQUIRE(doc.contains("parameters"));
+    REQUIRE(doc["parameters"].is_array());
+    REQUIRE(doc["parameters"].size() == 2);
+    CHECK(doc["parameters"][0]["key"] == "dt");
+    CHECK(doc["parameters"][0]["value"].get<double>() == doctest::Approx(0.05));
+
+    REQUIRE(doc.contains("initial_conditions"));
+    CHECK(doc["initial_conditions"]["velocity"]["x"] == doctest::Approx(3.0));
+    CHECK(doc["initial_conditions"]["acceleration"]["x"] == doctest::Approx(1.0));
+
+    REQUIRE(doc.contains("integration_method"));
+    CHECK(doc["integration_method"] == "closed_form");
+
+    REQUIRE(doc.contains("time_step_s"));
+    CHECK(doc["time_step_s"].get<double>() == doctest::Approx(0.05));
+    REQUIRE(doc.contains("duration_s"));
+    CHECK(doc["duration_s"].get<double>() == doctest::Approx(0.5));
+
+    REQUIRE(doc.contains("result"));
+    CHECK(doc["result"]["method"] == "closed_form");
+    REQUIRE(doc.contains("result_metadata"));
+    CHECK(doc["result_metadata"].contains("sample_count"));
+    CHECK(doc["result_metadata"]["sample_count"] == outcome.result.samples.size());
+
+    REQUIRE(doc.contains("validation"));
+    CHECK(doc["validation"]["ok"] == true);
+    REQUIRE(doc["validation"].contains("rules"));
+
+    REQUIRE(doc.contains("artifacts"));
+    REQUIRE(doc.contains("artifact_references"));
+    REQUIRE(doc["artifact_references"].is_array());
+    REQUIRE(doc["artifact_references"].size() == 1);
+    CHECK(doc["artifact_references"][0]["artifact_id"] == "art-1");
+
+    // Large time series live in the CSV, not the JSON: the embedded
+    // preview is a bounded, strided window of the full series.
+    REQUIRE(doc.contains("sample_preview"));
+    REQUIRE(doc["sample_preview"].is_array());
+    CHECK(doc["sample_preview"].size() <= 500);
+    CHECK(doc["sample_preview"].size() <= outcome.result.samples.size());
+    REQUIRE(doc["sample_preview"].size() >= 2);
+    CHECK(doc["sample_preview"].front().contains("time_s"));
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("writeJson sample preview is bounded for long runs") {
+    SimulationProject p = makeProject();
+    p.dt = 0.001;
+    p.durationS = 10.0;  // 10001 samples
+    const auto outcome = integrate(p);
+    REQUIRE(outcome.success);
+    REQUIRE(outcome.result.samples.size() > 500);
+
+    const fs::path dir = fs::temp_directory_path() / "trinity-sim-export-long";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const std::string path = (dir / "out.json").string();
+    writeJson(path, p, outcome.result, trinity::core::Json::object());
+
+    const trinity::core::Json doc = trinity::core::Json::parse(readAll(path));
+    REQUIRE(doc.contains("sample_preview"));
+    const size_t preview = doc["sample_preview"].size();
+    CHECK(preview <= 500);
+    CHECK(preview >= 2);
+    // Full sample count still reported in metadata for honesty.
+    CHECK(doc["result_metadata"]["sample_count"] == outcome.result.samples.size());
+
+    fs::remove_all(dir);
+}

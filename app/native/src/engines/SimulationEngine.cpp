@@ -71,6 +71,53 @@ double massKgFromParams(const core::Json& params) {
 
 double mmToM(double mm) { return mm / 1000.0; }
 
+std::vector<simulation::SimulationOutput> defaultOutputs() {
+    return {{"position", "m", core::Json::object()},
+            {"velocity", "m/s", core::Json::object()},
+            {"acceleration", "m/s^2", core::Json::object()}};
+}
+
+/// Ledger of the exact normalized values the integrator will use.
+/// Recorded after all defaults/aliases are resolved so runs stay
+/// reproducible and auditable (no silent input changes).
+std::vector<simulation::SimulationParameter> parameterLedger(
+    const simulation::SimulationProject& project) {
+    std::vector<simulation::SimulationParameter> ledger;
+    ledger.push_back({"dt", project.dt, "s"});
+    ledger.push_back({"duration_s", project.durationS, "s"});
+    if (project.type == "basic_dynamics") {
+        ledger.push_back({"mass_kg", project.massKg, "kg"});
+        ledger.push_back({"force_N_x", project.forceN.x, "N"});
+        ledger.push_back({"force_N_y", project.forceN.y, "N"});
+        ledger.push_back({"force_N_z", project.forceN.z, "N"});
+    } else {
+        ledger.push_back({"initial_position_x_m", project.initial.position.x, "m"});
+        ledger.push_back({"initial_velocity_x_m_s", project.initial.velocity.x, "m/s"});
+        ledger.push_back({"initial_velocity_y_m_s", project.initial.velocity.y, "m/s"});
+        ledger.push_back({"initial_velocity_z_m_s", project.initial.velocity.z, "m/s"});
+        ledger.push_back({"acceleration_x_m_s2", project.initial.acceleration.x, "m/s^2"});
+        ledger.push_back({"acceleration_y_m_s2", project.initial.acceleration.y, "m/s^2"});
+        ledger.push_back({"acceleration_z_m_s2", project.initial.acceleration.z, "m/s^2"});
+        if (project.model == "projectile") {
+            ledger.push_back({"gravity_m_s2", project.gravity, "m/s^2"});
+        }
+    }
+    return ledger;
+}
+
+core::Json inputsFromParams(const core::Json& params) {
+    // Structured request inputs, minus the two keys that can carry a
+    // full result/project payload (never duplicate large series here).
+    core::Json inputs = core::Json::object();
+    for (auto it = params.begin(); it != params.end(); ++it) {
+        if (it.key() == "project" || it.key() == "result") {
+            continue;
+        }
+        inputs[it.key()] = it.value();
+    }
+    return inputs;
+}
+
 core::Json validationJson(const simulation::ResultChecks& checks) {
     return core::Json{{"finite", checks.finite},
                       {"time_monotonic", checks.timeMonotonic},
@@ -105,9 +152,17 @@ simulation::SimulationProject SimulationEngine::projectFromParams(
     }
     project.name = params.value("name", model);
     project.model = model;
-    project.dt = optionalNumber(params, "dt", simulation::kDefaultDt);
+    // Time step: "dt" is canonical; "dt_s" is the intent-pipeline alias.
+    if (params.contains("dt")) {
+        project.dt = optionalNumber(params, "dt", simulation::kDefaultDt);
+    } else {
+        project.dt = optionalNumber(params, "dt_s", simulation::kDefaultDt);
+    }
     project.durationS = optionalNumber(params, "duration_s", simulation::kDefaultDurationS);
     project.originalUnits = params.value("original_units", core::Json::object());
+    project.boundaryConditions = params.value("boundary_conditions", core::Json::object());
+    project.metadata = params.value("metadata", core::Json::object());
+    project.inputs = inputsFromParams(params);
 
     const core::Json initial = params.value("initial", core::Json::object());
     project.initial.t = 0.0;
@@ -162,16 +217,29 @@ simulation::SimulationProject SimulationEngine::projectFromParams(
     } else {
         project.type = "kinematics";
     }
+    project.outputs = defaultOutputs();
+    project.parameters = parameterLedger(project);
     return project;
 }
 
 EngineResult SimulationEngine::runProject(const EngineRequest& request,
-                                          const simulation::SimulationProject& project,
+                                          const simulation::SimulationProject& input,
                                           bool writeArtifacts) {
+    // Backfill IR containers for externally supplied projects so every
+    // recorded run carries its normalized parameter ledger + outputs.
+    simulation::SimulationProject project = input;
+    if (project.outputs.empty()) {
+        project.outputs = defaultOutputs();
+    }
+    if (project.parameters.empty()) {
+        project.parameters = parameterLedger(project);
+    }
     const simulation::ProjectValidation projectCheck = simulation::validateProject(project);
     if (!projectCheck.ok) {
-        throw core::RequestValidationError(projectCheck.error, {{"project", project.toJson()}},
-                                           "engines");
+        throw core::RequestValidationError(
+            projectCheck.error,
+            {{"project", project.toJson()}, {"project_rules", projectCheck.rules}},
+            "engines");
     }
 
     simulation::CancelProbe cancel;
@@ -202,7 +270,8 @@ EngineResult SimulationEngine::runProject(const EngineRequest& request,
         request,
         core::Json{{"project", project.toJson()},
                    {"result", outcome.result.toJson()},
-                   {"checks", validationJson(checks)}});
+                   {"checks", validationJson(checks)},
+                   {"project_rules", projectCheck.rules}});
     out.metadata["sim_checks"] = validationJson(checks);
     out.metadata["integration_method"] = outcome.result.method;
 
@@ -258,11 +327,14 @@ EngineResult SimulationEngine::executeCreate(const EngineRequest& request) {
     project.type = type;
     const simulation::ProjectValidation check = simulation::validateProject(project);
     if (!check.ok) {
-        throw core::RequestValidationError(check.error, {{"project", project.toJson()}},
-                                           "engines");
+        throw core::RequestValidationError(
+            check.error, {{"project", project.toJson()}, {"project_rules", check.rules}},
+            "engines");
     }
     EngineResult out =
-        successResult(request, core::Json{{"project", project.toJson()}, {"valid", true}});
+        successResult(request, core::Json{{"project", project.toJson()},
+                                          {"valid", true},
+                                          {"project_rules", check.rules}});
     out.validation = validate(out);
     return out;
 }
@@ -295,7 +367,9 @@ EngineResult SimulationEngine::executeValidate(const EngineRequest& request) {
     const simulation::SimulationProject project =
         simulation::SimulationProject::fromJson(request.parameters["project"]);
     const simulation::ProjectValidation projectCheck = simulation::validateProject(project);
-    core::Json data{{"project_ok", projectCheck.ok}, {"project_error", projectCheck.error}};
+    core::Json data{{"project_ok", projectCheck.ok},
+                    {"project_error", projectCheck.error},
+                    {"project_rules", projectCheck.rules}};
     if (!projectCheck.ok) {
         EngineResult out = successResult(request, data);
         out.success = false;
