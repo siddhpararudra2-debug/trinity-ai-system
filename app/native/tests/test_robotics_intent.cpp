@@ -103,3 +103,62 @@ TEST_CASE("robotics intent: generate phrasing routes to generate_trajectory") {
     REQUIRE(parsed.intent.parameters.contains("duration_s"));
     CHECK(std::fabs(parsed.intent.parameters["duration_s"].get<double>() - 2.0) < 1e-9);
 }
+
+TEST_CASE("robotics intent: calculate end-effector position with degree angles") {
+    RequirementParser parser;
+    const auto parsed = parser.parse(
+        "Calculate the end-effector position for joint angles 30 and 45 degrees");
+    const bool status_Valid = parsed.status == ParseStatus::Valid; CHECK(status_Valid);
+    CHECK(parsed.intent.domain == "robotics");
+    CHECK(parsed.intent.operation == "forward_kinematics");
+    REQUIRE(parsed.intent.parameters.contains("joint_angles"));
+    const auto& angles = parsed.intent.parameters["joint_angles"];
+    REQUIRE(angles.size() == 2);
+    CHECK(std::fabs(angles[0].get<double>() - 0.5235987755982988) < 1e-9);
+    CHECK(std::fabs(angles[1].get<double>() - 0.7853981633974483) < 1e-9);
+    CHECK(parsed.intent.rawMetadata.value("original_units", "") == "degrees");
+}
+
+TEST_CASE("robotics intent: move end effector with x and y reports missing z") {
+    RequirementParser parser;
+    const auto parsed = parser.parse("Move the robot end effector to x=100 mm y=50 mm");
+    const bool status_Incomplete = parsed.status == ParseStatus::Incomplete; CHECK(status_Incomplete);
+    CHECK(parsed.intent.domain == "robotics");
+    CHECK(parsed.intent.operation == "inverse_kinematics");
+    CHECK(missingContains(parsed.intent, "target_z_mm"));
+    REQUIRE_FALSE(parsed.errors.empty());
+}
+
+TEST_CASE("robotics intent: move end effector with x, y and z is valid") {
+    RequirementParser parser;
+    const auto parsed =
+        parser.parse("Move the robot end effector to x=100 mm y=50 mm z=20 mm");
+    const bool status_Valid = parsed.status == ParseStatus::Valid; CHECK(status_Valid);
+    CHECK(parsed.intent.domain == "robotics");
+    CHECK(parsed.intent.operation == "inverse_kinematics");
+    REQUIRE(parsed.intent.parameters.contains("target_xyz_mm"));
+    const auto& target = parsed.intent.parameters["target_xyz_mm"];
+    REQUIRE(target.size() == 3);
+    CHECK(target[0].get<double>() == 100.0);
+    CHECK(target[1].get<double>() == 50.0);
+    CHECK(target[2].get<double>() == 20.0);
+}
+
+TEST_CASE("robotics intent: trajectory with degree endpoints normalizes to radians") {
+    RequirementParser parser;
+    const auto parsed = parser.parse(
+        "Generate a joint trajectory from 0 degrees to 90 degrees in 2 seconds");
+    const bool status_Valid = parsed.status == ParseStatus::Valid; CHECK(status_Valid);
+    CHECK(parsed.intent.domain == "robotics");
+    CHECK(parsed.intent.operation == "generate_trajectory");
+    REQUIRE(parsed.intent.parameters.contains("joint_start"));
+    REQUIRE(parsed.intent.parameters.contains("joint_goal"));
+    CHECK(std::fabs(parsed.intent.parameters["joint_start"][0].get<double>()) < 1e-12);
+    CHECK(std::fabs(parsed.intent.parameters["joint_goal"][0].get<double>() -
+                    1.5707963267948966) < 1e-9);
+    REQUIRE(parsed.intent.parameters.contains("duration_s"));
+    CHECK(std::fabs(parsed.intent.parameters["duration_s"].get<double>() - 2.0) < 1e-9);
+    CHECK(parsed.intent.rawMetadata.value("original_units", "") == "degrees");
+    REQUIRE(parsed.intent.rawMetadata.contains("joint_goal_original"));
+    CHECK(parsed.intent.rawMetadata["joint_goal_original"][0].get<double>() == 90.0);
+}

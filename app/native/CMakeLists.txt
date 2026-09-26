@@ -76,6 +76,12 @@ set(TRINITY_CORE_SOURCES
     src/intelligence/ModelProviderFactory.cpp
     src/intelligence/ExampleProvider.cpp
     src/intelligence/Planner.cpp
+    src/intelligence/CredentialStore.cpp
+    src/intelligence/ModelManager.cpp
+    src/intelligence/Agent.cpp
+    src/intelligence/providers/OpenAIProvider.cpp
+    src/intelligence/providers/AnthropicProvider.cpp
+    src/intelligence/providers/LocalModelProvider.cpp
     src/validation/ValidationResult.cpp
     src/engines/Engine.cpp
     src/engines/EngineRegistry.cpp
@@ -208,6 +214,7 @@ if(TRINITY_BUILD_TESTS)
     tests/test_robotics_ik.cpp
     tests/test_robotics_trajectory.cpp
     tests/test_robotics_exports.cpp
+    tests/test_robotics_workflow.cpp
         tests/test_sim_kinematics.cpp
         tests/test_sim_dynamics.cpp
         tests/test_sim_validation.cpp

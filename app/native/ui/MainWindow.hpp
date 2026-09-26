@@ -127,6 +127,12 @@ private slots:
     void handleRoboticsIk();
     void handleRoboticsGenerate();
     void handleRoboticsValidate();
+    void handleRoboticsAddLink();
+    void handleRoboticsAddJoint();
+    /// Read the joint type/axis/limits controls into `params`
+    /// (create_robot / add_joint). Returns false with `errorOut` set
+    /// when a filled field cannot be parsed.
+    bool roboticsJointConfig(trinity::core::Json& params, QString& errorOut);
     std::string roboticsProjectId() const;
     void handleDemoWorkflow();
     void refreshJobs();
@@ -239,6 +245,17 @@ private:
     QLineEdit* robotLinkLength_ = nullptr;
     QLineEdit* robotTarget_ = nullptr;
     QLineEdit* robotProject_ = nullptr;
+    // §12 model-authoring controls: joint type/axis/limits feed both
+    // create_robot and add_joint; name fields feed add_link/add_joint;
+    // robotDt_ is the trajectory time step.
+    QComboBox* robotJointType_ = nullptr;
+    QLineEdit* robotJointAxis_ = nullptr;
+    QLineEdit* robotJointLimits_ = nullptr;
+    QLineEdit* robotNewLinkName_ = nullptr;
+    QLineEdit* robotNewJointName_ = nullptr;
+    QLineEdit* robotParentLink_ = nullptr;
+    QLineEdit* robotChildLink_ = nullptr;
+    QLineEdit* robotDt_ = nullptr;
     QTextEdit* roboticsOutput_ = nullptr;
     std::string lastRoboticsJobId_;
     std::string lastRoboticsViewerJobId_;

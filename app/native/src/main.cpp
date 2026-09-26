@@ -275,7 +275,7 @@ int runSelftest() {
     // Planner with no model must execute nothing (default Null path).
     bool plannerOk = false;
     try {
-        trinity::intelligence::Planner planner(context.model(), context.jobs(),
+        trinity::intelligence::Planner planner(context.model(), context.executor(),
                                                context.engines());
         const auto plan = planner.planAndExecute(request);
         plannerOk = !plan.success && plan.steps.empty() && !plan.error.is_null();

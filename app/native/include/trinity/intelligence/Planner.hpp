@@ -23,8 +23,8 @@
 namespace trinity::engines {
 class EngineRegistry;
 }
-namespace trinity::jobs {
-class JobManager;
+namespace trinity::workflows {
+class WorkflowExecutor;
 }
 
 namespace trinity::intelligence {
@@ -46,6 +46,7 @@ struct PlanResult {
     std::string requestId;
     std::vector<PlanStepResult> steps;
     core::Json error = nullptr;  // aggregate error when success == false
+    std::string workflowId; // new field
 
     core::Json toJson() const;
     static PlanResult fromJson(const core::Json& json);
@@ -53,13 +54,13 @@ struct PlanResult {
 
 class Planner {
 public:
-    Planner(IModelProvider& model, jobs::JobManager& jobs, engines::EngineRegistry& registry);
+    Planner(IModelProvider& model, workflows::WorkflowExecutor& executor, engines::EngineRegistry& registry);
 
     PlanResult planAndExecute(const ModelRequest& request);
 
 private:
     IModelProvider* model_;
-    jobs::JobManager* jobs_;
+    workflows::WorkflowExecutor* executor_;
     engines::EngineRegistry* registry_;
 };
 

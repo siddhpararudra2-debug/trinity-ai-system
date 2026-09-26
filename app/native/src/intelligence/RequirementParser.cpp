@@ -2238,13 +2238,20 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
         static const std::regex kFromTo(
             R"(from\s+(\[?[-\d.,+\s]+\]?)\s+to\s+(\[?[-\d.,+\s]+\]?))",
             std::regex_constants::icase);
+        // "from 0 degrees to 90 degrees" — strip unit words so the value
+        // capture works, then normalize degrees to radians at the boundary.
+        static const std::regex kTrajDegrees(R"(\b(?:degrees?|deg)\b)",
+                                             std::regex_constants::icase);
+        const bool trajectoryDegrees = std::regex_search(text, kTrajDegrees);
+        const std::string fromToText =
+            trajectoryDegrees ? std::regex_replace(text, kTrajDegrees, " ") : text;
         std::smatch match;
         const std::vector<double> start =
-            std::regex_search(text, match, kFromTo) ? parseNumberList(match[1].str())
-                                                    : std::vector<double>{};
+            std::regex_search(fromToText, match, kFromTo) ? parseNumberList(match[1].str())
+                                                          : std::vector<double>{};
         const std::vector<double> goal =
-            std::regex_search(text, match, kFromTo) ? parseNumberList(match[2].str())
-                                                    : std::vector<double>{};
+            std::regex_search(fromToText, match, kFromTo) ? parseNumberList(match[2].str())
+                                                          : std::vector<double>{};
         if (start.empty() || goal.empty()) {
             ParseResult result;
             result.intent = intent;
@@ -2255,8 +2262,23 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
                 "Incomplete robotics request: trajectory needs 'from <joints> to <joints>'");
             return result;
         }
-        intent.parameters["joint_start"] = toJsonArray(start);
-        intent.parameters["joint_goal"] = toJsonArray(goal);
+        std::vector<double> startOut = start;
+        std::vector<double> goalOut = goal;
+        if (trajectoryDegrees) {
+            intent.rawMetadata["joint_start_original"] = toJsonArray(start);
+            intent.rawMetadata["joint_goal_original"] = toJsonArray(goal);
+            intent.rawMetadata["original_units"] = "degrees";
+            intent.assumptions.push_back(
+                "trajectory endpoints converted from degrees to radians for the engine");
+            for (double& value : startOut) {
+                value *= 3.14159265358979323846 / 180.0;
+            }
+            for (double& value : goalOut) {
+                value *= 3.14159265358979323846 / 180.0;
+            }
+        }
+        intent.parameters["joint_start"] = toJsonArray(startOut);
+        intent.parameters["joint_goal"] = toJsonArray(goalOut);
         static const std::regex kDuration(
             R"((\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s\b))", std::regex_constants::icase);
         if (std::regex_search(text, match, kDuration)) {
@@ -2400,6 +2422,124 @@ ParseResult RequirementParser::tryRoboticsRequest(const std::string& text,
         result.status = ParseStatus::Valid;
         result.intent.status = ParseStatus::Valid;
         result.intent.confidence = 0.9;
+        return result;
+    }
+
+    // "Move the robot end effector to x=100 mm y=50 mm" → inverse_kinematics.
+    // Only explicitly labeled coordinates are extracted; a missing axis is
+    // reported as a missing requirement instead of being invented.
+    static const std::regex kMovePhrase(
+        R"(\bmove\b[^.]*\bend[- ]?effector\b)", std::regex_constants::icase);
+    if (!hasIkWord && std::regex_search(text, kMovePhrase)) {
+        intent.operation = "inverse_kinematics";
+        intent.object = "robot";
+        static const std::regex kCoord(
+            R"(\b([xyz])\s*=\s*([-+]?\d+(?:\.\d+)?)\s*((?:mm|cm|meters|meter|m)(?![a-z]))?)",
+            std::regex_constants::icase);
+        bool haveX = false;
+        bool haveY = false;
+        bool haveZ = false;
+        double rawX = 0.0;
+        double rawY = 0.0;
+        double rawZ = 0.0;
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        bool metersGiven = false;
+        bool millimetersGiven = false;
+        for (std::sregex_iterator it(text.begin(), text.end(), kCoord), end; it != end; ++it) {
+            const std::smatch& coordMatch = *it;
+            const char axis =
+                static_cast<char>(std::tolower(static_cast<unsigned char>(coordMatch[1].str()[0])));
+            double value = 0.0;
+            try {
+                value = std::stod(coordMatch[2].str());
+            } catch (...) {
+                continue;
+            }
+            const double spoken = value;
+            std::string unit = coordMatch[3].str();
+            for (char& c : unit) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            if (unit == "m" || unit == "meter" || unit == "meters") {
+                metersGiven = true;
+            } else if (unit == "cm" || unit == "mm") {
+                millimetersGiven = true;
+                if (unit == "cm") {
+                    value *= 10.0;
+                }
+            }
+            if (axis == 'x') {
+                if (!haveX) {
+                    rawX = spoken;
+                }
+                x = value;
+                haveX = true;
+            } else if (axis == 'y') {
+                if (!haveY) {
+                    rawY = spoken;
+                }
+                y = value;
+                haveY = true;
+            } else {
+                if (!haveZ) {
+                    rawZ = spoken;
+                }
+                z = value;
+                haveZ = true;
+            }
+        }
+        if (haveX && haveY && haveZ) {
+            // Mixed units resolve to meters when any axis is in meters.
+            const bool asMeters = metersGiven;
+            if (asMeters && millimetersGiven) {
+                x *= 0.001;
+                y *= 0.001;
+                z *= 0.001;
+            }
+            core::Json target = core::Json::array();
+            target.push_back(x);
+            target.push_back(y);
+            target.push_back(z);
+            if (asMeters) {
+                intent.parameters["target_xyz_m"] = target;
+                intent.rawMetadata["original_units"] = "meters";
+            } else {
+                intent.parameters["target_xyz_mm"] = target;
+                intent.rawMetadata["original_units"] = "millimeters";
+                if (!millimetersGiven) {
+                    intent.assumptions.push_back(
+                        "target position numbers interpreted as millimeters (no unit given)");
+                }
+            }
+            core::Json original = core::Json::array();
+            original.push_back(rawX);
+            original.push_back(rawY);
+            original.push_back(rawZ);
+            intent.rawMetadata["target_point_original"] = original;
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+        ParseResult result;
+        result.intent = intent;
+        result.status = ParseStatus::Incomplete;
+        result.intent.status = ParseStatus::Incomplete;
+        if (!haveZ && haveX && haveY) {
+            result.intent.missing = {"target_z_mm"};
+            result.errors.push_back(
+                "Incomplete robotics request: move target has x and y but no z coordinate "
+                "(e.g. 'x=100 mm y=50 mm z=0 mm')");
+        } else {
+            result.intent.missing = {"target_xyz_mm"};
+            result.errors.push_back(
+                "Incomplete robotics request: move target needs labeled x, y and z "
+                "coordinates (e.g. 'to x=100 mm y=50 mm z=0 mm')");
+        }
         return result;
     }
 

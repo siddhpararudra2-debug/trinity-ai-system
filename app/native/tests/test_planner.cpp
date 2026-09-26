@@ -10,6 +10,8 @@
 #include "trinity/intelligence/Planner.hpp"
 #include "trinity/jobs/Job.hpp"
 #include "trinity/storage/Database.hpp"
+#include "trinity/storage/Repositories.hpp"
+#include "trinity/workflows/Executor.hpp"
 
 namespace {
 
@@ -68,6 +70,8 @@ struct PlannerFixture {
     std::shared_ptr<trinity::engines::EngineRegistry> registry;
     std::shared_ptr<trinity::artifacts::ArtifactManager> artifacts;
     std::shared_ptr<trinity::jobs::JobManager> jobs;
+    std::shared_ptr<trinity::storage::WorkflowRepository> workflows;
+    std::shared_ptr<trinity::workflows::WorkflowExecutor> executor;
 
     PlannerFixture() {
         dir = (std::filesystem::temp_directory_path() / "trinity-test-planner").string();
@@ -81,9 +85,13 @@ struct PlannerFixture {
         artifacts = std::make_shared<trinity::artifacts::ArtifactManager>(
             db, dir + "/artifacts");
         jobs = std::make_shared<trinity::jobs::JobManager>(db, registry, artifacts);
+        workflows = std::make_shared<trinity::storage::WorkflowRepository>(db);
+        executor = std::make_shared<trinity::workflows::WorkflowExecutor>(jobs, registry, workflows);
     }
 
     ~PlannerFixture() {
+        executor.reset();
+        workflows.reset();
         jobs.reset();
         artifacts.reset();
         registry.reset();
@@ -110,7 +118,7 @@ TEST_CASE("planner executes model tool calls through real engines") {
     script.toolCalls = {math, math2};
 
     ScriptedProvider model(script);
-    trinity::intelligence::Planner planner(model, *fx.jobs, *fx.registry);
+    trinity::intelligence::Planner planner(model, *fx.executor, *fx.registry);
     trinity::intelligence::ModelRequest request;
     request.prompt = "demo";
     const auto plan = planner.planAndExecute(request);
@@ -141,7 +149,7 @@ TEST_CASE("planner refuses unknown engine without executing") {
     script.toolCalls = {bad, good};
 
     ScriptedProvider model(script);
-    trinity::intelligence::Planner planner(model, *fx.jobs, *fx.registry);
+    trinity::intelligence::Planner planner(model, *fx.executor, *fx.registry);
     trinity::intelligence::ModelRequest request;
     const auto plan = planner.planAndExecute(request);
     CHECK_FALSE(plan.success);
@@ -155,7 +163,7 @@ TEST_CASE("planner refuses unknown engine without executing") {
 TEST_CASE("planner executes nothing on model refusal") {
     PlannerFixture fx;
     ScriptedProvider model(refusalScript());
-    trinity::intelligence::Planner planner(model, *fx.jobs, *fx.registry);
+    trinity::intelligence::Planner planner(model, *fx.executor, *fx.registry);
     trinity::intelligence::ModelRequest request;
     const auto plan = planner.planAndExecute(request);
     CHECK_FALSE(plan.success);
@@ -169,7 +177,7 @@ TEST_CASE("planner with no tool calls succeeds trivially") {
     script.success = true;
     script.text = "nothing to do";
     ScriptedProvider model(script);
-    trinity::intelligence::Planner planner(model, *fx.jobs, *fx.registry);
+    trinity::intelligence::Planner planner(model, *fx.executor, *fx.registry);
     trinity::intelligence::ModelRequest request;
     const auto plan = planner.planAndExecute(request);
     CHECK(plan.success);

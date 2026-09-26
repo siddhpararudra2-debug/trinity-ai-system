@@ -3,6 +3,9 @@
 #include <algorithm>
 
 #include "trinity/core/Logger.hpp"
+#include "trinity/intelligence/providers/OpenAIProvider.hpp"
+#include "trinity/intelligence/providers/AnthropicProvider.hpp"
+#include "trinity/intelligence/providers/LocalModelProvider.hpp"
 
 namespace trinity::intelligence {
 
@@ -17,6 +20,15 @@ ModelProviderFactory::ModelProviderFactory() {
     // recurse.
     creators_.emplace("null", [](const core::Json&) {
         return std::make_shared<NullModelProvider>();
+    });
+    creators_.emplace("openai", [](const core::Json&) {
+        return std::make_shared<providers::OpenAIProvider>();
+    });
+    creators_.emplace("anthropic", [](const core::Json&) {
+        return std::make_shared<providers::AnthropicProvider>();
+    });
+    creators_.emplace("local", [](const core::Json&) {
+        return std::make_shared<providers::LocalModelProvider>();
     });
 }
 

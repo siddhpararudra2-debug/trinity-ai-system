@@ -611,9 +611,12 @@ void MainWindow::buildUi() {
     goalJoint_->setPlaceholderText(QStringLiteral("Goal joints (Trajectory)"));
     duration_ = new QLineEdit(leftPane);
     duration_->setPlaceholderText(QStringLiteral("Duration s"));
+    robotDt_ = new QLineEdit(leftPane);
+    robotDt_->setPlaceholderText(QStringLiteral("dt s"));
     trajectoryRow->addWidget(startJoint_);
     trajectoryRow->addWidget(goalJoint_);
     trajectoryRow->addWidget(duration_);
+    trajectoryRow->addWidget(robotDt_);
     leftLayout->addLayout(trajectoryRow);
 
     auto* roboticsActionRow = new QHBoxLayout();
@@ -649,6 +652,47 @@ void MainWindow::buildUi() {
     roboticsIrRow->addWidget(robotTarget_);
     roboticsIrRow->addWidget(robotProject_);
     leftLayout->addLayout(roboticsIrRow);
+
+    // Joint configuration: type/axis/limits feed create_robot and add_joint.
+    auto* roboticsJointCfgRow = new QHBoxLayout();
+    robotJointType_ = new QComboBox(leftPane);
+    robotJointType_->addItems({QStringLiteral("revolute"), QStringLiteral("prismatic"),
+                               QStringLiteral("fixed")});
+    robotJointAxis_ = new QLineEdit(leftPane);
+    robotJointAxis_->setPlaceholderText(QStringLiteral("Axis x,y,z"));
+    robotJointLimits_ = new QLineEdit(leftPane);
+    robotJointLimits_->setPlaceholderText(QStringLiteral("Limits low,high (deg or mm)"));
+    roboticsJointCfgRow->addWidget(robotJointType_);
+    roboticsJointCfgRow->addWidget(robotJointAxis_);
+    roboticsJointCfgRow->addWidget(robotJointLimits_);
+    leftLayout->addLayout(roboticsJointCfgRow);
+
+    // Model authoring: link/joint names and parent/child for add_link/add_joint.
+    auto* roboticsNamesRow = new QHBoxLayout();
+    robotNewLinkName_ = new QLineEdit(leftPane);
+    robotNewLinkName_->setPlaceholderText(QStringLiteral("Link name (Add Link)"));
+    robotNewJointName_ = new QLineEdit(leftPane);
+    robotNewJointName_->setPlaceholderText(QStringLiteral("Joint name (Add Joint)"));
+    robotParentLink_ = new QLineEdit(leftPane);
+    robotParentLink_->setPlaceholderText(QStringLiteral("Parent link"));
+    robotChildLink_ = new QLineEdit(leftPane);
+    robotChildLink_->setPlaceholderText(QStringLiteral("Child link"));
+    roboticsNamesRow->addWidget(robotNewLinkName_);
+    roboticsNamesRow->addWidget(robotNewJointName_);
+    roboticsNamesRow->addWidget(robotParentLink_);
+    roboticsNamesRow->addWidget(robotChildLink_);
+    leftLayout->addLayout(roboticsNamesRow);
+
+    auto* roboticsModelActions = new QHBoxLayout();
+    auto* roboticsAddLinkButton = new QPushButton(QStringLiteral("Add Link"), leftPane);
+    auto* roboticsAddJointButton = new QPushButton(QStringLiteral("Add Joint"), leftPane);
+    roboticsModelActions->addWidget(roboticsAddLinkButton);
+    roboticsModelActions->addWidget(roboticsAddJointButton);
+    leftLayout->addLayout(roboticsModelActions);
+    connect(roboticsAddLinkButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsAddLink);
+    connect(roboticsAddJointButton, &QPushButton::clicked, this,
+            &MainWindow::handleRoboticsAddJoint);
 
     auto* roboticsIrActions = new QHBoxLayout();
     auto* roboticsCreateButton = new QPushButton(QStringLiteral("Create Robot"), leftPane);
@@ -1616,6 +1660,11 @@ void MainWindow::handleRoboticsCreate() {
         }
         params["link_length_mm"] = mm;
     }
+    QString configError;
+    if (!roboticsJointConfig(params, configError)) {
+        roboticsOutput_->setPlainText(configError);
+        return;
+    }
     try {
         lastRoboticsJobId_ = worker_->submit("robotics", "create_robot", params);
         roboticsOutput_->setPlainText(
@@ -1767,6 +1816,16 @@ void MainWindow::handleRoboticsGenerate() {
         }
         params["duration_s"] = seconds;
     }
+    if (robotDt_ != nullptr && !robotDt_->text().trimmed().isEmpty()) {
+        bool ok = false;
+        const double dt = robotDt_->text().trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(dt) || dt <= 0.0) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: dt must be a positive number of seconds"));
+            return;
+        }
+        params["dt"] = dt;
+    }
     try {
         lastRoboticsJobId_ = worker_->submit("robotics", "generate_trajectory", params);
         roboticsOutput_->setPlainText(
@@ -1806,6 +1865,120 @@ void MainWindow::handleRoboticsValidate() {
     refreshJobs();
 }
 
+bool MainWindow::roboticsJointConfig(trinity::core::Json& params, QString& errorOut) {
+    if (robotJointType_ != nullptr) {
+        params["joint_type"] = robotJointType_->currentText().toStdString();
+    }
+    if (robotJointAxis_ != nullptr && !robotJointAxis_->text().trimmed().isEmpty()) {
+        std::vector<double> axis;
+        if (!roboticsNumberList(robotJointAxis_->text(), axis) || axis.size() != 3) {
+            errorOut = QStringLiteral("Robotics: joint axis must be 3 numbers (e.g. 0,0,1)");
+            return false;
+        }
+        params["axis"] = roboticsJsonArray(axis);
+    }
+    if (robotJointLimits_ != nullptr && !robotJointLimits_->text().trimmed().isEmpty()) {
+        std::vector<double> limits;
+        if (!roboticsNumberList(robotJointLimits_->text(), limits) || limits.size() != 2) {
+            errorOut = QStringLiteral("Robotics: joint limits must be 'lower,upper'");
+            return false;
+        }
+        const bool prismatic =
+            robotJointType_ != nullptr &&
+            robotJointType_->currentText() == QStringLiteral("prismatic");
+        params[prismatic ? "limit_lower_mm" : "limit_lower_deg"] = limits[0];
+        params[prismatic ? "limit_upper_mm" : "limit_upper_deg"] = limits[1];
+    }
+    return true;
+}
+
+void MainWindow::handleRoboticsAddLink() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    const QString linkName =
+        robotNewLinkName_ != nullptr ? robotNewLinkName_->text().trimmed() : QString();
+    if (linkName.isEmpty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: Add Link needs a link name"));
+        return;
+    }
+    trinity::core::Json params = {{"project_id", projectId},
+                                  {"link_name", linkName.toStdString()}};
+    if (robotLinkLength_ != nullptr && !robotLinkLength_->text().trimmed().isEmpty()) {
+        bool ok = false;
+        const double mm = robotLinkLength_->text().trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(mm) || mm < 0.0) {
+            roboticsOutput_->setPlainText(
+                QStringLiteral("Robotics: link length must be a non-negative number (mm)"));
+            return;
+        }
+        params["length_mm"] = mm;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "add_link", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Add link submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics add link submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
+void MainWindow::handleRoboticsAddJoint() {
+    if (roboticsOutput_ == nullptr || worker_ == nullptr) {
+        return;
+    }
+    const std::string projectId = roboticsProjectId();
+    if (projectId.empty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: create a robot first (no project id)"));
+        return;
+    }
+    const QString jointName =
+        robotNewJointName_ != nullptr ? robotNewJointName_->text().trimmed() : QString();
+    const QString parentLink =
+        robotParentLink_ != nullptr ? robotParentLink_->text().trimmed() : QString();
+    const QString childLink =
+        robotChildLink_ != nullptr ? robotChildLink_->text().trimmed() : QString();
+    if (jointName.isEmpty() || parentLink.isEmpty() || childLink.isEmpty()) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics: Add Joint needs joint name, parent link and child link"));
+        return;
+    }
+    trinity::core::Json params = {{"project_id", projectId},
+                                  {"joint_name", jointName.toStdString()},
+                                  {"parent_link", parentLink.toStdString()},
+                                  {"child_link", childLink.toStdString()}};
+    QString configError;
+    if (!roboticsJointConfig(params, configError)) {
+        roboticsOutput_->setPlainText(configError);
+        return;
+    }
+    try {
+        lastRoboticsJobId_ = worker_->submit("robotics", "add_joint", params);
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Add joint submitted, job %1…")
+                .arg(QString::fromStdString(lastRoboticsJobId_)));
+    } catch (const std::exception& exc) {
+        roboticsOutput_->setPlainText(
+            QStringLiteral("Robotics add joint submit failed: ") +
+            QString::fromStdString(exc.what()));
+        lastRoboticsJobId_.clear();
+    }
+    refreshJobs();
+}
+
 void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || jobs_ == nullptr || lastRoboticsJobId_.empty()) {
         return;
     }
@@ -1825,8 +1998,12 @@ void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || 
 
     if (!job.result.is_null() && job.result.is_object()) {
         const auto& envelope = job.result;
-        if (envelope.contains("result") && envelope["result"].is_object()) {
-            const auto& res = envelope["result"];
+        // The job store persists the bare engine result (not the envelope),
+        // so accept both shapes: {"result": {...}} and the result itself.
+        {
+            const auto& res = (envelope.contains("result") && envelope["result"].is_object())
+                                  ? envelope["result"]
+                                  : envelope;
             if (res.contains("project_id") && res["project_id"].is_string()) {
                 const std::string seen = res["project_id"].get<std::string>();
                 if (!seen.empty()) {
@@ -1838,7 +2015,8 @@ void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || 
                     }
                 }
             }
-            if (res.contains("end_effector")) {
+            if (res.contains("end_effector") && res["end_effector"].is_object() &&
+                res["end_effector"].contains("position")) {
                 const auto& pos = res["end_effector"]["position"];
                 const std::string chainSource =
                     res.value("chain_source", res.value("method", "?"));
@@ -1865,6 +2043,66 @@ void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || 
                                                      ik.value("message", ""))
                                            : QString());
                 }
+            } else if (res.contains("links") || res.contains("joints")) {
+                // Model authoring results (create_robot / add_link / add_joint):
+                // links, joints with types + limits, and the current state.
+                const std::string pid = res.value("project_id", "");
+                report += QStringLiteral("Robot: %1  project=%2  links=%3 joints=%4 actuated=%5\n")
+                              .arg(QString::fromStdString(res.value("robot_name", "?")))
+                              .arg(QString::fromStdString(
+                                  pid.size() > 8 ? pid.substr(0, 8) : pid))
+                              .arg(res.contains("link_count")
+                                       ? res.value("link_count", 0LL)
+                                       : static_cast<long long>(
+                                             res.value("links", core::Json::array()).size()))
+                              .arg(res.contains("joint_count")
+                                       ? res.value("joint_count", 0LL)
+                                       : static_cast<long long>(
+                                             res.value("joints", core::Json::array()).size()))
+                              .arg(res.value("actuated_joint_count", 0LL));
+                if (res.contains("joints") && res["joints"].is_array()) {
+                    for (const auto& joint : res["joints"]) {
+                        if (!joint.is_object()) {
+                            continue;
+                        }
+                        double ax = 0.0;
+                        double ay = 0.0;
+                        double az = 0.0;
+                        if (joint.contains("axis") && joint["axis"].is_object()) {
+                            ax = joint["axis"].value("x", 0.0);
+                            ay = joint["axis"].value("y", 0.0);
+                            az = joint["axis"].value("z", 0.0);
+                        }
+                        QString line = QStringLiteral("  %1 [%2] axis=(%3,%4,%5)")
+                                           .arg(QString::fromStdString(
+                                               joint.value("name", "?")))
+                                           .arg(QString::fromStdString(
+                                               joint.value("type", "?")))
+                                           .arg(ax, 0, 'g', 4)
+                                           .arg(ay, 0, 'g', 4)
+                                           .arg(az, 0, 'g', 4);
+                        if (joint.contains("limit") && joint["limit"].is_object() &&
+                            joint["limit"].value("specified", false)) {
+                            line += QStringLiteral(" limits=[%1,%2]")
+                                        .arg(joint["limit"].value("lower", 0.0), 0, 'g', 4)
+                                        .arg(joint["limit"].value("upper", 0.0), 0, 'g', 4);
+                        }
+                        report += line + QStringLiteral("\n");
+                    }
+                }
+                if (res.contains("initial_state") && res["initial_state"].is_object() &&
+                    res["initial_state"].contains("positions")) {
+                    report += QStringLiteral("State: ") +
+                              QString::fromStdString(
+                                  res["initial_state"]["positions"].dump()) +
+                              QStringLiteral("\n");
+                }
+                if (res.contains("model_validation")) {
+                    report += QStringLiteral("Model valid: %1\n")
+                                  .arg(res["model_validation"].value("passed", false)
+                                           ? "yes"
+                                           : "NO");
+                }
             } else if (res.contains("start_reached")) {
                 const std::string finalStr = res.contains("goal_positions")
                                                  ? res["goal_positions"].dump()
@@ -1880,6 +2118,21 @@ void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || 
                               .arg(res.value("sample_count", 0LL))
                               .arg(QString::fromStdString(finalStr))
                               .arg(QString::fromStdString(methodStr));
+                              
+                if (res.contains("trajectory") && res["trajectory"].is_array() && simPosChart_ != nullptr) {
+                    std::vector<SeriesPoint> posSeries;
+                    const auto& traj = res["trajectory"];
+                    for (size_t i = 0; i < traj.size(); ++i) {
+                        const auto& pt = traj[i];
+                        if (pt.is_object() && pt.contains("time") && pt.contains("positions") && pt["positions"].is_array() && !pt["positions"].empty()) {
+                            double t = pt["time"].get<double>();
+                            double p = pt["positions"][0].get<double>();
+                            posSeries.push_back({t, p});
+                        }
+                    }
+                    simPosChart_->setSeries(posSeries, "Position");
+                }
+
             } else if (res.contains("path")) {
                 report += QStringLiteral("URDF: %1\n  sha256=%2  revolute=%3 joints=%4\n")
                               .arg(QString::fromStdString(res.value("path", "")))
