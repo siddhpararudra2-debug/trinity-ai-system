@@ -57,6 +57,7 @@ public:
     Planner(IModelProvider& model, workflows::WorkflowExecutor& executor, engines::EngineRegistry& registry);
 
     PlanResult planAndExecute(const ModelRequest& request);
+    PlanResult executeToolCalls(const std::vector<ToolCall>& calls, const std::string& requestId);
 
 private:
     IModelProvider* model_;

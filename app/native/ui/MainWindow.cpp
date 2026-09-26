@@ -2130,7 +2130,7 @@ void MainWindow::refreshRoboticsResult() {    if (roboticsOutput_ == nullptr || 
                             posSeries.push_back({t, p});
                         }
                     }
-                    simPosChart_->setSeries(posSeries, "Position");
+                    simPosChart_->setSeries(posSeries, "Position Trajectory", "Time (s)", "Position");
                 }
 
             } else if (res.contains("path")) {

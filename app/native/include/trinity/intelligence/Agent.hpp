@@ -17,9 +17,11 @@ struct AgentOptions {
     int maxHistorySize = 50; // Truncate older messages to save context
 };
 
+class Planner;
+
 class Agent {
 public:
-    Agent(const std::string& sessionId, const AgentOptions& options = AgentOptions());
+    Agent(const std::string& sessionId, Planner* planner = nullptr, const AgentOptions& options = AgentOptions());
 
     // Execute a request and run the agent loop
     ModelResponse execute(const std::string& userPrompt, std::atomic<bool>* cancelToken = nullptr);
@@ -37,6 +39,7 @@ public:
 
 private:
     std::string _sessionId;
+    Planner* _planner;
     AgentOptions _options;
     std::vector<Message> _history;
 };

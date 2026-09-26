@@ -3,12 +3,13 @@
 #include "trinity/core/Logger.hpp"
 #include "trinity/core/Uuid.hpp"
 #include "trinity/workflows/Workflow.hpp"
+#include "trinity/intelligence/Planner.hpp"
 #include <chrono>
 
 namespace trinity::intelligence {
 
-Agent::Agent(const std::string& sessionId, const AgentOptions& options)
-    : _sessionId(sessionId), _options(options) {}
+Agent::Agent(const std::string& sessionId, Planner* planner, const AgentOptions& options)
+    : _sessionId(sessionId), _planner(planner), _options(options) {}
 
 void Agent::addMessage(const Message& msg) {
     _history.push_back(msg);
@@ -82,14 +83,25 @@ ModelResponse Agent::execute(const std::string& userPrompt, std::atomic<bool>* c
         addMessage(assistantMsg);
         
         if (lastResponse.hasToolCall || !lastResponse.toolCalls.empty()) {
-            // Need to execute the tool(s)! Wait, Agent should execute it?
-            // "The LLM must never have direct access to... The architecture must remain: LLM -> Structured ToolCall -> Tool Schema Validation -> Permission Check -> Trinity Engine -> Validation -> ToolResult -> LLM"
-            
-            // For now, if the LLM emits a tool call, we execute it in the loop or planner.
-            // But wait, the prompt says Planner -> WorkflowExecutor. Let's delegate execution to the Planner/WorkflowExecutor in the higher layer, or just here.
-            // Let's break to let the caller handle the ToolCall or we execute it here.
-            // I'll execute it here to close the agent loop.
-            break; // We'll implement actual tool execution here soon.
+            if (_planner) {
+                std::vector<ToolCall> calls = lastResponse.toolCalls;
+                if (calls.empty() && lastResponse.hasToolCall) {
+                    calls.push_back(lastResponse.toolCall);
+                }
+                
+                PlanResult planRes = _planner->executeToolCalls(calls, request.requestId);
+                
+                // Add the tool results to history
+                Message toolResultMsg;
+                toolResultMsg.role = MessageRole::User; // Tool results usually come back as user/system
+                toolResultMsg.content = planRes.toJson().dump();
+                addMessage(toolResultMsg);
+                
+                // Don't break, let the loop continue to get the final response from the model
+            } else {
+                // No planner, we can't execute tools. Just break.
+                break;
+            }
         } else {
             // No tool call, final response reached
             break;
