@@ -10,7 +10,6 @@ height is exactly `height`.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -46,25 +45,14 @@ class StandoffIR:
                 )
             params[key] = float(value)
 
-        height = params["height"]
-        if not math.isfinite(height) or height <= 0:
-            raise RequestValidationError("height must be a finite positive value")
-        if height > 1000:
-            raise RequestValidationError("height must be at most 1000 mm")
+        from src.engines.cad.parts import check_parameter_bounds
 
-        for key in ("diameter", "foot_diameter", "foot_height"):
-            value = params[key]
-            if not math.isfinite(value) or value < MIN_PRINTABLE_FEATURE_MM:
-                raise RequestValidationError(
-                    f"{key} must be a finite value of at least 1 mm"
-                )
-            if value > 1000:
-                raise RequestValidationError(f"{key} must be at most 1000 mm")
+        check_parameter_bounds("standoff", params)
 
-        if params["foot_height"] > height:
+        if params["foot_height"] > params["height"]:
             raise RequestValidationError(
                 "foot_height must not exceed height",
-                details={"foot_height": params["foot_height"], "height": height},
+                details={"foot_height": params["foot_height"], "height": params["height"]},
             )
 
         return cls(units="mm", parameters=params)

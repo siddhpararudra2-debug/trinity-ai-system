@@ -10,7 +10,6 @@ the outside of the floor sits at z=0.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -46,20 +45,11 @@ class EnclosureIR:
                 )
             params[key] = float(value)
 
-        for key in ("length", "width", "height"):
-            value = params[key]
-            if not math.isfinite(value) or value <= 0:
-                raise RequestValidationError(f"{key} must be a finite positive value")
-            if value > 1000:
-                raise RequestValidationError(f"{key} must be at most 1000 mm")
+        from src.engines.cad.parts import check_parameter_bounds
+
+        check_parameter_bounds("enclosure", params)
 
         wall = params["wall_thickness"]
-        if not math.isfinite(wall) or wall < MIN_PRINTABLE_FEATURE_MM:
-            raise RequestValidationError(
-                "wall_thickness must be a finite value of at least 1 mm"
-            )
-        if wall > 50:
-            raise RequestValidationError("wall_thickness must be at most 50 mm")
         if 2 * wall >= min(params["length"], params["width"]):
             raise RequestValidationError(
                 "2 x wall_thickness must be less than the smaller of length and width",

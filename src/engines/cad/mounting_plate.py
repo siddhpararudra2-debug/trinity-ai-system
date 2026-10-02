@@ -11,7 +11,6 @@ rule keeps every boss entirely on the plate.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,25 +48,9 @@ class MountingPlateIR:
                 )
             params[key] = float(value)
 
-        for key in ("length", "width", "boss_inset"):
-            value = params[key]
-            if not math.isfinite(value) or value <= 0:
-                raise RequestValidationError(f"{key} must be a finite positive value")
-            if value > 1000:
-                raise RequestValidationError(f"{key} must be at most 1000 mm")
+        from src.engines.cad.parts import check_parameter_bounds
 
-        for key, upper in (
-            ("thickness", 50),
-            ("boss_diameter", 1000),
-            ("boss_height", 50),
-        ):
-            value = params[key]
-            if not math.isfinite(value) or value < MIN_PRINTABLE_FEATURE_MM:
-                raise RequestValidationError(
-                    f"{key} must be a finite value of at least 1 mm"
-                )
-            if value > upper:
-                raise RequestValidationError(f"{key} must be at most {upper} mm")
+        check_parameter_bounds("mounting_plate", params)
 
         boss_diameter = params["boss_diameter"]
         boss_inset = params["boss_inset"]

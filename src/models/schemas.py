@@ -110,6 +110,39 @@ class CADGenerateRequest(BaseModel):
         return value
 
 
+class CADCatalogParameter(BaseModel):
+    """One parameter of one part, as enforced by the engine (PRD §12)."""
+
+    name: str
+    label: str
+    unit: str
+    default: float | int
+    min: float | int
+    description: str
+    min_exclusive: bool = False
+    max: float | int | None = None
+    integer: bool = False
+    allowed_values: tuple[float | int, ...] | None = None
+
+
+class CADCatalogPart(BaseModel):
+    """One registered part type: metadata, parameters and cross-field rules."""
+
+    name: str
+    title: str
+    description: str
+    parameters: list[CADCatalogParameter]
+    rules: list[str]
+
+
+class CADCatalog(BaseModel):
+    """GET /api/cad/catalog: the whole catalog in one payload."""
+
+    parts: list[CADCatalogPart]
+    default_outputs: list[str]
+    outputs: dict[str, dict[str, Any]]
+
+
 # -------------------------------------------------------------- generic ---
 
 

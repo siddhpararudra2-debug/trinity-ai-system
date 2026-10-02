@@ -9,7 +9,6 @@ the -X end.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,20 +44,11 @@ class LBracketIR:
                 )
             params[key] = float(value)
 
-        for key in ("base_length", "height", "width"):
-            value = params[key]
-            if not math.isfinite(value) or value <= 0:
-                raise RequestValidationError(f"{key} must be a finite positive value")
-            if value > 1000:
-                raise RequestValidationError(f"{key} must be at most 1000 mm")
+        from src.engines.cad.parts import check_parameter_bounds
+
+        check_parameter_bounds("l_bracket", params)
 
         thickness = params["thickness"]
-        if not math.isfinite(thickness) or thickness < MIN_PRINTABLE_FEATURE_MM:
-            raise RequestValidationError(
-                "thickness must be a finite value of at least 1 mm"
-            )
-        if thickness > 50:
-            raise RequestValidationError("thickness must be at most 50 mm")
         if thickness >= params["base_length"]:
             raise RequestValidationError(
                 "thickness must be less than base_length",

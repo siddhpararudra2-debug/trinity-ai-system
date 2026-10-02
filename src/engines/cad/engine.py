@@ -28,6 +28,13 @@ from src.engines.cad.primitives import Mesh, write_binary_stl
 
 NOT_YET_SUPPORTED_FORMATS = {"step"}
 
+STEP_UNAVAILABLE_REASON = (
+    "CAD_KERNEL_UNAVAILABLE: STEP requires CadQuery/OpenCascade or another "
+    "real CAD kernel."
+)
+
+DEFAULT_OUTPUTS = ("stl", "json")
+
 
 class CADEngine(BaseEngine):
     name = "cad"
@@ -44,7 +51,7 @@ class CADEngine(BaseEngine):
     def generate(self, parameters: dict[str, Any]) -> EngineResult:
         part = get_part(parameters.get("type", DEFAULT_PART_TYPE))
 
-        outputs: list[str] = parameters.get("outputs") or ["stl", "json"]
+        outputs: list[str] = parameters.get("outputs") or list(DEFAULT_OUTPUTS)
         ir = part.ir_class.from_request(parameters.get("parameters", {}))
         mesh = part.builder(ir)
 
@@ -83,8 +90,7 @@ class CADEngine(BaseEngine):
         }
         if unavailable_formats:
             result["unavailable_formats"] = {
-                fmt: "CAD_KERNEL_UNAVAILABLE: STEP requires CadQuery/OpenCascade or another real CAD kernel."
-                for fmt in unavailable_formats
+                fmt: STEP_UNAVAILABLE_REASON for fmt in unavailable_formats
             }
 
         return EngineResult(
