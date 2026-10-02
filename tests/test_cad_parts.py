@@ -18,16 +18,26 @@ from src.engines.cad.parts import (
 from src.engines.cad.primitives import Mesh, box
 from src.main import app
 
+# The five registered parts, sorted — shared by the discovery assertions
+# that Phase 1 originally pinned to ["quadcopter_frame"] alone.
+ALL_PARTS = [
+    "enclosure",
+    "l_bracket",
+    "mounting_plate",
+    "quadcopter_frame",
+    "standoff",
+]
 
-def test_registry_lists_exactly_quadcopter_frame():
-    assert list_supported_types() == ["quadcopter_frame"]
+
+def test_registry_lists_all_supported_parts():
+    assert list_supported_types() == ALL_PARTS
 
 
 def test_get_part_unknown_raises_request_validation_error():
     with pytest.raises(RequestValidationError) as excinfo:
         get_part("nope")
     assert str(excinfo.value) == "Unsupported CAD type 'nope'"
-    assert excinfo.value.details == {"supported": ["quadcopter_frame"]}
+    assert excinfo.value.details == {"supported": ALL_PARTS}
 
 
 def test_generate_without_type_defaults_and_validates():
@@ -61,7 +71,7 @@ def test_execute_unknown_type_fails_with_supported_list():
         assert resp.status_code == 200
         assert body["success"] is False
         assert body["errors"][0]["code"] == "request_validation_error"
-        assert body["errors"][0]["details"]["supported"] == ["quadcopter_frame"]
+        assert body["errors"][0]["details"]["supported"] == ALL_PARTS
 
 
 def test_execute_defaults_to_quadcopter_frame_when_type_missing():

@@ -3,10 +3,11 @@ CAD validation (PRD §29):
 
     dimensions | intersections | clearances | topology | manufacturability
 
-V1's local-fallback backend does box geometry only, so "intersections/
-topology" reduce to sanity checks (finite coordinates, non-degenerate
-triangles) rather than a full boolean-mesh analysis — that level of
-rigor is exactly what the CadQuery/FreeCAD/Onshape adapters are for.
+V1's local-fallback backend does box and cylinder geometry only, so
+"intersections/topology" reduce to sanity checks (finite coordinates,
+non-degenerate triangles) rather than a full boolean-mesh analysis —
+that level of rigor is exactly what the CadQuery/FreeCAD/Onshape
+adapters are for.
 """
 
 from __future__ import annotations
@@ -18,6 +19,48 @@ from src.engines.cad.ir import QuadcopterFrameIR
 from src.engines.cad.primitives import Mesh
 
 MIN_PRINTABLE_FEATURE_MM = 1.0  # conservative FDM-printing floor
+BBOX_TOLERANCE_MM = 1e-6
+
+
+def mesh_integrity(mesh: Mesh) -> tuple[bool, int, int]:
+    """Shared topology checks: finite vertices, degenerate triangles, size.
+
+    Used by every part validator so the keys and semantics of
+    `all_vertices_finite`, `degenerate_triangle_count` and
+    `triangle_count` stay identical across part types.
+    """
+    finite_ok = True
+    degenerate = 0
+    for tri in mesh.triangles:
+        for v in tri:
+            if any(math.isnan(c) or math.isinf(c) for c in v):
+                finite_ok = False
+        if _triangle_area(tri) < 1e-9:
+            degenerate += 1
+    return finite_ok, degenerate, len(mesh.triangles)
+
+
+def envelope_matches(
+    mesh: Mesh,
+    expected_min: tuple[float, float, float],
+    expected_max: tuple[float, float, float],
+) -> bool:
+    """True when the mesh bounding box equals the expected envelope.
+
+    The local backend emits axis-aligned boxes and vertical cylinders by
+    exact parameter arithmetic, so a tight absolute tolerance is enough —
+    it only absorbs float noise (e.g. `(a - b/2) + b/2` landing 1 ulp off),
+    never a genuinely wrong shape.
+    """
+    actual_min, actual_max = mesh.bounding_box()
+    for actual, expected in (
+        (actual_min, expected_min),
+        (actual_max, expected_max),
+    ):
+        for a, e in zip(actual, expected, strict=True):
+            if abs(a - e) > BBOX_TOLERANCE_MM:
+                return False
+    return True
 
 
 def validate_quadcopter_frame(
@@ -47,14 +90,7 @@ def validate_quadcopter_frame(
     ok = ok and dims_ok
 
     # --- topology / finiteness: no NaN/Inf vertices, no degenerate triangles ---
-    finite_ok = True
-    degenerate = 0
-    for tri in mesh.triangles:
-        for v in tri:
-            if any(math.isnan(c) or math.isinf(c) for c in v):
-                finite_ok = False
-        if _triangle_area(tri) < 1e-9:
-            degenerate += 1
+    finite_ok, degenerate, triangle_count = mesh_integrity(mesh)
     checks["all_vertices_finite"] = finite_ok
     checks["degenerate_triangle_count"] = degenerate
     ok = ok and finite_ok and degenerate == 0
@@ -76,7 +112,7 @@ def validate_quadcopter_frame(
     checks["manufacturable_min_feature"] = manufacturable
     ok = ok and manufacturable
 
-    checks["triangle_count"] = len(mesh.triangles)
+    checks["triangle_count"] = triangle_count
     return ok, checks
 
 

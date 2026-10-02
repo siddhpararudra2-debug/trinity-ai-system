@@ -4,10 +4,11 @@ Pure-Python mesh primitives and STL export.
 This is the "local fallback" backend mentioned in PRD §12 — it exists
 so Trinity produces a real, inspectable geometry artifact without any
 external CAD kernel. It is intentionally simple (axis-aligned boxes
-only, no boolean CSG), which means motor mounts are rendered as raised
-bosses rather than bored holes. Swapping this module for a CadQuery or
-Onshape adapter behind the same `CADEngine.generate/validate/export`
-interface is exactly the extension point the architecture is built for.
+and vertical cylinders only, no boolean CSG), which means motor mounts
+are rendered as raised bosses rather than bored holes. Swapping this
+module for a CadQuery or Onshape adapter behind the same
+`CADEngine.generate/validate/export` interface is exactly the extension
+point the architecture is built for.
 """
 
 from __future__ import annotations
@@ -74,6 +75,46 @@ def box(center: Vec3, size: Vec3, rotation_z_deg: float = 0.0) -> Mesh:
     tris += _face(c[5], c[6], c[2], c[1])  # right
     tris += _face(c[6], c[7], c[3], c[2])  # back
     tris += _face(c[7], c[4], c[0], c[3])  # left
+    return Mesh(triangles=tris)
+
+
+def cylinder(
+    center: Vec3, radius: float, height: float, segments: int = 32
+) -> Mesh:
+    """Vertical cylinder whose midpoint is `center` (axis parallel to Z).
+
+    Produces 4 * segments triangles: 2 per side segment plus 1 per
+    segment for each cap (128 at the default 32). Normals point outward —
+    sides away from the axis, top cap +Z, bottom cap -Z.
+    """
+    if radius <= 0:
+        raise ValueError("radius must be > 0")
+    if height <= 0:
+        raise ValueError("height must be > 0")
+    if segments < 8:
+        raise ValueError("segments must be >= 8")
+
+    cx, cy, cz = center
+    z0, z1 = cz - height / 2, cz + height / 2
+
+    bottom: list[Vec3] = []
+    top: list[Vec3] = []
+    for i in range(segments):
+        theta = 2 * math.pi * i / segments
+        px = cx + radius * math.cos(theta)
+        py = cy + radius * math.sin(theta)
+        bottom.append((px, py, z0))
+        top.append((px, py, z1))
+
+    tris: list[Triangle] = []
+    for i in range(segments):
+        j = (i + 1) % segments
+        # sides: CCW seen from outside, normal points away from the axis
+        tris.append((bottom[i], bottom[j], top[j]))
+        tris.append((bottom[i], top[j], top[i]))
+        # caps: top wound +Z, bottom wound -Z
+        tris.append((top[i], top[j], (cx, cy, z1)))
+        tris.append((bottom[j], bottom[i], (cx, cy, z0)))
     return Mesh(triangles=tris)
 
 
