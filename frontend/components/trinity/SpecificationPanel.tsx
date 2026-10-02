@@ -2,115 +2,82 @@
 
 import type { TrinityResult } from '@/lib/api/trinity';
 
+function labelFor(name: string): string {
+  return name.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatValue(name: string, value: unknown, unit?: string): string {
+  const hasUnit = unit && unit !== 'count' && !/(^|_)(count|quantity|motors?)($|_)/i.test(name);
+  if (typeof value === 'number') {
+    const rendered = Number.isInteger(value) ? String(value) : value.toFixed(2);
+    return hasUnit ? `${rendered} ${unit}` : rendered;
+  }
+  if (Array.isArray(value)) return value.map((part) => String(part)).join(' × ');
+  return value === null || value === undefined ? '—' : String(value);
+}
+
 export default function SpecificationPanel({ result }: { result: TrinityResult | null }) {
-  const params = result?.result.spec?.parameters as Record<string, number> | undefined;
-  const triangleCount = result?.result.triangle_count as number | undefined;
-
-  const hasData = !!params && Object.keys(params).length > 0;
-  const dims = params
-    ? {
-        'Frame width': params.overall_size ?? params.frame_width ?? params.width,
-        'Frame height': params.overall_size ?? params.frame_height ?? params.height,
-        'Arm thickness': params.arm_thickness ?? params.thickness ?? 3.4,
-        'Hub diameter': params.hub_diameter ?? 8,
-        'Overall size': params.overall_size,
-      }
-    : null;
-
-  const geometry = {
-    Topology: 'QUADCOPTER',
-    Symmetry: 'RADIAL',
-    Configuration: 'X-FRAME',
-    'Triangle count': triangleCount ? `${triangleCount.toLocaleString()}` : '—',
-  };
+  const spec = result?.result.spec;
+  const parameters = spec?.parameters as Record<string, unknown> | undefined;
+  const parameterRows = parameters ? Object.entries(parameters) : [];
+  const partName = String(result?.result.type ?? spec?.type ?? 'CAD part');
+  const triangleCount = result?.result.triangle_count;
+  const bounds = result?.result.bounding_box_mm;
+  const boundsText = Array.isArray(bounds)
+    ? bounds.map((value) => Array.isArray(value) ? value.join(', ') : String(value)).join(' — ')
+    : bounds && typeof bounds === 'object'
+      ? `${JSON.stringify((bounds as Record<string, unknown>).min ?? '')} — ${JSON.stringify((bounds as Record<string, unknown>).max ?? '')}`
+      : undefined;
+  const hasData = !!result?.success && parameterRows.length > 0;
 
   return (
     <section className="spec-panel" aria-labelledby="spec-title">
       <div className="spec-panel-head">
         <h3 id="spec-title">ENGINEERING SPECIFICATION</h3>
-        <span className={`status-pill ${hasData ? 'is-live' : ''}`}>{hasData ? 'LIVE RESULT' : 'DEMO'}</span>
+        <span className={`status-pill ${hasData ? 'is-live' : ''}`}>{hasData ? 'LIVE RESULT' : 'AWAITING'}</span>
       </div>
 
       {!hasData ? (
         <div style={{ padding: '20px' }}>
           <p className="spec-empty">
-            Submit a requirement — structured parameters appear here with 2-decimal
-            precision. Values use <span className="mono">IBM Plex Mono</span> with
-            tabular numerals.
+            Generate a catalog part to inspect its parameters and geometry checks here.
           </p>
           <div className="spec-group">
-            <div className="spec-group-title">Dimensions — Example (DEMO)</div>
+            <div className="spec-group-title">CAD OUTPUT</div>
             <dl style={{ margin: 0 }}>
-              <div className="spec-row">
-                <dt>Frame width</dt>
-                <dd className="mono-num">50.00 mm</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Frame height</dt>
-                <dd className="mono-num">50.00 mm</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Arm thickness</dt>
-                <dd className="mono-num">2.00 mm</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Hub diameter</dt>
-                <dd className="mono-num">8.00 mm</dd>
-              </div>
-            </dl>
-          </div>
-          <div className="spec-group">
-            <div className="spec-group-title">Geometry — Example</div>
-            <dl style={{ margin: 0 }}>
-              <div className="spec-row">
-                <dt>Topology</dt>
-                <dd>QUADCOPTER</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Symmetry</dt>
-                <dd>RADIAL</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Status</dt>
-                <dd>AWAITING</dd>
-              </div>
+              <div className="spec-row"><dt>Part</dt><dd>—</dd></div>
+              <div className="spec-row"><dt>Triangle count</dt><dd>—</dd></div>
+              <div className="spec-row"><dt>Validation</dt><dd>AWAITING</dd></div>
             </dl>
           </div>
         </div>
       ) : (
         <>
           <div className="spec-group">
-            <div className="spec-group-title">Dimensions</div>
+            <div className="spec-group-title">{labelFor(partName)} — PARAMETERS</div>
             <dl style={{ margin: 0 }}>
-              {dims &&
-                Object.entries(dims)
-                  .filter(([, v]) => v !== undefined)
-                  .map(([k, v]) => (
-                    <div className="spec-row" key={k}>
-                      <dt>{k}</dt>
-                      <dd className="mono-num">{typeof v === 'number' ? `${v.toFixed(2)} mm` : String(v)}</dd>
-                    </div>
-                  ))}
+              {parameterRows.map(([key, value]) => (
+                <div className="spec-row" key={key}>
+                  <dt>{labelFor(key)}</dt>
+                  <dd className="mono-num">{formatValue(key, value, spec?.units)}</dd>
+                </div>
+              ))}
             </dl>
           </div>
           <div className="spec-group">
-            <div className="spec-group-title">Geometry</div>
+            <div className="spec-group-title">GEOMETRY</div>
             <dl style={{ margin: 0 }}>
-              {Object.entries(geometry).map(([k, v]) => (
-                <div className="spec-row" key={k}>
-                  <dt>{k}</dt>
-                  <dd className="mono-num">{v}</dd>
+              {typeof triangleCount === 'number' && (
+                <div className="spec-row"><dt>Triangle count</dt><dd className="mono-num">{triangleCount.toLocaleString()}</dd></div>
+              )}
+              {boundsText && <div className="spec-row"><dt>Bounds (mm)</dt><dd className="mono-num">{boundsText}</dd></div>}
+              <div className="spec-row"><dt>Validation</dt><dd>{result?.validation?.status ?? 'GENERATED'}</dd></div>
+              {result?.result.parse?.matched_rule && (
+                <div className="spec-row">
+                  <dt>Matched rule</dt>
+                  <dd>{typeof result.result.parse.matched_rule === 'string' ? result.result.parse.matched_rule : result.result.parse.matched_rule.name ?? '—'}</dd>
                 </div>
-              ))}
-              {params &&
-                Object.entries(params)
-                  .filter(([k]) => !['overall_size', 'frame_width', 'frame_height', 'width', 'height', 'arm_thickness', 'thickness', 'hub_diameter'].includes(k))
-                  .map(([k, v]) => (
-                    <div className="spec-row" key={k}>
-                      <dt>{k.replaceAll('_', ' ')}</dt>
-                      <dd className="mono-num">{typeof v === 'number' ? v.toFixed(2) : String(v)}</dd>
-                    </div>
-                  ))}
+              )}
             </dl>
           </div>
           <div style={{ padding: '12px 20px', borderTop: '1px solid #F1F1ED', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', letterSpacing: '0.08em', color: '#707070' }}>

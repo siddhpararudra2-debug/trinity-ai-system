@@ -152,6 +152,13 @@ def cad_catalog() -> dict:
 @router.post("/requirements/execute", response_model=ToolResponse)
 async def execute_requirement(req: RequirementRequest) -> dict:
     parsed = parse_requirement(req.text)
+    if parsed["domain"] == "math":
+        return await asyncio.to_thread(
+            job_manager.run_sync,
+            parsed["domain"],
+            parsed["operation"],
+            parsed["parameters"],
+        )
     return await asyncio.to_thread(
         job_manager.run_sync,
         parsed["domain"],
