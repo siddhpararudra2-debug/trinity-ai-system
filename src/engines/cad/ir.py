@@ -12,9 +12,30 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol, Self
 
 from src.core.errors import RequestValidationError
+
+
+class PartIR(Protocol):
+    """Shared contract every registered CAD part IR must satisfy.
+
+    The engine, adapters and part registry type against this instead of
+    any concrete IR class, so registering a new part type requires no
+    changes above the registry (PRD §12, §13).
+
+    `to_dict()` must include a `"type"` key naming the registered part —
+    the engine uses it to dispatch validation for a bare IR.
+    """
+
+    units: str
+    parameters: dict[str, float]
+
+    @classmethod
+    def from_request(cls, raw_parameters: dict[str, Any]) -> Self: ...
+
+    def to_dict(self) -> dict[str, Any]: ...
+
 
 DEFAULT_QUADCOPTER_PARAMS: dict[str, float] = {
     "overall_size": 50.0,  # mm, motor-to-motor diagonal span

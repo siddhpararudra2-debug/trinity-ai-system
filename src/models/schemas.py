@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from pydantic_core import PydanticCustomError
+
+from src.engines.cad.parts import list_supported_types
 
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 ValidationLevel = Literal["GENERATED", "VALIDATED", "VERIFIED", "FAILED"]
@@ -85,11 +88,26 @@ class MathSolveRequest(BaseModel):
 
 
 class CADGenerateRequest(BaseModel):
-    type: Literal["quadcopter_frame"] = "quadcopter_frame"
+    type: str = "quadcopter_frame"
     parameters: dict[str, Any] = Field(default_factory=dict)
     outputs: list[Literal["stl", "step", "glb", "json"]] = Field(
         default_factory=lambda: ["stl", "json"]
     )
+
+    @field_validator("type")
+    @classmethod
+    def _validate_type(cls, value: str) -> str:
+        # Checked at the schema edge (not only in the engine) so an unknown
+        # type gets a 422 here; engine-time failures are HTTP 200 success:false.
+        # PydanticCustomError (not ValueError) keeps errors()["ctx"] JSON
+        # serializable, which main.py's 422 handler passes to json.dumps.
+        if value not in list_supported_types():
+            raise PydanticCustomError(
+                "unsupported_cad_type",
+                "Unsupported CAD type '{name}'",
+                {"name": value},
+            )
+        return value
 
 
 # -------------------------------------------------------------- generic ---

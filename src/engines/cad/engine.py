@@ -6,6 +6,10 @@ interface. The concrete geometry backend used here is the pure-Python
 local fallback (src.engines.cad.primitives) — swapping in CadQuery,
 FreeCAD, or the Onshape adapter means writing a new module that
 satisfies the same four methods; nothing above this layer changes.
+
+Part types are dispatched through the registry in
+src.engines.cad.parts, so this engine never hardcodes a specific
+part's IR, builder, validator or filename scheme.
 """
 
 from __future__ import annotations
@@ -17,13 +21,11 @@ from typing import Any
 
 from src.core.errors import GeometryValidationError, RequestValidationError
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
-from src.engines.cad.builder import build_quadcopter_frame
 from src.engines.cad.glb import write_glb
-from src.engines.cad.ir import QuadcopterFrameIR
+from src.engines.cad.ir import PartIR
+from src.engines.cad.parts import DEFAULT_PART_TYPE, PartDefinition, get_part
 from src.engines.cad.primitives import Mesh, write_binary_stl
-from src.engines.cad.validators import validate_quadcopter_frame
 
-SUPPORTED_TYPES = {"quadcopter_frame"}
 NOT_YET_SUPPORTED_FORMATS = {"step"}
 
 
@@ -40,16 +42,11 @@ class CADEngine(BaseEngine):
     # ------------------------------------------------------------ generate ---
 
     def generate(self, parameters: dict[str, Any]) -> EngineResult:
-        part_type = parameters.get("type", "quadcopter_frame")
-        if part_type not in SUPPORTED_TYPES:
-            raise RequestValidationError(
-                f"Unsupported CAD type '{part_type}'",
-                details={"supported": sorted(SUPPORTED_TYPES)},
-            )
+        part = get_part(parameters.get("type", DEFAULT_PART_TYPE))
 
         outputs: list[str] = parameters.get("outputs") or ["stl", "json"]
-        ir = QuadcopterFrameIR.from_request(parameters.get("parameters", {}))
-        mesh = build_quadcopter_frame(ir)
+        ir = part.ir_class.from_request(parameters.get("parameters", {}))
+        mesh = part.builder(ir)
 
         ok, checks = self.validate(mesh, ir)
         if not ok:
@@ -61,9 +58,7 @@ class CADEngine(BaseEngine):
         unavailable_formats = [f for f in outputs if f in NOT_YET_SUPPORTED_FORMATS]
 
         work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
-        base_name = (
-            f"{part_type}_{int(ir.parameters['overall_size'])}mm_{uuid.uuid4().hex[:8]}"
-        )
+        base_name = f"{part.filename_stem(ir)}_{uuid.uuid4().hex[:8]}"
 
         if "stl" in outputs:
             stl_path = work_dir / f"{base_name}.stl"
@@ -81,7 +76,7 @@ class CADEngine(BaseEngine):
             pending_artifacts.append((str(json_path), "json"))
 
         result: dict[str, Any] = {
-            "type": part_type,
+            "type": part.name,
             "spec": ir.to_dict(),
             "triangle_count": len(mesh.triangles),
             "bounding_box_mm": mesh.bounding_box(),
@@ -104,9 +99,10 @@ class CADEngine(BaseEngine):
     # ------------------------------------------------------------ validate ---
 
     def validate(
-        self, mesh: Mesh, ir: QuadcopterFrameIR
+        self, mesh: Mesh, ir: PartIR, part: PartDefinition | None = None
     ) -> tuple[bool, dict[str, Any]]:
-        return validate_quadcopter_frame(ir, mesh)
+        definition = part or get_part(ir.to_dict().get("type", ""))
+        return definition.validator(ir, mesh)
 
     # -------------------------------------------------------------- export ---
 
@@ -130,7 +126,7 @@ class CADEngine(BaseEngine):
         }
 
 
-def _ir_json(ir: QuadcopterFrameIR) -> str:
+def _ir_json(ir: PartIR) -> str:
     import json
 
     return json.dumps(ir.to_dict(), indent=2)

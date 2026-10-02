@@ -1,10 +1,10 @@
 from typing import Protocol
 
-from src.engines.cad.ir import QuadcopterFrameIR
+from src.engines.cad.ir import PartIR
 
 
 class CADAdapter(Protocol):
     name: str
 
-    def generate(self, ir: QuadcopterFrameIR): ...
+    def generate(self, ir: PartIR): ...
     def export_step(self, model, output_path: str): ...
