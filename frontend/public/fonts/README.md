@@ -29,6 +29,11 @@ build-time font fetch failed and surfaced as
 | `ibm-plex-mono-400.woff2` | IBM Plex Mono | 400 | latin subset |
 | `ibm-plex-mono-500.woff2` | IBM Plex Mono | 500 | latin subset |
 | `ibm-plex-mono-600.woff2` | IBM Plex Mono | 600 | latin subset |
+| `instrument-serif-400-italic.woff2` | Instrument Serif | 400 italic | latin subset; used only by `app/chat` via `--font-instrument` |
+
+> Note: Instrument Serif ships the **italic** cut only, because that is the sole
+> usage (`app/chat/chat.css` `h1 em`). Add the normal cut here and a matching
+> `@font-face` in `app/globals.css` if a non-italic use ever appears.
 
 > Note: Google Fonts serves a **single variable woff2 per family** for Space Grotesk,
 > Inter and JetBrains Mono — every requested weight of those families points at the

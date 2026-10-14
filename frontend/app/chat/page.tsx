@@ -1,8 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Inter, Instrument_Serif } from 'next/font/google';
 import './chat.css';
 import {
   executeRequirement,
@@ -14,9 +12,6 @@ import {
   type ParseSummary,
   type TrinityResult,
 } from '@/lib/api/trinity';
-
-const inter = Inter({ subsets: ['latin'], display: 'swap', axes: ['opsz'] });
-const instrumentSerif = Instrument_Serif({ weight: '400', style: 'italic', subsets: ['latin'], display: 'swap' });
 
 type Message = {
   id: number;
@@ -421,8 +416,6 @@ export default function ChatPage() {
   return (
     <div
       id="chatWrapper"
-      className={inter.className}
-      style={{ '--font-instrument': instrumentSerif.style.fontFamily } as React.CSSProperties}
     >
       <div className="grain"></div>
       <div className="hero-photo">
