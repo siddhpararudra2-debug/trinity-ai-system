@@ -171,6 +171,35 @@ export async function getEngines(): Promise<EngineInfo[] | null> {
   }
 }
 
+export async function executeEngine(
+  engine: string,
+  operation: string,
+  parameters: Record<string, unknown> = {},
+): Promise<TrinityResult> {
+  const response = await fetch(`${TRINITY_API_URL}/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ engine, operation, parameters }),
+  });
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw apiError(payload, response.status);
+  }
+
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('success' in payload) ||
+    !('job_id' in payload)
+  ) {
+    throw new Error('The API returned an invalid response.');
+  }
+
+  return payload as TrinityResult;
+}
+
 export function getArtifactUrl(artifactId: string): string {
   return `${TRINITY_API_URL}/artifacts/${artifactId}`;
 }

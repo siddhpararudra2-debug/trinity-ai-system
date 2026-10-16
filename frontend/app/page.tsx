@@ -3,6 +3,7 @@ import Hero from '@/components/trinity/Hero';
 import EngineStrip from '@/components/trinity/EngineStrip';
 import SystemFlow from '@/components/trinity/SystemFlow';
 import TrinityWorkspace from '@/components/trinity/TrinityWorkspace';
+import BridgedEngines from '@/components/trinity/BridgedEngines';
 import EngineeringSystems from '@/components/trinity/EngineeringSystems';
 import Projects from '@/components/trinity/Projects';
 import Philosophy from '@/components/trinity/Philosophy';
@@ -18,6 +19,7 @@ export default function Home() {
   return (
     <main>
       <TrinityWorkspace />
+      <BridgedEngines />
       <Reveal variant="up">
         <Hero />
       </Reveal>

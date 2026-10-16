@@ -606,8 +606,32 @@ p { margin-top: 0; }
 .ws-validation-status { color: var(--green); font-family: var(--font-mono-plex), monospace; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .ws-validation-status.is-failed { color: var(--danger); }
 .ws-checks { margin: 14px 0 0; padding: 0; list-style: none; }
-.ws-checks li { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid #F1F1ED; color: var(--trinity-gray); font-family: var(--font-mono-plex), monospace; font-size: 0.7rem; }
+.ws-checks li { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--trinity-border-soft); color: var(--trinity-gray); font-family: var(--font-mono-plex), monospace; font-size: 0.7rem; }
 .ws-checks li b { color: var(--green); }
+.ws-checks a { color: var(--trinity-blue); text-decoration: underline; text-underline-offset: 2px; }
+
+/* bridged-engine consoles (research / simulation / pcb) */
+.ws-form { display: grid; gap: 10px; }
+.ws-field { display: grid; gap: 6px; }
+.ws-field > span { font-family: var(--font-mono-plex), monospace; font-size: 0.62rem; letter-spacing: 0.1em; color: var(--trinity-gray); }
+.ws-input {
+  width: 100%; min-height: 40px; padding: 8px 12px;
+  border: 1px solid var(--trinity-border); background: var(--trinity-white);
+  color: var(--trinity-black); font-family: var(--font-mono-plex), monospace; font-size: 0.78rem;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.ws-input::placeholder { color: var(--trinity-gray); opacity: 0.7; }
+.ws-input:focus { outline: none; border-color: var(--trinity-blue); box-shadow: 0 0 0 3px rgba(49,91,115,0.08); }
+select.ws-input { appearance: none; cursor: pointer; }
+.ws-error {
+  margin: 12px 0 0; padding: 10px 12px;
+  border: 1px solid var(--danger-border); background: var(--danger-bg); color: var(--danger);
+  font-family: var(--font-mono-plex), monospace; font-size: 0.68rem; line-height: 1.6;
+}
+.ws-spec { margin: 14px 0 0; padding: 0; }
+.ws-spec > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--trinity-border-soft); font-family: var(--font-mono-plex), monospace; font-size: 0.7rem; }
+.ws-spec dt { color: var(--trinity-gray); letter-spacing: 0.08em; }
+.ws-spec dd { margin: 0; color: var(--trinity-black); font-weight: 600; }
 .principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .principle { min-height: 210px; padding: 24px; border: 1px solid var(--trinity-border); border-radius: var(--radius-sm); background: var(--panel); transition: transform 0.2s, border-color 0.2s; }
 .principle:hover { transform: translateY(-3px); border-color: var(--trinity-black); }

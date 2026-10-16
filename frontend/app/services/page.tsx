@@ -93,8 +93,10 @@ export default function ServicesPage() {
             What Trinity <span className="accent-word">can do</span> — and what it refuses to fake.
           </h1>
           <p className="lede">
-            GET /api/engines returns every registered capability as structured data. Two engines are
-            live; six are honest scaffolds that raise capability errors rather than pretending.
+            GET /api/engines returns every registered capability as structured data. CAD and
+            math run locally; PCB, firmware, vision, research, simulation and robotics bridge
+            to the native backend when connected — otherwise they refuse truthfully instead
+            of pretending.
           </p>
         </div>
       </section>
