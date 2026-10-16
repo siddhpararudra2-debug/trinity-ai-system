@@ -9,11 +9,23 @@ import {
 } from '@/lib/api/trinity';
 
 /**
- * Interactive consoles for the bridged native engines (research, simulation,
- * pcb). Each panel follows the workspace pattern: form -> POST /api/execute
- * -> TrinityResult rendered as spec | result | validation | artifacts.
- * When the native backend is not connected the API answers success:false
- * with a capability_unavailable error, which is shown truthfully.
+ * Interactive consoles for the bridged native engines. Each panel follows the
+ * workspace pattern: form -> POST /api/execute -> TrinityResult rendered as
+ * spec | result | validation | artifacts. When the native backend is not
+ * connected the API answers success:false with a capability_unavailable
+ * error, which is shown truthfully.
+ *
+ * Every panel below was built against the live engine, not its docstring:
+ *   research/search        -> hits, hit_count
+ *   simulation/simulate    -> result.result.{method,step_count,final_state}
+ *   pcb/generate|validate  -> design, rules
+ *   robotics/kinematics    -> end_effector.{position,rotation}, frames
+ *   robotics/trajectory    -> goal_reached, sample_count, trajectory[]
+ *   firmware/create        -> project
+ *   vision/image_inspect   -> input.metadata.{width,height,format,channels}
+ *
+ * Where an operation exists natively but is not reachable through the
+ * bridge, the panel says so instead of shipping a button that always fails.
  */
 
 type PanelState = {
@@ -30,6 +42,27 @@ function errorText(e: unknown): string {
     return hints.length > 0 ? `${e.message} — try: ${hints.join(', ')}` : e.message;
   }
   return e instanceof Error ? e.message : 'Request failed';
+}
+
+/** "0.5, -0.3" -> [0.5, -0.3]. Returns null when anything is not a finite number,
+ *  so the panel can say which field is wrong instead of sending NaN. */
+function parseNumbers(raw: string): number[] | null {
+  const parts = raw.split(/[,\s]+/).filter(Boolean);
+  const values = parts.map(Number);
+  return values.length > 0 && values.every(Number.isFinite) ? values : null;
+}
+
+function Spec({ rows }: { rows: Array<[string, unknown]> }) {
+  return (
+    <dl className="ws-spec">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{typeof v === 'number' ? Number(v.toFixed(4)) : String(v ?? '—')}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function Field({ label, value, onChange, hint }: {
@@ -341,6 +374,257 @@ function PcbPanel() {
   );
 }
 
+function RoboticsPanel() {
+  const [angles, setAngles] = useState('0.5, -0.3');
+  const [start, setStart] = useState('0.0, 0.0');
+  const [goal, setGoal] = useState('1.0, -1.0');
+  const [duration, setDuration] = useState('1.0');
+  const [state, setState] = useState<PanelState>(idle);
+
+  const parsedAngles = parseNumbers(angles);
+  const parsedStart = parseNumbers(start);
+  const parsedGoal = parseNumbers(goal);
+
+  async function call(operation: string, parameters: Record<string, unknown>) {
+    if (state.busy) return;
+    setState({ busy: true, result: null, error: null });
+    try {
+      const result = await executeEngine('robotics', operation, parameters);
+      setState({
+        busy: false,
+        result,
+        error: result.success ? null : (result.errors[0]?.message ?? 'Robotics operation failed'),
+      });
+    } catch (e) {
+      setState({ busy: false, result: null, error: errorText(e) });
+    }
+  }
+
+  const data = (state.result?.result ?? {}) as Record<string, unknown>;
+  const ee = (data.end_effector ?? {}) as Record<string, unknown>;
+  const pos = (ee.position ?? {}) as Record<string, unknown>;
+  const frames = (data.frames ?? []) as Array<Record<string, unknown>>;
+
+  return (
+    <article className="ws-panel">
+      <h2>ROBOTICS · KINEMATICS</h2>
+      <p className="ws-empty">
+        Forward kinematics and joint-space trajectories on the native Denavit-Hartenberg
+        chain. The engine&apos;s two-link default is used unless dh_params are supplied.
+      </p>
+      <div className="ws-form" style={{ marginTop: 14 }}>
+        <Field label="JOINT_ANGLES (RAD)" value={angles} onChange={setAngles} hint="0.5, -0.3" />
+        <div>
+          <button
+            className="btn-generate"
+            type="button"
+            disabled={state.busy || !parsedAngles}
+            onClick={() => call('kinematics', { joint_angles: parsedAngles ?? [] })}
+          >
+            {state.busy ? 'WORKING…' : 'FORWARD KINEMATICS →'}
+          </button>
+        </div>
+        <Field label="JOINT_START" value={start} onChange={setStart} hint="0.0, 0.0" />
+        <Field label="JOINT_GOAL" value={goal} onChange={setGoal} hint="1.0, -1.0" />
+        <Field label="DURATION_S" value={duration} onChange={setDuration} hint="1.0" />
+        <div>
+          <button
+            className="btn-generate"
+            type="button"
+            disabled={state.busy || !parsedStart || !parsedGoal}
+            onClick={() =>
+              call('trajectory_plan', {
+                joint_start: parsedStart ?? [],
+                joint_goal: parsedGoal ?? [],
+                duration_s: Number(duration),
+              })
+            }
+          >
+            PLAN TRAJECTORY →
+          </button>
+        </div>
+      </div>
+      {(parsedAngles === null || parsedStart === null || parsedGoal === null) && (
+        <p className="ws-error">Joint fields need comma or space separated numbers.</p>
+      )}
+      {state.error && <p className="ws-error">{state.error}</p>}
+      {state.result?.success && (
+        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+          <ResultHead result={state.result} />
+          {typeof data.end_effector === 'object' ? (
+            <>
+              <Spec
+                rows={[
+                  ['JOINT_COUNT', data.joint_count],
+                  ['CHAIN_SOURCE', data.chain_source],
+                  ['EE_X_M', pos.x],
+                  ['EE_Y_M', pos.y],
+                  ['EE_Z_M', pos.z],
+                  ['UNITS', (data.units as Record<string, unknown>)?.length],
+                ]}
+              />
+              <ul className="ws-checks">
+                {frames.map((f, i) => (
+                  <li key={i}>
+                    <b>▸</b>
+                    <span>
+                      {String(f.name ?? `link${i}`)}
+                      {' · '}
+                      {(['x', 'y', 'z'] as const).map((axis) => {
+                        const p = f.position as Record<string, unknown>;
+                        return `${axis.toUpperCase()} ${typeof p?.[axis] === 'number' ? p[axis].toFixed(4) : '—'}`;
+                      }).join('  ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <Spec
+              rows={[
+                ['GOAL_REACHED', String(data.goal_reached ?? '—')],
+                ['START_REACHED', String(data.start_reached ?? '—')],
+                ['JOINT_COUNT', data.joint_count],
+                ['SAMPLE_COUNT', data.sample_count],
+                ['DT_S', data.dt],
+                ['DURATION_S', data.duration_s],
+                ['INTEGRATOR', data.integrator],
+                ['FINAL', JSON.stringify(data.final_positions ?? [])],
+              ]}
+            />
+          )}
+          <Artifacts result={state.result} />
+        </div>
+      )}
+    </article>
+  );
+}
+
+function FirmwarePanel() {
+  const [name, setName] = useState('trinity_demo');
+  const [state, setState] = useState<PanelState>(idle);
+
+  async function create() {
+    if (!name.trim() || state.busy) return;
+    setState({ busy: true, result: null, error: null });
+    try {
+      const result = await executeEngine('firmware', 'create', { name: name.trim() });
+      setState({
+        busy: false,
+        result,
+        error: result.success ? null : (result.errors[0]?.message ?? 'Project creation failed'),
+      });
+    } catch (e) {
+      setState({ busy: false, result: null, error: errorText(e) });
+    }
+  }
+
+  const project = ((state.result?.result as Record<string, unknown> | undefined)?.project ??
+    {}) as Record<string, unknown>;
+  const mcu = (project.mcu ?? {}) as Record<string, unknown>;
+
+  return (
+    <article className="ws-panel">
+      <h2>FIRMWARE · PROJECT</h2>
+      <p className="ws-empty">
+        Creates an MCU-less project shell through the native firmware engine — the same object
+        the rest of the firmware pipeline takes over from.
+      </p>
+      <div className="ws-form" style={{ marginTop: 14 }}>
+        <Field label="PROJECT_NAME" value={name} onChange={setName} hint="trinity_demo" />
+        <div>
+          <button className="btn-generate" type="button" disabled={state.busy || !name.trim()} onClick={create}>
+            {state.busy ? 'WORKING…' : 'CREATE PROJECT →'}
+          </button>
+        </div>
+      </div>
+      {state.error && <p className="ws-error">{state.error}</p>}
+      {state.result?.success && (
+        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+          <ResultHead result={state.result} />
+          <Spec
+            rows={[
+              ['NAME', project.name],
+              ['HAS_MCU', String(project.has_mcu ?? '—')],
+              ['CLOCK_HZ', project.clock_hz],
+              ['PINS', Array.isArray(project.pin_mappings) ? project.pin_mappings.length : 0],
+              ['SOURCES', Array.isArray(project.sources) ? project.sources.length : 0],
+              ['MCU', mcu.model || '—'],
+            ]}
+          />
+          <Artifacts result={state.result} />
+        </div>
+      )}
+      <p className="ws-empty" style={{ marginTop: 14 }}>
+        Build is intentionally absent: the native build step requires an MCU and generated
+        sources from select_mcu and generate_firmware, which the bridge does not expose yet.
+      </p>
+    </article>
+  );
+}
+
+function VisionPanel() {
+  const [path, setPath] = useState('');
+  const [state, setState] = useState<PanelState>(idle);
+
+  async function inspect() {
+    if (!path.trim() || state.busy) return;
+    setState({ busy: true, result: null, error: null });
+    try {
+      const result = await executeEngine('vision', 'image_inspect', { path: path.trim() });
+      setState({
+        busy: false,
+        result,
+        error: result.success ? null : (result.errors[0]?.message ?? 'Inspection failed'),
+      });
+    } catch (e) {
+      setState({ busy: false, result: null, error: errorText(e) });
+    }
+  }
+
+  const input = ((state.result?.result as Record<string, unknown> | undefined)?.input ??
+    {}) as Record<string, unknown>;
+  const meta = (input.metadata ?? {}) as Record<string, unknown>;
+
+  return (
+    <article className="ws-panel">
+      <h2>VISION · IMAGE INSPECT</h2>
+      <p className="ws-empty">
+        Reads image metadata through the native vision engine. Takes an absolute path on the
+        server — there is no upload endpoint yet, so the file has to already be there.
+      </p>
+      <div className="ws-form" style={{ marginTop: 14 }}>
+        <Field label="ABSOLUTE_PATH" value={path} onChange={setPath} hint="C:\\images\\board.png" />
+        <div>
+          <button className="btn-generate" type="button" disabled={state.busy || !path.trim()} onClick={inspect}>
+            {state.busy ? 'READING…' : 'INSPECT →'}
+          </button>
+        </div>
+      </div>
+      {state.error && <p className="ws-error">{state.error}</p>}
+      {state.result?.success && (
+        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+          <ResultHead result={state.result} />
+          <Spec
+            rows={[
+              ['FORMAT', meta.format],
+              ['WIDTH_PX', meta.width],
+              ['HEIGHT_PX', meta.height],
+              ['CHANNELS', meta.channels],
+              ['SIZE_BYTES', meta.size_bytes],
+            ]}
+          />
+          <Artifacts result={state.result} />
+        </div>
+      )}
+      <p className="ws-empty" style={{ marginTop: 14 }}>
+        Needs an OpenCascade-era OpenCV build of Trinity.exe — the plain build reports the
+        capability as unavailable rather than guessing.
+      </p>
+    </article>
+  );
+}
+
 export default function BridgedEngines() {
   return (
     <section className="section-sm" id="bridged-engines" aria-labelledby="bridged-title">
@@ -353,15 +637,19 @@ export default function BridgedEngines() {
             </h2>
           </div>
           <p className="lede">
-            Research, simulation and PCB run in the native backend and stream back through the
-            same envelope — result, artifacts, validation, job id. When the native backend is
-            not connected these consoles say so instead of faking output.
+            Research, simulation, PCB, robotics, firmware and vision run in the native backend
+            and stream back through the same envelope — result, artifacts, validation, job id.
+            When the native backend is not connected these consoles say so instead of faking
+            output.
           </p>
         </div>
         <div className="workspace-grid">
           <ResearchPanel />
           <SimulationPanel />
           <PcbPanel />
+          <RoboticsPanel />
+          <FirmwarePanel />
+          <VisionPanel />
         </div>
       </div>
     </section>

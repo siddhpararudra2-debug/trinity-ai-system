@@ -25,9 +25,8 @@ export default function ArtifactPanel({ result, error }: { result: TrinityResult
             <code style={{ display: 'block', padding: 12, background: 'var(--panel)', border: '1px solid var(--danger-border)', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.78rem', color: 'var(--danger)' }}>
               {error}
             </code>
-            <a href="#workspace" className="btn btn-primary" style={{ width: 'max-content' }}>
-              RETRY →
-            </a>
+            {/* No retry link: the command bar is pinned above this panel and
+                never scrolls away, so there is nothing to scroll back to. */}
           </div>
         </div>
       </section>

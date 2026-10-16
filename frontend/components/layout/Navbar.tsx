@@ -8,8 +8,7 @@ import { useTheme } from '@/components/trinity/ThemeProvider';
 const navLinks = [
   { href: '/', label: 'Workspace' },
   { href: '/systems', label: 'Systems' },
-  { href: '/#artifacts', label: 'Artifacts' },
-  { href: '/projects', label: 'Projects' },
+  { href: '/projects', label: 'Artifacts' },
   { href: '/about', label: 'About' },
 ];
 

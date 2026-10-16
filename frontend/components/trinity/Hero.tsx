@@ -65,7 +65,7 @@ export default function Hero() {
             </p>
             <div>
               <div className="hero-actions anim-rise" style={{ '--d': '700ms' } as CSSProperties}>
-                <Link href="#workspace" className="btn btn-primary">
+                <Link href="/" className="btn btn-primary">
                   START ENGINEERING <span aria-hidden="true">→</span>
                 </Link>
                 <Link href="#systems" className="text-link" style={{ marginTop: 0, padding: '12px 0' }}>

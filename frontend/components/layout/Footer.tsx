@@ -2,9 +2,9 @@ import Link from 'next/link';
 
 const engineLinks = [
   { href: '/', label: 'Workspace' },
-  { href: '/projects', label: 'Projects' },
   { href: '/systems', label: 'Systems' },
-  { href: '/#artifacts', label: 'Artifacts' },
+  { href: '/projects', label: 'Artifacts & Jobs' },
+  { href: '/chat', label: 'Chat' },
   { href: '/about', label: 'About' },
 ];
 
