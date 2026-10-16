@@ -148,6 +148,29 @@ export async function generateCad(input: {
   return payload as TrinityResult;
 }
 
+export type EngineInfo = {
+  name: string;
+  version: string;
+  capabilities: string[];
+  status?: string | null;
+};
+
+export async function getEngines(): Promise<EngineInfo[] | null> {
+  try {
+    const response = await fetch(`${TRINITY_API_URL}/engines`, { cache: 'no-store' });
+    if (!response.ok) return null;
+    const payload: unknown = await response.json().catch(() => null);
+    if (!Array.isArray(payload)) return null;
+    const rows = payload.filter(
+      (row): row is EngineInfo =>
+        !!row && typeof row === 'object' && typeof (row as EngineInfo).name === 'string'
+    );
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
 export function getArtifactUrl(artifactId: string): string {
   return `${TRINITY_API_URL}/artifacts/${artifactId}`;
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Hero from '@/components/trinity/Hero';
+import EngineStrip from '@/components/trinity/EngineStrip';
 import SystemFlow from '@/components/trinity/SystemFlow';
 import TrinityWorkspace from '@/components/trinity/TrinityWorkspace';
 import EngineeringSystems from '@/components/trinity/EngineeringSystems';
@@ -33,28 +34,8 @@ export default function Home() {
         <Philosophy />
       </Reveal>
 
-      {/* Engine registry strip — honest secondary band */}
-      <section className="engine-strip" aria-label="Registered engines">
-        <div className="container engine-strip-grid">
-          <div className="strip-label">Engine registry — one process, structured capabilities</div>
-          <div className="strip-item is-live">
-            <strong>CAD</strong>
-            <small>● generate · validate</small>
-          </div>
-          <div className="strip-item is-live">
-            <strong>MATH</strong>
-            <small>● solve · evaluate</small>
-          </div>
-          <div className="strip-item">
-            <strong>PCB</strong>
-            <small>SCAFFOLD · 501</small>
-          </div>
-          <div className="strip-item">
-            <strong>VISION</strong>
-            <small>SCAFFOLD · 501</small>
-          </div>
-        </div>
-      </section>
+      {/* Engine registry strip — live from GET /api/engines, static fallback */}
+      <EngineStrip />
     </main>
   );
 }

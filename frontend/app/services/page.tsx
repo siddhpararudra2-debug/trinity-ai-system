@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Reveal from '@/components/sections/Reveal';
+import EngineGrid from '@/components/trinity/EngineGrid';
 
 export const metadata: Metadata = {
   title: 'Engines',
@@ -100,35 +101,7 @@ export default function ServicesPage() {
 
       <section className="section-sm" aria-label="Engine details">
         <div className="container">
-          <div className="workspace-grid">
-            {engines.map((engine, i) => (
-              <Reveal key={engine.id} delay={(i % 2) * 70}>
-                <article className="ws-panel" id={engine.id} style={{ height: '100%' }}>
-                  <h2>
-                    {engine.name} · {engine.version}
-                  </h2>
-                  <p className="ws-empty">{engine.body}</p>
-                  <ul className="ws-checks" style={{ marginTop: 16 }}>
-                    {engine.facts.map((fact) => (
-                      <li key={fact}>
-                        <b>▸</b> {fact}
-                      </li>
-                    ))}
-                  </ul>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
-                    <span className={`status-pill ${engine.status === 'LIVE' ? 'is-live' : 'is-scaffold'}`}>
-                      {engine.status}
-                    </span>
-                    {engine.capabilities.map((cap) => (
-                      <span className="status-pill" key={cap}>
-                        {cap}
-                      </span>
-                    ))}
-                  </div>
-                </article>
-              </Reveal>
-            ))}
-          </div>
+          <EngineGrid fallback={engines} />
         </div>
       </section>
 
