@@ -445,6 +445,8 @@
     transform: none !important;
     clip-path: none !important;
     filter: none !important;
+  }#chatWrapper .hero-photo video {
+    display: none;
   }
 }
 

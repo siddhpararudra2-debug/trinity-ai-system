@@ -437,7 +437,7 @@ export default function ChatPage() {
         </Link>
       </header>
       <div className="grain"></div>
-      <div className="hero-photo">
+      <div className="hero-photo" aria-hidden="true">
         <video
           src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260818_072341_50851634-bbc3-4c33-9acc-7647d4db44aa.mp4"
           autoPlay
@@ -483,7 +483,7 @@ export default function ChatPage() {
               ))}
               {isLoading && (
                 <div className="chat-message bot appear appear--soft is-in" style={{ '--d': '0s' } as React.CSSProperties}>
-                  <div className="message-content message-bubble"><span style={{ opacity: 0.5 }}>Processing...</span></div>
+                  <div className="message-content message-bubble"><span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.68rem', letterSpacing: '0.12em', opacity: 0.6 }}>PROCESSING —</span></div>
                 </div>
               )}
             </div>
