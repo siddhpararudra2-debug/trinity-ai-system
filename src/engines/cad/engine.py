@@ -44,7 +44,91 @@ class CADEngine(BaseEngine):
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "generate":
             return self.generate(parameters)
+        if operation == "validate":
+            return self.execute_validate(parameters)
+        if operation == "preview":
+            return self.execute_preview(parameters)
+        if operation == "export":
+            return self.execute_export(parameters)
         raise RequestValidationError(f"CAD engine has no operation '{operation}'")
+
+    # ----------------------------------------- execute() operation routes ---
+
+    def _build_from_execute_params(
+        self, parameters: dict[str, Any]
+    ) -> tuple[PartDefinition, PartIR, Mesh]:
+        """Shared rebuild for validate/preview/export: no persisted state.
+
+        Takes the same {type, parameters} shape as generate() so callers
+        use one payload shape for every CAD operation.
+        """
+        part = get_part(parameters.get("type", DEFAULT_PART_TYPE))
+        ir = part.ir_class.from_request(parameters.get("parameters", {}))
+        mesh = part.builder(ir)
+        return part, ir, mesh
+
+    def execute_validate(self, parameters: dict[str, Any]) -> EngineResult:
+        part, ir, mesh = self._build_from_execute_params(parameters)
+        ok, checks = self.validate(mesh, ir, part)
+        return EngineResult(
+            success=ok,
+            engine=self.name,
+            operation="validate",
+            result={
+                "type": part.name,
+                "spec": ir.to_dict(),
+                "triangle_count": len(mesh.triangles),
+                "bounding_box_mm": mesh.bounding_box(),
+                "checks": checks,
+            },
+            validation=ValidationResult(
+                status="VALIDATED" if ok else "FAILED", checks=checks
+            ),
+        )
+
+    def execute_preview(self, parameters: dict[str, Any]) -> EngineResult:
+        part, ir, mesh = self._build_from_execute_params(parameters)
+        return EngineResult(
+            success=True,
+            engine=self.name,
+            operation="preview",
+            result={"type": part.name, **self.preview(mesh)},
+        )
+
+    def execute_export(self, parameters: dict[str, Any]) -> EngineResult:
+        part, ir, mesh = self._build_from_execute_params(parameters)
+        ok, checks = self.validate(mesh, ir, part)
+        if not ok:
+            raise GeometryValidationError(
+                "Generated geometry failed validation", details={"checks": checks}
+            )
+        outputs: list[str] = parameters.get("outputs", parameters.get("formats")) or list(
+            DEFAULT_OUTPUTS
+        )
+        work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
+        base_name = f"{part.filename_stem(ir)}_{uuid.uuid4().hex[:8]}"
+        pending_artifacts = [
+            (str(p), t) for p, t in self.export(mesh, outputs, work_dir, base_name, ir)
+        ]
+        result: dict[str, Any] = {
+            "type": part.name,
+            "spec": ir.to_dict(),
+            "triangle_count": len(mesh.triangles),
+            "bounding_box_mm": mesh.bounding_box(),
+        }
+        unavailable_formats = [f for f in outputs if f in NOT_YET_SUPPORTED_FORMATS]
+        if unavailable_formats:
+            result["unavailable_formats"] = {
+                fmt: STEP_UNAVAILABLE_REASON for fmt in unavailable_formats
+            }
+        return EngineResult(
+            success=True,
+            engine=self.name,
+            operation="export",
+            result=result,
+            pending_artifacts=pending_artifacts,
+            validation=ValidationResult(status="VALIDATED", checks=checks),
+        )
 
     # ------------------------------------------------------------ generate ---
 
@@ -113,14 +197,35 @@ class CADEngine(BaseEngine):
     # -------------------------------------------------------------- export ---
 
     def export(
-        self, mesh: Mesh, formats: list[str], out_dir: Path, base_name: str
-    ) -> list[Path]:
-        paths: list[Path] = []
+        self,
+        mesh: Mesh,
+        formats: list[str],
+        out_dir: Path,
+        base_name: str,
+        ir: PartIR | None = None,
+    ) -> list[tuple[Path, str]]:
+        """Write each requested format, returning (path, type) pairs.
+
+        `ir` is optional only for backward compatibility: JSON export needs
+        the spec, so callers requesting "json" must pass it. Unknown and
+        unavailable formats (e.g. "step") are reported by the caller, never
+        silently dropped here — every format in `formats` that this backend
+        can write produces exactly one pair.
+        """
+        pairs: list[tuple[Path, str]] = []
         if "stl" in formats:
             p = out_dir / f"{base_name}.stl"
             write_binary_stl(mesh, str(p))
-            paths.append(p)
-        return paths
+            pairs.append((p, "stl"))
+        if "glb" in formats:
+            p = out_dir / f"{base_name}.glb"
+            write_glb(mesh, p)
+            pairs.append((p, "glb"))
+        if "json" in formats and ir is not None:
+            p = out_dir / f"{base_name}.json"
+            p.write_text(_ir_json(ir))
+            pairs.append((p, "json"))
+        return pairs
 
     # ------------------------------------------------------------- preview ---
 
