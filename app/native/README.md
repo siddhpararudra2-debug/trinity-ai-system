@@ -295,7 +295,7 @@ rest marked `skipped`. Model refusal executes nothing.
   No cross-call state by design.
 - Math beyond single-variable numeric roots (transcendental systems,
   multi-variable solving, symbolic algebra)
-- CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
+- Kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,

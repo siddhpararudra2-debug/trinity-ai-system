@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 
+#include "trinity/cad/GlbWriter.hpp"
 #include "trinity/cad/Parts.hpp"
 #include "trinity/cad/StlWriter.hpp"
 #include "trinity/cad/Validators.hpp"
@@ -110,6 +111,7 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
 
     EngineResult out = successResult(request, core::Json::object());
     const bool wantStl = std::find(outputs.begin(), outputs.end(), "stl") != outputs.end();
+    const bool wantGlb = std::find(outputs.begin(), outputs.end(), "glb") != outputs.end();
     const bool wantJson = std::find(outputs.begin(), outputs.end(), "json") != outputs.end();
     if (wantStl) {
         const std::string stlPath = (workDir / (baseName + ".stl")).string();
@@ -120,6 +122,16 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
                 std::string("Cannot write STL artifact: ") + exc.what(), {}, "engines");
         }
         out.pendingArtifacts.emplace_back(stlPath, "stl");
+    }
+    if (wantGlb) {
+        const std::string glbPath = (workDir / (baseName + ".glb")).string();
+        try {
+            cad::writeGlb(mesh, glbPath);
+        } catch (const std::exception& exc) {
+            throw core::EngineExecutionError(
+                std::string("Cannot write GLB artifact: ") + exc.what(), {}, "engines");
+        }
+        out.pendingArtifacts.emplace_back(glbPath, "glb");
     }
     if (wantJson) {
         const std::string jsonPath = (workDir / (baseName + ".json")).string();
