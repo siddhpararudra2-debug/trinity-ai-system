@@ -51,7 +51,6 @@ set(TRINITY_CORE_SOURCES
     src/core/Uuid.cpp
     src/core/Time.cpp
     src/core/ApplicationContext.cpp
-    src/core/BridgeState.cpp
     src/cli/Exec.cpp
     src/fs/Filesystem.cpp
     src/cad/FrameParams.cpp

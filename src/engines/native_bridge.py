@@ -27,7 +27,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from src.core.config import settings
 from src.core.errors import CapabilityUnavailableError, EngineExecutionError
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
 
@@ -161,6 +160,8 @@ class NativeBridgeEngine(BaseEngine):
         }
         # Isolated storage root: the child must never touch Python's SQLite
         # files (schema-mismatch risk). Its DB/logs die with this temp dir.
+        # No state dir: the bridge is single-shot by design, every op fully
+        # parameterized, so successive --exec processes share nothing.
         native_tmp = tempfile.mkdtemp(prefix="trinity_native_")
         try:
             proc = self._invoke(exe, request, native_tmp, operation)
@@ -192,17 +193,7 @@ class NativeBridgeEngine(BaseEngine):
         self, exe: str, request: dict[str, Any], native_tmp: str, operation: str
     ):
         """Run the child with an isolated storage root. No shell, timeout, cap."""
-        # Stable bridge-state dir (native BridgeState design): successive
-        # --exec processes share research/robotics state through here, while
-        # TRINITY_STORAGE_ROOT stays throwaway so the child never touches
-        # Python's SQLite files.
-        state_dir = settings.storage_root / "bridge_state"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        env = {
-            **os.environ,
-            "TRINITY_STORAGE_ROOT": native_tmp,
-            "TRINITY_BRIDGE_STATE_DIR": str(state_dir),
-        }
+        env = {**os.environ, "TRINITY_STORAGE_ROOT": native_tmp}
         try:
             proc = subprocess.run(
                 [exe, "--exec"],
