@@ -24,6 +24,7 @@
 #include <opencv2/imgcodecs.hpp>
 #endif
 
+#include "trinity/cli/Exec.hpp"
 #include "trinity/core/ApplicationContext.hpp"
 #include "trinity/core/Logger.hpp"
 #include "trinity/engines/EngineRegistry.hpp"
@@ -301,6 +302,9 @@ int runSelftest() {
 
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--exec") {
+            return trinity::cli::runExecFromStdin();
+        }
         if (std::string(argv[i]) == "--selftest") {
             return runSelftest();
         }

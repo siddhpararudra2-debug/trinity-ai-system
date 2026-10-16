@@ -57,6 +57,11 @@ core::Json EngineResult::toJson() const {
         artifactsJson.push_back(ref.toJson());
     }
     json["artifacts"] = artifactsJson;
+    core::Json pendingJson = core::Json::array();
+    for (const auto& [path, type] : pendingArtifacts) {
+        pendingJson.push_back(core::Json{{"path", path}, {"type", type}});
+    }
+    json["pending_artifacts"] = pendingJson;
     json["validation"] = validation.has_value() ? validation->toJson() : core::Json(nullptr);
     return json;
 }
@@ -74,6 +79,17 @@ EngineResult EngineResult::fromJson(const core::Json& json) {
     if (json.contains("artifacts") && json["artifacts"].is_array()) {
         for (const auto& item : json["artifacts"]) {
             out.artifacts.push_back(ArtifactRef::fromJson(item));
+        }
+    }
+    if (json.contains("pending_artifacts") && json["pending_artifacts"].is_array()) {
+        for (const auto& item : json["pending_artifacts"]) {
+            if (item.is_object()) {
+                out.pendingArtifacts.emplace_back(item.value("path", ""),
+                                                  item.value("type", ""));
+            } else if (item.is_array() && item.size() >= 2) {
+                out.pendingArtifacts.emplace_back(item[0].get<std::string>(),
+                                                  item[1].get<std::string>());
+            }
         }
     }
     if (json.contains("validation") && !json["validation"].is_null()) {

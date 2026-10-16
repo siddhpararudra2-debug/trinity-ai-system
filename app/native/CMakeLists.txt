@@ -51,6 +51,8 @@ set(TRINITY_CORE_SOURCES
     src/core/Uuid.cpp
     src/core/Time.cpp
     src/core/ApplicationContext.cpp
+    src/core/BridgeState.cpp
+    src/cli/Exec.cpp
     src/fs/Filesystem.cpp
     src/cad/FrameParams.cpp
     src/cad/Mesh.cpp
@@ -224,6 +226,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_sim_pipeline.cpp
         tests/test_sim_workflow.cpp
         tests/test_sim_cancellation.cpp
+        tests/test_exec.cpp
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)
