@@ -192,6 +192,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_cad_generate.cpp
         tests/test_cad_primitives.cpp
         tests/test_cad_parts.cpp
+        tests/test_cad_new_parts.cpp
         tests/test_validation.cpp
         tests/test_provider_factory.cpp
         tests/test_planner.cpp

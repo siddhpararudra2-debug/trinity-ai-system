@@ -1,5 +1,6 @@
 #include "trinity/cad/Parts.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -318,6 +319,161 @@ std::string lBracketStem(const PartSpec& spec) {
            formatG(p.at("height")) + "x" + formatG(p.at("width")) + "mm";
 }
 
+// ------------------------------------------------------- mounting_plate ---
+
+const std::map<std::string, double> kMountingPlateDefaults = {
+    {"length", 100.0},
+    {"width", 60.0},
+    {"thickness", 3.0},
+    {"boss_diameter", 8.0},
+    {"boss_height", 2.0},
+    {"boss_inset", 8.0},
+};
+
+const std::map<std::string, ParamBound> kMountingPlateBounds = {
+    {"length", {0.0, true, true, 1000.0, false, "mm"}},
+    {"width", {0.0, true, true, 1000.0, false, "mm"}},
+    {"thickness", {1.0, false, true, 50.0, false, "mm"}},
+    {"boss_diameter", {1.0, false, true, 1000.0, false, "mm"}},
+    {"boss_height", {1.0, false, true, 50.0, false, "mm"}},
+    {"boss_inset", {0.0, true, true, 1000.0, false, "mm"}},
+};
+
+PartSpec mountingPlateFromRequest(const core::Json& raw) {
+    PartSpec spec = mergeDefaults("mounting_plate", kMountingPlateDefaults,
+                                  kMountingPlateBounds, raw);
+    auto& p = spec.parameters;
+    const double bossDiameter = p.at("boss_diameter");
+    const double bossInset = p.at("boss_inset");
+    if (bossInset < bossDiameter / 2.0) {
+        throw core::RequestValidationError(
+            "boss_inset must be at least boss_diameter / 2 so each boss "
+            "stays within its plate edge",
+            {{"boss_diameter", bossDiameter}, {"boss_inset", bossInset}},
+            "engines");
+    }
+    if (bossDiameter / 2.0 + bossInset > std::min(p.at("length"), p.at("width"))) {
+        throw core::RequestValidationError(
+            "boss_diameter / 2 + boss_inset must not exceed the smaller "
+            "of length and width",
+            {{"boss_diameter", bossDiameter},
+             {"boss_inset", bossInset},
+             {"length", p.at("length")},
+             {"width", p.at("width")}},
+            "engines");
+    }
+    return spec;
+}
+
+Mesh buildMountingPlate(const PartSpec& spec) {
+    const auto& p = spec.parameters;
+    const double length = p.at("length");
+    const double width = p.at("width");
+    const double thickness = p.at("thickness");
+    Mesh mesh = box({0.0, 0.0, thickness / 2.0}, {length, width, thickness});
+    for (double signX : {1.0, -1.0}) {
+        for (double signY : {1.0, -1.0}) {
+            mesh.extend(cylinder(
+                {signX * (length / 2.0 - p.at("boss_inset")),
+                 signY * (width / 2.0 - p.at("boss_inset")),
+                 thickness + p.at("boss_height") / 2.0},
+                p.at("boss_diameter") / 2.0, p.at("boss_height")));
+        }
+    }
+    return mesh;
+}
+
+FrameValidation validateMountingPlate(const PartSpec& spec, const Mesh& mesh) {
+    FrameValidation result;
+    const auto& p = spec.parameters;
+    core::Json checks = core::Json::object();
+    const bool dimsOk = envelopesMatch(
+        mesh, {-p.at("length") / 2.0, -p.at("width") / 2.0, 0.0},
+        {p.at("length") / 2.0, p.at("width") / 2.0,
+         p.at("thickness") + p.at("boss_height")});
+    checks["dimensions_match_envelope"] = dimsOk;
+    const MeshIntegrity info = integrity(mesh);
+    checks["all_vertices_finite"] = info.finite;
+    checks["degenerate_triangle_count"] = info.degenerate;
+    const bool manufacturable = p.at("thickness") >= kMinPrintableFeatureMm &&
+                                p.at("boss_height") >= kMinPrintableFeatureMm;
+    checks["manufacturable_min_feature"] = manufacturable;
+    checks["triangle_count"] = info.triangles;
+    result.ok = dimsOk && info.finite && info.degenerate == 0 && manufacturable;
+    result.checks = std::move(checks);
+    return result;
+}
+
+std::string mountingPlateStem(const PartSpec& spec) {
+    const auto& p = spec.parameters;
+    return "mounting_plate_" + formatG(p.at("length")) + "x" +
+           formatG(p.at("width")) + "mm";
+}
+
+// --------------------------------------------------------------- standoff ---
+
+const std::map<std::string, double> kStandoffDefaults = {
+    {"height", 10.0},
+    {"diameter", 6.0},
+    {"foot_diameter", 10.0},
+    {"foot_height", 1.5},
+};
+
+const std::map<std::string, ParamBound> kStandoffBounds = {
+    {"height", {0.0, true, true, 1000.0, false, "mm"}},
+    {"diameter", {1.0, false, true, 1000.0, false, "mm"}},
+    {"foot_diameter", {1.0, false, true, 1000.0, false, "mm"}},
+    {"foot_height", {1.0, false, true, 1000.0, false, "mm"}},
+};
+
+PartSpec standoffFromRequest(const core::Json& raw) {
+    PartSpec spec =
+        mergeDefaults("standoff", kStandoffDefaults, kStandoffBounds, raw);
+    auto& p = spec.parameters;
+    if (p.at("foot_height") > p.at("height")) {
+        throw core::RequestValidationError(
+            "foot_height must not exceed height",
+            {{"foot_height", p.at("foot_height")}, {"height", p.at("height")}},
+            "engines");
+    }
+    return spec;
+}
+
+Mesh buildStandoff(const PartSpec& spec) {
+    const auto& p = spec.parameters;
+    Mesh mesh = cylinder({0.0, 0.0, p.at("height") / 2.0},
+                         p.at("diameter") / 2.0, p.at("height"));
+    mesh.extend(cylinder({0.0, 0.0, p.at("foot_height") / 2.0},
+                         p.at("foot_diameter") / 2.0, p.at("foot_height")));
+    return mesh;
+}
+
+FrameValidation validateStandoff(const PartSpec& spec, const Mesh& mesh) {
+    FrameValidation result;
+    const auto& p = spec.parameters;
+    core::Json checks = core::Json::object();
+    const double halfSpan =
+        std::max(p.at("diameter"), p.at("foot_diameter")) / 2.0;
+    const bool dimsOk = envelopesMatch(mesh, {-halfSpan, -halfSpan, 0.0},
+                                       {halfSpan, halfSpan, p.at("height")});
+    checks["dimensions_match_envelope"] = dimsOk;
+    const MeshIntegrity info = integrity(mesh);
+    checks["all_vertices_finite"] = info.finite;
+    checks["degenerate_triangle_count"] = info.degenerate;
+    const bool manufacturable = p.at("diameter") >= kMinPrintableFeatureMm &&
+                                p.at("foot_diameter") >= kMinPrintableFeatureMm &&
+                                p.at("foot_height") >= kMinPrintableFeatureMm;
+    checks["manufacturable_min_feature"] = manufacturable;
+    checks["triangle_count"] = info.triangles;
+    result.ok = dimsOk && info.finite && info.degenerate == 0 && manufacturable;
+    result.checks = std::move(checks);
+    return result;
+}
+
+std::string standoffStem(const PartSpec& spec) {
+    return "standoff_" + formatG(spec.parameters.at("height")) + "mm";
+}
+
 }  // namespace
 
 const std::vector<PartDefinition>& partRegistry() {
@@ -334,12 +490,24 @@ const std::vector<PartDefinition>& partRegistry() {
          {"thickness must be less than base_length",
           "thickness must be less than height"},
          lBracketFromRequest, buildLBracket, validateLBracket, lBracketStem},
+        {"mounting_plate", "Mounting plate",
+         "Flat plate with four raised cylindrical mounting bosses.",
+         kMountingPlateDefaults, kMountingPlateBounds,
+         {"boss_inset must be at least boss_diameter / 2",
+          "boss_diameter / 2 + boss_inset must not exceed the plate"},
+         mountingPlateFromRequest, buildMountingPlate, validateMountingPlate,
+         mountingPlateStem},
         {"quadcopter_frame", "Quadcopter frame",
          "X-configuration quadcopter frame with center plate and four arms.",
          defaultFrameParams(), {},
          {"overall_size must be greater than center_plate_size",
           "motor_count must be 4"},
          quadFromRequest, quadBuilder, quadValidator, quadStem},
+        {"standoff", "Standoff",
+         "Cylindrical post on a wider foot for spacing boards apart.",
+         kStandoffDefaults, kStandoffBounds,
+         {"foot_height must not exceed height"},
+         standoffFromRequest, buildStandoff, validateStandoff, standoffStem},
     };
     return registry;
 }
@@ -358,6 +526,7 @@ std::vector<std::string> partNames() {
     for (const auto& part : partRegistry()) {
         names.push_back(part.name);
     }
+    std::sort(names.begin(), names.end());
     return names;
 }
 

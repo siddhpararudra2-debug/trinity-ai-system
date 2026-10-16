@@ -15,10 +15,12 @@
 
 TEST_CASE("part registry lists the supported parts sorted") {
     const std::vector<std::string> names = trinity::cad::partNames();
-    REQUIRE(names.size() == 3);
+    REQUIRE(names.size() == 5);
     CHECK(names[0] == "enclosure");
     CHECK(names[1] == "l_bracket");
-    CHECK(names[2] == "quadcopter_frame");
+    CHECK(names[2] == "mounting_plate");
+    CHECK(names[3] == "quadcopter_frame");
+    CHECK(names[4] == "standoff");
 }
 
 TEST_CASE("findPart returns null for unknown types") {
