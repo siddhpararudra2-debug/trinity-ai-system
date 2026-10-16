@@ -56,7 +56,7 @@ const phases = [
   {
     n: 'PHASE 2',
     title: 'Deterministic CAD',
-    body: 'Parametric quadcopter frame through a native mesh builder with binary STL, GLB and JSON export.',
+    body: 'Parametric quadcopter frame through a native mesh builder with binary STL, GLB, JSON and faceted AP214 STEP export.',
   },
   {
     n: 'PHASE 3',

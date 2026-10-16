@@ -5,7 +5,7 @@ import Reveal from '@/components/sections/Reveal';
 export const metadata: Metadata = {
   title: 'Artifacts & Jobs',
   description:
-    'Trinity AI artifacts: checksummed STL, GLB and JSON outputs with job provenance, validation records and SQLite lineage.',
+    'Trinity AI artifacts: checksummed STL, GLB, JSON and STEP outputs with job provenance, validation records and SQLite lineage.',
 };
 
 const artifacts = [

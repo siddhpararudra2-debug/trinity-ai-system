@@ -35,7 +35,7 @@ const INITIAL_MESSAGES: Message[] = [
     id: 1,
     role: 'bot',
     delay: '0.42s',
-    content: 'Describe a part — quadcopter frame, enclosure, bracket, plate or standoff — or switch to Form for exact dimensions. Trinity shows what it understood, then generates validated STL, GLB and JSON. No guessing, no placeholders.',
+    content: 'Describe a part — quadcopter frame, enclosure, bracket, plate or standoff — or switch to Form for exact dimensions. Trinity shows what it understood, then generates validated STL, GLB and JSON, plus STEP when a CAD kernel is installed. No guessing, no placeholders.',
   },
 ];
 
@@ -459,7 +459,7 @@ export default function ChatPage() {
       <div className="grain"></div>
       <div className="hero-photo" aria-hidden="true">
         <video
-          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260818_072341_50851634-bbc3-4c33-9acc-7647d4db44aa.mp4"
+          src="/chat-hero.mp4"
           poster="/chat-poster.svg"
           autoPlay
           loop

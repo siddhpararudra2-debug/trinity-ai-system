@@ -76,7 +76,7 @@ export default function Hero() {
                 <span className="proof-dot" aria-hidden="true" />
                 <span>
                   V1 flagship: validated 50 mm quadcopter drone — checksummed
-                  STL, GLB and JSON.
+                  STL, GLB, JSON and AP214 STEP.
                 </span>
               </div>
             </div>
