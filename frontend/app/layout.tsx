@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import { ThemeProvider } from '@/components/trinity/ThemeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -50,11 +51,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <Navbar />
-        {children}
-        <Footer />
+        {/* Theme bootstrap: runs before paint so the stored/OS theme
+            applies without a flash. Mirrored by ThemeProvider. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('trinity-theme');if(!t){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;}catch(e){}})();",
+          }}
+        />
+        <ThemeProvider>
+          <Navbar />
+          {children}
+          <Footer />
+        </ThemeProvider>
       </body>
     </html>
   );

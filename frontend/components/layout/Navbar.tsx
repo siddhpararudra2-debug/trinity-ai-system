@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTheme } from '@/components/trinity/ThemeProvider';
 
 const navLinks = [
   { href: '/#workspace', label: 'Workspace' },
@@ -17,6 +18,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [progress, setProgress] = useState(0);
   const pathname = usePathname();
+  const { theme, toggle } = useTheme();
   const closeMenu = () => setMobileOpen(false);
 
   useEffect(() => {
@@ -65,6 +67,16 @@ export default function Navbar() {
             <i aria-hidden="true" />
             SYSTEM READY
           </span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggle}
+            aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+            title={theme === 'light' ? 'Dark' : 'Light'}
+          >
+            <span aria-hidden="true">{theme === 'light' ? '◐' : '◑'}</span>
+            <span>{theme === 'light' ? 'DARK' : 'LIGHT'}</span>
+          </button>
           <Link href="/#workspace" className="btn btn-primary">
             OPEN WORKSPACE
           </Link>

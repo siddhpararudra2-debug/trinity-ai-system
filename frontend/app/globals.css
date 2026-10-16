@@ -79,6 +79,48 @@
   --radius-sm: 4px;
   --shadow: 0 18px 48px rgba(17, 17, 17, 0.07);
   --shadow-soft: 0 8px 24px rgba(17, 17, 17, 0.06);
+  color-scheme: light;
+}
+
+/* -------------------------------------------------- dark theme
+   Same contract, night shift. Every component that reads the tokens
+   above flips free; hardcoded hex (being migrated out) does not.
+   Chat and the 3D stages stay dark in both themes by design. */
+[data-theme="dark"] {
+  --trinity-white: #101211;
+  --trinity-paper: #171918;
+  --trinity-black: #F7F7F4;
+  --trinity-graphite: #E8E8E4;
+  --trinity-gray: #A8A8A0;
+  --trinity-light-gray: #3A3D38;
+  --trinity-border: #2E322E;
+  --trinity-border-soft: #222622;
+  --trinity-blue: #8FB3C9;
+  --trinity-blue-soft: #8FA3B0;
+  --trinity-blue-pale: #1C2830;
+  --surface-dark: #0B0C0B;
+  --surface-dark-2: #101211;
+  --surface-dark-3: #171918;
+
+  --ink: var(--trinity-black);
+  --ink-2: var(--trinity-paper);
+  --panel: #171918;
+  --panel-2: #202321;
+  --line: var(--trinity-border);
+  --line-strong: #4A4F4A;
+  --text: var(--trinity-black);
+  --muted: var(--trinity-gray);
+  --accent: var(--trinity-blue);
+  --accent-hover: #A8C4D6;
+  --accent-ink: #101211;
+  --green: #7fdba0;
+  --violet: #9B8CD4;
+  --amber: #C9A86A;
+  --danger: #E06C5B;
+  --mesh-line: rgba(255, 255, 255, 0.06);
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
 }
 
 /* -------------------------------------------------- reset */
@@ -203,6 +245,9 @@ p { margin-top: 0; }
 .system-ready { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono-plex), monospace; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--trinity-gray); }
 .system-ready i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(45,106,79,0.12); animation: livePulse 2.4s ease-in-out infinite; }
 .nav .btn { min-height: 38px; padding: 0 18px; font-size: 0.7rem; }
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px; border: 1px solid var(--trinity-border); background: transparent; color: var(--trinity-gray); font-family: var(--font-mono-plex), monospace; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.1em; cursor: pointer; transition: color 0.18s, border-color 0.18s; }
+.theme-toggle:hover { color: var(--trinity-black); border-color: var(--trinity-black); }
+[data-theme="dark"] .nav-wrap { background: rgba(16, 18, 17, 0.86); }
 .mobile-toggle { display: none; width: 40px; height: 40px; border: 1px solid var(--trinity-border); background: transparent; color: var(--trinity-black); font-size: 1.1rem; line-height: 1; }
 .mobile-menu { display: none; }
 /* scroll progress hairline */
