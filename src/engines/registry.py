@@ -45,21 +45,30 @@ def bootstrap_engines() -> None:
     """Import + register every built-in engine. Called once at startup."""
     from src.engines.cad.engine import CADEngine
     from src.engines.math.engine import MathEngine
+    from src.engines.native_bridge import NATIVE_ENGINES, NativeBridgeEngine
     from src.engines.scaffold import ScaffoldEngine
 
     registry.register(MathEngine())
     registry.register(CADEngine())
-    registry.register(
-        ScaffoldEngine("pcb", ["inspect", "validate", "generate", "export"])
-    )
-    registry.register(
-        ScaffoldEngine("firmware", ["create", "build", "test", "compile"])
-    )
-    registry.register(
-        ScaffoldEngine(
-            "vision", ["image_inspect", "ocr", "document_parse", "geometry_extract"]
-        )
-    )
-    registry.register(ScaffoldEngine("research", ["search"]))
-    registry.register(ScaffoldEngine("simulation", ["simulate"]))
-    registry.register(ScaffoldEngine("robotics", ["kinematics", "trajectory_plan"]))
+    bridged = NATIVE_ENGINES if _native_available() else {}
+    for name, capabilities in (
+        ("pcb", ["inspect", "validate", "generate", "export"]),
+        ("firmware", ["create", "build", "test", "compile"]),
+        (
+            "vision",
+            ["image_inspect", "ocr", "document_parse", "geometry_extract"],
+        ),
+        ("research", ["search"]),
+        ("simulation", ["simulate"]),
+        ("robotics", ["kinematics", "trajectory_plan"]),
+    ):
+        if name in bridged:
+            registry.register(NativeBridgeEngine(name, NATIVE_ENGINES[name]))
+        else:
+            registry.register(ScaffoldEngine(name, capabilities))
+
+
+def _native_available() -> bool:
+    from src.engines.native_bridge import native_exe_path
+
+    return native_exe_path() is not None
