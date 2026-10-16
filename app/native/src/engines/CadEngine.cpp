@@ -5,7 +5,7 @@
 #include <fstream>
 #include <vector>
 
-#include "trinity/cad/Builder.hpp"
+#include "trinity/cad/Parts.hpp"
 #include "trinity/cad/StlWriter.hpp"
 #include "trinity/cad/Validators.hpp"
 #include "trinity/core/Logger.hpp"
@@ -16,7 +16,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-const std::vector<std::string> kSupportedTypes = {"quadcopter_frame"};
 const std::vector<std::string> kStepFormats = {"step"};
 
 std::string shortId() {
@@ -34,17 +33,21 @@ core::Json boundingBoxJson(const cad::BoundingBox& bbox) {
 
 CadEngine::CadEngine() {
     name_ = "cad";
-    version_ = "0.2.0";
+    version_ = "0.3.0";
     capabilities_ = {"generate", "describe"};
 }
 
 EngineResult CadEngine::execute(const EngineRequest& request) {
     if (request.operation == "describe") {
+        core::Json supported = core::Json::array();
+        for (const auto& type : cad::partNames()) {
+            supported.push_back(type);
+        }
         EngineResult out = successResult(
             request, {{"engine", name_},
                       {"version", version_},
                       {"capabilities", capabilities_},
-                      {"supported_types", kSupportedTypes}});
+                      {"supported_types", supported}});
         out.validation = validate(out);
         return out;
     }
@@ -62,10 +65,10 @@ EngineResult CadEngine::execute(const EngineRequest& request) {
 
 EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
     const std::string partType = request.parameters.value("type", "quadcopter_frame");
-    if (std::find(kSupportedTypes.begin(), kSupportedTypes.end(), partType) ==
-        kSupportedTypes.end()) {
+    const cad::PartDefinition* part = cad::findPart(partType);
+    if (part == nullptr) {
         core::Json supported = core::Json::array();
-        for (const auto& type : kSupportedTypes) {
+        for (const auto& type : cad::partNames()) {
             supported.push_back(type);
         }
         throw core::RequestValidationError("Unsupported CAD type '" + partType + "'",
@@ -86,10 +89,10 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
     }
 
     // May throw RequestValidationError for bad parameters.
-    const cad::FrameParams params = cad::FrameParams::fromRequest(
-        request.parameters.value("parameters", core::Json(nullptr)));
-    const cad::Mesh mesh = cad::buildQuadcopterFrame(params);
-    const cad::FrameValidation validation = cad::validateQuadcopterFrame(params, mesh);
+    const cad::PartSpec spec =
+        part->fromRequest(request.parameters.value("parameters", core::Json(nullptr)));
+    const cad::Mesh mesh = part->builder(spec);
+    const cad::FrameValidation validation = part->validator(spec, mesh);
     if (!validation.ok) {
         throw core::GeometryValidationError("Generated geometry failed validation",
                                             {{"checks", validation.checks}}, "engines");
@@ -103,9 +106,7 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
         throw core::EngineExecutionError(
             "Cannot create CAD scratch directory: " + ec.message(), {}, "engines");
     }
-    const int overallMm = static_cast<int>(params.parameters.at("overall_size"));
-    const std::string baseName =
-        partType + "_" + std::to_string(overallMm) + "mm_" + shortId();
+    const std::string baseName = part->filenameStem(spec) + "_" + shortId();
 
     EngineResult out = successResult(request, core::Json::object());
     const bool wantStl = std::find(outputs.begin(), outputs.end(), "stl") != outputs.end();
@@ -126,7 +127,7 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
         if (!jsonFile) {
             throw core::EngineExecutionError("Cannot write JSON artifact", {}, "engines");
         }
-        jsonFile << params.toJson().dump(2);
+        jsonFile << spec.toJson().dump(2);
         jsonFile.close();
         if (!jsonFile) {
             throw core::EngineExecutionError("Failed while writing JSON artifact", {},
@@ -137,7 +138,7 @@ EngineResult CadEngine::executeGenerate(const EngineRequest& request) {
 
     const cad::BoundingBox bbox = mesh.boundingBox();
     core::Json result{{"type", partType},
-                      {"spec", params.toJson()},
+                      {"spec", spec.toJson()},
                       {"triangle_count", static_cast<int>(mesh.triangleCount())},
                       {"bounding_box_mm", boundingBoxJson(bbox)}};
     core::Json unavailable = core::Json::object();
