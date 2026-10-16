@@ -23,7 +23,25 @@ export const metadata: Metadata = {
     siteName: 'Trinity AI',
     title: 'Trinity AI — Engineering Operating System',
     description: 'Deterministic engines generate and validate engineering artifacts with full provenance.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Trinity AI — Design. Simulate. Validate. Deterministically.',
+      },
+    ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Trinity AI — Engineering Operating System',
+    description: 'Deterministic engines generate and validate engineering artifacts with full provenance.',
+    images: ['/og-image.png'],
+  },
+};
+
+export const viewport = {
+  themeColor: '#111111',
 };
 
 export default function RootLayout({

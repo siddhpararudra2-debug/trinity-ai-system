@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <rect width="1920" height="1080" fill="#000000"/>
+  <g stroke="#ffffff" stroke-opacity="0.08" stroke-width="1">
+    <line x1="0" y1="270" x2="1920" y2="270"/>
+    <line x1="0" y1="540" x2="1920" y2="540"/>
+    <line x1="0" y1="810" x2="1920" y2="810"/>
+    <line x1="480" y1="0" x2="480" y2="1080"/>
+    <line x1="960" y1="0" x2="960" y2="1080"/>
+    <line x1="1440" y1="0" x2="1440" y2="1080"/>
+  </g>
+  <text x="960" y="520" text-anchor="middle" fill="#ffffff" fill-opacity="0.9" font-family="monospace" font-size="120">◈</text>
+  <text x="960" y="600" text-anchor="middle" fill="#ffffff" fill-opacity="0.55" font-family="monospace" font-size="28" letter-spacing="12">TRINITY</text>
+  <text x="960" y="645" text-anchor="middle" fill="#ffffff" fill-opacity="0.35" font-family="monospace" font-size="20" letter-spacing="6">GEOMETRY ENGINE — STANDBY</text>
+</svg>
