@@ -38,10 +38,17 @@ public:
 private:
     std::vector<Triangle> triangles_;
     friend Mesh box(const Vec3& center, const Vec3& size, double rotationZDeg);
+    friend Mesh cylinder(const Vec3& center, double radius, double height, int segments);
 };
 
 /// Box centered at `center` with full-extent `size`, rotated about Z.
 Mesh box(const Vec3& center, const Vec3& size, double rotationZDeg = 0.0);
+
+/// Vertical cylinder centered at `center` (axis parallel to Z).
+/// Produces 4 * segments triangles (128 at the default 32): 2 per side
+/// segment plus 1 per segment for each cap. Side normals point away from
+/// the axis; caps face +/-Z. Ports src/engines/cad/primitives.py.
+Mesh cylinder(const Vec3& center, double radius, double height, int segments = 32);
 
 Vec3 triangleNormal(const Triangle& tri);
 double triangleArea(const Triangle& tri);

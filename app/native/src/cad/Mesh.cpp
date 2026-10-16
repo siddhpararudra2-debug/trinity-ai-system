@@ -78,6 +78,46 @@ Mesh box(const Vec3& center, const Vec3& size, double rotationZDeg) {
     return out;
 }
 
+Mesh cylinder(const Vec3& center, double radius, double height, int segments) {
+    if (radius <= 0.0) {
+        throw std::invalid_argument("radius must be > 0");
+    }
+    if (height <= 0.0) {
+        throw std::invalid_argument("height must be > 0");
+    }
+    if (segments < 8) {
+        throw std::invalid_argument("segments must be >= 8");
+    }
+    constexpr double kPi = 3.14159265358979323846;
+    const double z0 = center[2] - height / 2.0;
+    const double z1 = center[2] + height / 2.0;
+
+    std::vector<Vec3> bottom;
+    std::vector<Vec3> top;
+    bottom.reserve(static_cast<size_t>(segments));
+    top.reserve(static_cast<size_t>(segments));
+    for (int i = 0; i < segments; ++i) {
+        const double theta = 2.0 * kPi * i / segments;
+        const double px = center[0] + radius * std::cos(theta);
+        const double py = center[1] + radius * std::sin(theta);
+        bottom.push_back({px, py, z0});
+        top.push_back({px, py, z1});
+    }
+
+    Mesh out;
+    out.reserveTriangles(static_cast<size_t>(4 * segments));
+    for (int i = 0; i < segments; ++i) {
+        const int j = (i + 1) % segments;
+        // Sides: CCW seen from outside, normal points away from the axis.
+        out.triangles_.push_back({bottom[i], bottom[j], top[j]});
+        out.triangles_.push_back({bottom[i], top[j], top[i]});
+        // Caps: top wound +Z, bottom wound -Z.
+        out.triangles_.push_back({top[i], top[j], {center[0], center[1], z1}});
+        out.triangles_.push_back({bottom[j], bottom[i], {center[0], center[1], z0}});
+    }
+    return out;
+}
+
 Vec3 triangleNormal(const Triangle& tri) {
     const double ux = tri[1][0] - tri[0][0];
     const double uy = tri[1][1] - tri[0][1];
