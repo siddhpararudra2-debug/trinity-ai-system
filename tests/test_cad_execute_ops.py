@@ -116,7 +116,10 @@ def test_execute_unknown_operation_still_rejected():
 # --------------------------------------------------------------- status ---
 
 
-def test_engines_endpoint_marks_scaffolds():
+def test_engines_endpoint_marks_scaffolds(monkeypatch):
+    # Bridge tests set TRINITY_NATIVE_EXEC process-wide; clear it here so
+    # this test pins the no-binary behavior regardless of run order.
+    monkeypatch.delenv("TRINITY_NATIVE_EXEC", raising=False)
     with TestClient(app) as client:
         engines = {e["name"]: e for e in client.get("/api/engines").json()}
     assert engines["cad"].get("status") is None

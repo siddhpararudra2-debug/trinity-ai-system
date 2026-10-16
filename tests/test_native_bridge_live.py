@@ -59,6 +59,8 @@ def test_live_simulation_runs_linear_motion():
 
 @needs_binary
 def test_live_pcb_generates_board_with_artifacts():
+    # create_board is pure JSON (board spec in result); files come from the
+    # separate pcb/export op. Assert the board content, not files.
     with TestClient(app) as client:
         body = _exec(
             client,
@@ -72,7 +74,8 @@ def test_live_pcb_generates_board_with_artifacts():
         )
     assert body["success"] is True
     assert body["validation"]["status"] == "VALIDATED"
-    assert len(body["artifacts"]) >= 1
+    assert body["result"]["component_count"] == 1
+    assert body["result"]["design"]["components"][0]["ref"] == "U1"
 
 
 @needs_binary
