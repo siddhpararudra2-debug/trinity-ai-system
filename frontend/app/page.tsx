@@ -16,8 +16,10 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <main>
-      <Hero />
       <TrinityWorkspace />
+      <Reveal variant="up">
+        <Hero />
+      </Reveal>
       <Reveal variant="up">
         <SystemFlow />
       </Reveal>
