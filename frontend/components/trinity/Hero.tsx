@@ -12,13 +12,13 @@ const HeroScene = dynamic(() => import('./HeroScene'), {
         width: '100%',
         height: '100%',
         minHeight: 520,
-        background: '#F1F1ED',
+        background: 'var(--trinity-paper)',
         display: 'grid',
         placeItems: 'center',
         fontFamily: 'var(--font-mono-plex), monospace',
         fontSize: '0.68rem',
         letterSpacing: '0.12em',
-        color: '#707070',
+        color: 'var(--trinity-gray)',
       }}
     >
       INITIALIZING GEOMETRY —

@@ -15,14 +15,14 @@ export default function ArtifactPanel({ result, error }: { result: TrinityResult
       <section className="artifact-section" id="artifacts" aria-labelledby="artifact-title">
         <div className="container">
           <div className="section-label">05 / OUTPUT</div>
-          <div style={{ border: '1px solid #E6A8A8', background: '#FDF0F0', padding: 20, display: 'grid', gap: 12 }}>
-            <strong style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.78rem', letterSpacing: '0.08em', color: '#B42318' }}>
+          <div style={{ border: '1px solid var(--danger-border)', background: 'var(--danger-bg)', padding: 20, display: 'grid', gap: 12 }}>
+            <strong style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.78rem', letterSpacing: '0.08em', color: 'var(--danger)' }}>
               EXECUTION INTERRUPTED
             </strong>
-            <p style={{ margin: 0, fontSize: '0.92rem', color: '#7A2E1E', lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--danger)', lineHeight: 1.6 }}>
               TRINITY could not complete this engineering request.
             </p>
-            <code style={{ display: 'block', padding: 12, background: '#FFFFFF', border: '1px solid #E6A8A8', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.78rem', color: '#B42318' }}>
+            <code style={{ display: 'block', padding: 12, background: 'var(--panel)', border: '1px solid var(--danger-border)', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.78rem', color: 'var(--danger)' }}>
               {error}
             </code>
             <a href="#workspace" className="btn btn-primary" style={{ width: 'max-content' }}>
@@ -64,7 +64,7 @@ export default function ArtifactPanel({ result, error }: { result: TrinityResult
                 </div>
                 <div className="artifact-card-foot">
                   <span className="artifact-size">—</span>
-                  <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.68rem', color: '#707070', letterSpacing: '0.06em' }}>
+                  <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.68rem', color: 'var(--trinity-gray)', letterSpacing: '0.06em' }}>
                     AWAITING
                   </span>
                 </div>
@@ -112,7 +112,7 @@ export default function ArtifactPanel({ result, error }: { result: TrinityResult
           ))}
         </div>
 
-        <div style={{ marginTop: 20, padding: 14, border: '1px solid #D0D0CA', background: '#F7F7F4', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.66rem', letterSpacing: '0.06em', color: '#707070' }}>
+        <div style={{ marginTop: 20, padding: 14, border: '1px solid var(--trinity-border)', background: 'var(--trinity-paper)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.66rem', letterSpacing: '0.06em', color: 'var(--trinity-gray)' }}>
           <span>CHECKSUMS VERIFIED · SQLITE LINEAGE · NO CACHE REUSE FOR CAD</span>
           <span>JOB {result.job_id}</span>
         </div>

@@ -12,22 +12,22 @@ export default function Philosophy() {
               independent checks verify. Every file has a verdict and a lineage.
             </p>
             <div style={{ marginTop: 32, display: 'grid', gap: 16, maxWidth: 560 }}>
-              <div style={{ display: 'flex', gap: 16, paddingBottom: 16, borderBottom: '1px solid #D0D0CA' }}>
-                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: '#315B73', fontWeight: 600 }}>01</span>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: '#707070', lineHeight: 1.6 }}>
-                  <strong style={{ color: '#111111' }}>Models reason, tools execute.</strong> A future model provider can emit structured tool calls — it never runs engines itself. Execution stays deterministic and inspectable.
+              <div style={{ display: 'flex', gap: 16, paddingBottom: 16, borderBottom: '1px solid var(--trinity-border)' }}>
+                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: 'var(--trinity-blue)', fontWeight: 600 }}>01</span>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--trinity-gray)', lineHeight: 1.6 }}>
+                  <strong style={{ color: 'var(--trinity-black)' }}>Models reason, tools execute.</strong> A future model provider can emit structured tool calls — it never runs engines itself. Execution stays deterministic and inspectable.
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: 16, paddingBottom: 16, borderBottom: '1px solid #D0D0CA' }}>
-                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: '#315B73', fontWeight: 600 }}>02</span>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: '#707070', lineHeight: 1.6 }}>
-                  <strong style={{ color: '#111111' }}>Validation is independent.</strong> Generation and verification are separate steps. A mesh that fails checks never becomes an artifact.
+              <div style={{ display: 'flex', gap: 16, paddingBottom: 16, borderBottom: '1px solid var(--trinity-border)' }}>
+                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: 'var(--trinity-blue)', fontWeight: 600 }}>02</span>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--trinity-gray)', lineHeight: 1.6 }}>
+                  <strong style={{ color: 'var(--trinity-black)' }}>Validation is independent.</strong> Generation and verification are separate steps. A mesh that fails checks never becomes an artifact.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
-                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: '#315B73', fontWeight: 600 }}>03</span>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: '#707070', lineHeight: 1.6 }}>
-                  <strong style={{ color: '#111111' }}>Every artifact has provenance.</strong> Server-generated IDs, SHA-256 checksums and SQLite job lineage behind every file.
+                <span style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.7rem', color: 'var(--trinity-blue)', fontWeight: 600 }}>03</span>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--trinity-gray)', lineHeight: 1.6 }}>
+                  <strong style={{ color: 'var(--trinity-black)' }}>Every artifact has provenance.</strong> Server-generated IDs, SHA-256 checksums and SQLite job lineage behind every file.
                 </p>
               </div>
             </div>
@@ -45,7 +45,7 @@ export default function Philosophy() {
                 <span className="status-pill">POST /api/cad/generate</span>
               </div>
             </div>
-            <div className="philosophy-meta" style={{ background: '#F1F1ED', borderStyle: 'dashed' }}>
+            <div className="philosophy-meta" style={{ background: 'var(--trinity-paper)', borderStyle: 'dashed' }}>
               <h4>PLANNED — HONESTLY SCAFFOLDED</h4>
               <p>
                 CadQuery/OpenCascade kernel (STEP export), KiCad PCB, firmware sandbox, vision adapters, simulation DAG pipelines, model provider boundary. Scaffolds return 501 capability errors today — never fake files.
@@ -56,7 +56,7 @@ export default function Philosophy() {
                 <span className="status-pill">NO FAKE OUTPUT</span>
               </div>
             </div>
-            <div style={{ padding: 18, border: '1px solid #111111', background: '#111111', color: '#F7F7F4' }}>
+            <div className="inverse-card" style={{ padding: 18 }}>
               <div style={{ fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', letterSpacing: '0.12em', opacity: 0.6, marginBottom: 8 }}>
                 TRINITY / 2026 — BUILT FOR ENGINEERS
               </div>
@@ -65,7 +65,7 @@ export default function Philosophy() {
                 <br />
                 Independent checks verify.
                 <br />
-                <span style={{ color: '#6D8998' }}>Models may reason later.</span>
+                <span style={{ color: 'var(--trinity-blue-soft)' }}>Models may reason later.</span>
               </div>
             </div>
           </div>

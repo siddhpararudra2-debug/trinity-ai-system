@@ -23,15 +23,7 @@ export default function Footer() {
       <div className="container">
         <div className="footer-top">
           <div>
-            <div
-              style={{
-                fontFamily: 'var(--font-display), sans-serif',
-                fontSize: 'clamp(2.6rem, 8vw, 7rem)',
-                letterSpacing: '-0.06em',
-                lineHeight: 0.9,
-                color: '#F7F7F4',
-              }}
-            >
+            <div className="footer-display" aria-hidden="true">
               TRINITY
             </div>
             <div
@@ -46,7 +38,7 @@ export default function Footer() {
               ENGINEERING INTELLIGENCE / 2026
             </div>
           </div>
-          <Link href="/#workspace" className="btn btn-primary" style={{ background: '#F7F7F4', color: '#111111', borderColor: '#F7F7F4' }}>
+          <Link href="/#workspace" className="btn btn-primary">
             OPEN WORKSPACE
           </Link>
         </div>

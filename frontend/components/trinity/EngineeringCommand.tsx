@@ -111,7 +111,7 @@ export default function EngineeringCommand({ onResult, onStageChange }: Props) {
               spellCheck={false}
               aria-describedby="char-count command-hint"
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: '#5A5A56', letterSpacing: '0.06em' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: 'var(--trinity-gray)', letterSpacing: '0.06em' }}>
               <span id="char-count">{charCount} / 1000</span>
               <span id="command-hint" style={{ opacity: busy ? 0.35 : 0.6 }}>⌘ + ENTER to generate</span>
             </div>
@@ -139,7 +139,7 @@ export default function EngineeringCommand({ onResult, onStageChange }: Props) {
           <div className="command-bottom">
             <div className="command-meta">
               <span>
-                <i style={{ width: 6, height: 6, borderRadius: '50%', background: busy ? '#315B73' : '#2D6A4F', display: 'inline-block' }} />
+                <i style={{ width: 6, height: 6, borderRadius: '50%', background: busy ? 'var(--trinity-blue)' : 'var(--green)', display: 'inline-block' }} />
                 {STAGE_LABELS[stage]}
               </span>
               <span>TRINITY / V1</span>
