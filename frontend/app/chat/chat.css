@@ -825,3 +825,20 @@
 @media (max-width: 700px) {
   #chatWrapper { overflow-y: auto; }
 }
+
+/* ------------------------------------------------ chat topbar
+   Shared site chrome, dark-surface variant. Reuses global .brand and
+   .system-ready shapes; only color is overridden for the black console. */
+#chatWrapper .chat-topbar { position: relative; z-index: 101; display: flex; align-items: center; gap: 18px; padding: 18px 40px 0; }
+#chatWrapper .chat-topbar .brand { color: #ffffff; }
+#chatWrapper .chat-topbar .brand-mark { color: #ffffff; }
+#chatWrapper .chat-topbar .brand-text { color: #ffffff; }
+#chatWrapper .chat-topbar .brand-text small { color: rgba(255, 255, 255, 0.55); }
+#chatWrapper .chat-topbar .system-ready { color: rgba(255, 255, 255, 0.6); margin-left: auto; }
+#chatWrapper .chat-topbar-cta { margin-left: 18px; padding: 10px 18px; border: 1px solid rgba(255, 255, 255, 0.28); color: #ffffff; font-family: var(--font-mono-plex), monospace; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; transition: background 0.18s, color 0.18s; white-space: nowrap; }
+#chatWrapper .chat-topbar-cta:hover { background: #ffffff; color: #000000; }
+@media (max-width: 700px) {
+  #chatWrapper .chat-topbar { padding: 14px 20px 0; }
+  #chatWrapper .chat-topbar .system-ready { display: none; }
+  #chatWrapper .chat-topbar-cta { margin-left: auto; }
+}

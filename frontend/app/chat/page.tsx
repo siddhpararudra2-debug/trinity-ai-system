@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import './chat.css';
 import {
   executeRequirement,
@@ -417,6 +418,24 @@ export default function ChatPage() {
     <div
       id="chatWrapper"
     >
+      <header className="chat-topbar">
+        <Link href="/" className="brand" aria-label="Trinity AI home">
+          <span className="brand-mark" aria-hidden="true">
+            ◈
+          </span>
+          <span className="brand-text">
+            TRINITY
+            <small>AI ENGINEERING SYSTEM</small>
+          </span>
+        </Link>
+        <span className="system-ready" aria-label="System status">
+          <i aria-hidden="true" />
+          SYSTEM READY
+        </span>
+        <Link href="/#workspace" className="chat-topbar-cta">
+          OPEN WORKSPACE <span aria-hidden="true">→</span>
+        </Link>
+      </header>
       <div className="grain"></div>
       <div className="hero-photo">
         <video
