@@ -107,6 +107,81 @@ def test_live_firmware_create_then_build_needs_mcu():
 
 
 @needs_binary
+def test_live_firmware_full_chain_generates_sources_and_validates():
+    """The whole bridged chain, threading the project step to step.
+
+    This is the path the firmware console runs, so it is asserted end to end
+    rather than op by op: each call must return the project the next one
+    needs, or the console cannot walk it.
+    """
+    with TestClient(app) as client:
+        project = _exec(client, "firmware", "create", {"name": "chain-fw"})["result"][
+            "project"
+        ]
+        assert project["has_mcu"] is False
+
+        selected = _exec(
+            client, "firmware", "select_mcu", {"project": project, "mcu": "ESP32"}
+        )
+        assert selected["success"] is True
+        assert selected["result"]["mcu"] == "ESP32"
+        project = selected["result"]["project"]
+        assert project["has_mcu"] is True
+        assert project["clock_hz"] == 240_000_000
+
+        configured = _exec(
+            client,
+            "firmware",
+            "configure_peripheral",
+            {
+                "project": project,
+                "peripheral": "UART1",
+                "kind": "uart",
+                "tx": "GPIO17",
+                "rx": "GPIO16",
+                "baud": 115200,
+            },
+        )
+        assert configured["success"] is True
+        project = configured["result"]["project"]
+        assert len(project["pin_mappings"]) == 2
+
+        generated = _exec(client, "firmware", "generate", {"project": project})
+        assert generated["success"] is True
+        # Generated sources are real artifacts, not just a report.
+        assert any(a["type"] == "firmware_source" for a in generated["artifacts"])
+        project = generated["result"]["project"]
+        assert {s["path"] for s in project["sources"]} >= {"main.cpp"}
+
+        validated = _exec(client, "firmware", "validate", {"project": project})
+        assert validated["success"] is True
+        assert validated["result"]["passed"] is True
+
+
+@needs_binary
+def test_live_firmware_build_refuses_truthfully_without_a_toolchain():
+    """Build may legitimately fail on any machine; it must never fake success."""
+    with TestClient(app) as client:
+        project = _exec(client, "firmware", "create", {"name": "build-fw"})["result"][
+            "project"
+        ]
+        project = _exec(
+            client, "firmware", "select_mcu", {"project": project, "mcu": "ESP32"}
+        )["result"]["project"]
+        project = _exec(client, "firmware", "generate", {"project": project})["result"][
+            "project"
+        ]
+        built = _exec(client, "firmware", "build", {"project": project})
+
+    if built["success"]:
+        assert built["result"]["executed"] is True
+    else:
+        assert built["result"]["executed"] is False
+        assert built["result"]["toolchain"], "must name the toolchain it looked for"
+        assert built["errors"], "must explain the refusal"
+
+
+@needs_binary
 def test_live_pcb_generate_then_validate():
     with TestClient(app) as client:
         board = _exec(

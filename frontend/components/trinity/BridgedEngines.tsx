@@ -21,7 +21,7 @@ import {
  *   pcb/generate|validate  -> design, rules
  *   robotics/kinematics    -> end_effector.{position,rotation}, frames
  *   robotics/trajectory    -> goal_reached, sample_count, trajectory[]
- *   firmware/create        -> project
+ *   firmware/create..build -> project, threaded step to step
  *   vision/image_inspect   -> input.metadata.{width,height,format,channels}
  *
  * Where an operation exists natively but is not reachable through the
@@ -500,67 +500,239 @@ function RoboticsPanel() {
   );
 }
 
+const MCU_CHOICES = ['ESP32', 'STM32F401RE', 'RP2040'] as const;
+
+type Step = { op: string; label: string; ok: boolean; detail: string };
+
 function FirmwarePanel() {
   const [name, setName] = useState('trinity_demo');
+  const [mcu, setMcu] = useState<string>('ESP32');
+  const [peripheral, setPeripheral] = useState('UART1');
+  const [kind, setKind] = useState('uart');
+  const [pinA, setPinA] = useState('GPIO17');
+  const [pinB, setPinB] = useState('GPIO16');
   const [state, setState] = useState<PanelState>(idle);
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [project, setProject] = useState<Record<string, unknown> | null>(null);
 
-  async function create() {
-    if (!name.trim() || state.busy) return;
+  async function run(operation: string, parameters: Record<string, unknown>) {
+    const result = await executeEngine('firmware', operation, parameters);
+    if (!result.success) {
+      setSteps((prev) => [
+        ...prev,
+        { op: operation, label: operation, ok: false, detail: result.errors[0]?.message ?? 'failed' },
+      ]);
+      setState({ busy: false, result, error: result.errors[0]?.message ?? 'Step failed' });
+      throw new Error(result.errors[0]?.message ?? 'Step failed');
+    }
+    const data = result.result as Record<string, unknown>;
+    const next = (data.project ?? null) as Record<string, unknown> | null;
+    if (next) setProject(next);
+    setSteps((prev) => [
+      ...prev,
+      { op: operation, label: operation, ok: true, detail: summarise(operation, data) },
+    ]);
+    return { result, project: next };
+  }
+
+  async function pipeline() {
+    if (state.busy || !name.trim()) return;
+    setState({ busy: true, result: null, error: null });
+    setSteps([]);
+    setProject(null);
+    try {
+      const created = await run('create', { name: name.trim() });
+      let current = created.project;
+      if (!current) throw new Error('create returned no project');
+
+      const selected = await run('select_mcu', { project: current, mcu });
+      current = selected.project ?? current;
+
+      // SPI is refused by the native engine, so it is not offered here.
+      if (kind === 'uart' || kind === 'i2c') {
+        const configured = await run('configure_peripheral', {
+          project: current,
+          peripheral,
+          kind,
+          tx: pinA,
+          rx: pinB,
+          ...(kind === 'i2c' ? { sda: pinA, scl: pinB } : { baud: 115200 }),
+        });
+        current = configured.project ?? current;
+      } else {
+        const configured = await run('configure_peripheral', {
+          project: current,
+          peripheral,
+          kind: 'pwm',
+          pin: pinA,
+          freq_hz: 1000,
+          duty: 128,
+        });
+        current = configured.project ?? current;
+      }
+
+      const generated = await run('generate', { project: current });
+      current = generated.project ?? current;
+      await run('validate', { project: current });
+      setState({ busy: false, result: generated.result, error: null });
+    } catch {
+      // run() already recorded the failing step and set the error message.
+      setState((prev) => ({ ...prev, busy: false }));
+    }
+  }
+
+  async function build() {
+    if (state.busy || !project) return;
     setState({ busy: true, result: null, error: null });
     try {
-      const result = await executeEngine('firmware', 'create', { name: name.trim() });
+      const result = await executeEngine('firmware', 'build', { project });
+      const data = result.result as Record<string, unknown>;
       setState({
         busy: false,
         result,
-        error: result.success ? null : (result.errors[0]?.message ?? 'Project creation failed'),
+        error: result.success
+          ? null
+          : (result.errors[0]?.message ?? 'Build refused') +
+            (data.toolchain ? ` (toolchain: ${String(data.toolchain)})` : ''),
       });
     } catch (e) {
       setState({ busy: false, result: null, error: errorText(e) });
     }
   }
 
-  const project = ((state.result?.result as Record<string, unknown> | undefined)?.project ??
-    {}) as Record<string, unknown>;
-  const mcu = (project.mcu ?? {}) as Record<string, unknown>;
+  const mcuInfo = (project?.mcu ?? {}) as Record<string, unknown>;
+  const sources = (project?.sources ?? []) as Array<Record<string, unknown>>;
+  const validation = (state.result?.result as Record<string, unknown> | undefined)?.rules;
+  const validated = (state.result?.result as Record<string, unknown> | undefined)?.passed;
 
   return (
     <article className="ws-panel">
-      <h2>FIRMWARE · PROJECT</h2>
+      <h2>FIRMWARE · PIPELINE</h2>
       <p className="ws-empty">
-        Creates an MCU-less project shell through the native firmware engine — the same object
-        the rest of the firmware pipeline takes over from.
+        Walks the native chain end to end — create, select MCU, configure a peripheral, generate
+        sources, validate. Each step hands its project to the next; nothing is kept between calls.
       </p>
       <div className="ws-form" style={{ marginTop: 14 }}>
         <Field label="PROJECT_NAME" value={name} onChange={setName} hint="trinity_demo" />
-        <div>
-          <button className="btn-generate" type="button" disabled={state.busy || !name.trim()} onClick={create}>
-            {state.busy ? 'WORKING…' : 'CREATE PROJECT →'}
+        <label className="ws-field">
+          <span>MCU</span>
+          <select className="ws-input" value={mcu} onChange={(e) => setMcu(e.target.value)}>
+            {MCU_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>{choice}</option>
+            ))}
+          </select>
+        </label>
+        <label className="ws-field">
+          <span>PERIPHERAL</span>
+          <select className="ws-input" value={peripheral} onChange={(e) => setPeripheral(e.target.value)}>
+            <option value="UART0">UART0</option>
+            <option value="UART1">UART1</option>
+            <option value="I2C0">I2C0</option>
+            <option value="I2C1">I2C1</option>
+            <option value="PWM">PWM</option>
+          </select>
+        </label>
+        <label className="ws-field">
+          <span>KIND</span>
+          <select className="ws-input" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="uart">uart</option>
+            <option value="i2c">i2c</option>
+            <option value="pwm">pwm</option>
+          </select>
+        </label>
+        <Field
+          label={kind === 'pwm' ? 'PIN' : kind === 'i2c' ? 'SDA' : 'TX'}
+          value={pinA}
+          onChange={setPinA}
+          hint={kind === 'pwm' ? 'GPIO2' : 'GPIO17'}
+        />
+        {kind !== 'pwm' && (
+          <Field
+            label={kind === 'i2c' ? 'SCL' : 'RX'}
+            value={pinB}
+            onChange={setPinB}
+            hint={kind === 'i2c' ? 'GPIO22' : 'GPIO16'}
+          />
+        )}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn-generate" type="button" disabled={state.busy || !name.trim()} onClick={pipeline}>
+            {state.busy ? 'RUNNING…' : 'RUN PIPELINE →'}
+          </button>
+          <button className="btn-generate" type="button" disabled={state.busy || !project} onClick={build}>
+            BUILD →
           </button>
         </div>
       </div>
       {state.error && <p className="ws-error">{state.error}</p>}
-      {state.result?.success && (
-        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
-          <ResultHead result={state.result} />
-          <Spec
-            rows={[
-              ['NAME', project.name],
-              ['HAS_MCU', String(project.has_mcu ?? '—')],
-              ['CLOCK_HZ', project.clock_hz],
-              ['PINS', Array.isArray(project.pin_mappings) ? project.pin_mappings.length : 0],
-              ['SOURCES', Array.isArray(project.sources) ? project.sources.length : 0],
-              ['MCU', mcu.model || '—'],
-            ]}
-          />
-          <Artifacts result={state.result} />
-        </div>
+
+      {steps.length > 0 && (
+        <ul className="ws-checks">
+          {steps.map((step, i) => (
+            <li key={i}>
+              <b>{step.ok ? '✓' : '!'}</b>
+              <span>
+                <strong>{step.label}</strong>
+                <br />
+                {step.detail}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
+
+      {project && (
+        <Spec
+          rows={[
+            ['NAME', project.name],
+            ['MCU', mcuInfo.model || '—'],
+            ['ARCH', mcuInfo.architecture || '—'],
+            ['CLOCK_HZ', project.clock_hz],
+            ['PINS_MAPPED', Array.isArray(project.pin_mappings) ? project.pin_mappings.length : 0],
+            ['SOURCES', sources.length],
+            ['VALIDATED', validated === undefined ? '—' : String(validated)],
+            ['RULES', Array.isArray(validation) ? validation.length : '—'],
+          ]}
+        />
+      )}
+
+      {sources.length > 0 && (
+        <ul className="ws-checks">
+          {sources.map((source, i) => (
+            <li key={i}>
+              <b>▸</b>
+              <span>{String(source.path ?? `file-${i}`)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {state.result && <Artifacts result={state.result} />}
       <p className="ws-empty" style={{ marginTop: 14 }}>
-        Build is intentionally absent: the native build step requires an MCU and generated
-        sources from select_mcu and generate_firmware, which the bridge does not expose yet.
+        Build compiles for real with the MCU toolchain. Without {String(
+          (project?.build as Record<string, unknown> | undefined)?.toolchain || 'the toolchain',
+        )}{' '}
+        installed it refuses with a capability error — it never fakes a compile.
       </p>
     </article>
   );
+}
+
+/** One-line outcome for a pipeline step, taken from that step's own result. */
+function summarise(operation: string, data: Record<string, unknown>): string {
+  switch (operation) {
+    case 'create':
+      return `project "${String(data.name ?? '')}" created`;
+    case 'select_mcu':
+      return `${String(data.mcu ?? '')} at ${Number(data.clock_hz ?? 0) / 1e6} MHz`;
+    case 'configure_peripheral':
+      return `${String(data.peripheral ?? '')} configured as ${String(data.kind ?? '')}`;
+    case 'generate':
+      return `${String(data.file_count ?? 0)} source files written`;
+    case 'validate':
+      return data.passed ? 'all rules passed' : 'rules failed';
+    default:
+      return '';
+  }
 }
 
 function VisionPanel() {

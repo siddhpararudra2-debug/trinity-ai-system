@@ -39,7 +39,20 @@ STDERR_TAIL = 2000
 # advertise so describe() shape is unchanged apart from status.
 NATIVE_ENGINES: dict[str, list[str]] = {
     "pcb": ["inspect", "validate", "generate", "export"],
-    "firmware": ["create", "build", "test", "compile"],
+    # The firmware chain the native engine actually implements. `create` is
+    # the entry point; the rest are the steps build needs before it can run.
+    # The old ["create", "build", "test", "compile"] list advertised build
+    # while leaving it unreachable, because build requires an MCU and
+    # generated sources that no bridged op could supply.
+    "firmware": [
+        "create",
+        "select_mcu",
+        "configure_pin",
+        "configure_peripheral",
+        "generate",
+        "validate",
+        "build",
+    ],
     "vision": ["image_inspect", "ocr", "document_parse", "geometry_extract"],
     "research": ["search"],
     "simulation": ["simulate"],
@@ -57,7 +70,17 @@ OP_MAP: dict[str, dict[str, str]] = {
         "trajectory_plan": "plan_trajectory",
     },
     "simulation": {"simulate": "simulate_linear_motion"},
-    "firmware": {"create": "create_project", "build": "build"},
+    # Single-shot by design: each step takes the project returned by the
+    # previous one and returns it upgraded, so no cross-call state is kept.
+    "firmware": {
+        "create": "create_project",
+        "select_mcu": "select_mcu",
+        "configure_pin": "configure_pin",
+        "configure_peripheral": "configure_peripheral",
+        "generate": "generate_firmware",
+        "validate": "validate_project",
+        "build": "build",
+    },
     "pcb": {
         "validate": "validate_design",
         "generate": "create_board",
@@ -200,6 +223,14 @@ class NativeBridgeEngine(BaseEngine):
                 input=json.dumps(request),
                 capture_output=True,
                 text=True,
+                # Native stdout is UTF-8 JSON. Without this, text=True
+                # decodes with the Windows locale codec (cp1252), which
+                # raises UnicodeDecodeError on the first non-ASCII byte —
+                # firmware source generation emits plenty — and the whole
+                # envelope is lost. "replace" keeps a bad byte from taking
+                # down the call; it can only affect one string value.
+                encoding="utf-8",
+                errors="replace",
                 timeout=EXEC_TIMEOUT_S,
                 shell=False,
                 env=env,
