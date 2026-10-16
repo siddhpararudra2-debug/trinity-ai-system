@@ -27,7 +27,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from src.core.errors import CapabilityUnavailableError, EngineExecutionError
+from src.core.errors import (
+    CapabilityUnavailableError,
+    EngineExecutionError,
+    RequestValidationError,
+)
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
 
 EXEC_ENV_VAR = "TRINITY_NATIVE_EXEC"
@@ -179,7 +183,7 @@ class NativeBridgeEngine(BaseEngine):
             "request_id": uuid.uuid4().hex,
             "engine": self.name,
             "operation": native_op,
-            "parameters": parameters,
+            "parameters": self._resolve_inputs(operation, parameters),
         }
         # Isolated storage root: the child must never touch Python's SQLite
         # files (schema-mismatch risk). Its DB/logs die with this temp dir.
@@ -211,6 +215,39 @@ class NativeBridgeEngine(BaseEngine):
             validation=_map_validation(envelope),
             errors=errors,
         )
+
+    def _resolve_inputs(
+        self, operation: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Turn API-level handles into the concrete values native expects.
+
+        The native vision engine deliberately refuses an artifact_id on its
+        own — it has no database to resolve one against. Resolving here keeps
+        that refusal intact for anyone calling the binary directly, while
+        letting the HTTP surface speak in artifact ids.
+        """
+        artifact_id = parameters.get("artifact_id")
+        if not isinstance(artifact_id, str) or parameters.get("path"):
+            return parameters
+
+        from src.artifacts.manager import artifact_manager  # noqa: PLC0415
+        from src.core.errors import ArtifactNotFoundError  # noqa: PLC0415
+
+        try:
+            ref = artifact_manager.get(artifact_id)
+        except ArtifactNotFoundError as exc:
+            raise RequestValidationError(
+                f"No artifact '{artifact_id}' for {self.name}/{operation}",
+                details={"artifact_id": artifact_id, "engine": self.name},
+            ) from exc
+
+        resolved = Path(ref.path)
+        if not resolved.is_file():
+            raise RequestValidationError(
+                f"Artifact '{artifact_id}' has no file on disk",
+                details={"artifact_id": artifact_id, "engine": self.name},
+            )
+        return {**parameters, "path": str(resolved)}
 
     def _invoke(
         self, exe: str, request: dict[str, Any], native_tmp: str, operation: str

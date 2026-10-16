@@ -44,6 +44,11 @@ class Settings:
     api_title: str = "Trinity AI — Engineering Operating System"
     api_version: str = "1.0.0"
 
+    # Uploads land in artifact storage like any other engine output, so they
+    # get a checksum and a lineage row. 5 MB is generous for an image
+    # inspection input and keeps a stray video from filling the disk.
+    max_upload_bytes: int = 5 * 1024 * 1024
+
     environment: str = ENVIRONMENT
     cors_origins: tuple[str, ...] = CORS_ORIGINS
 

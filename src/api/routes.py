@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from src.artifacts.manager import artifact_manager
 from src.core.config import settings
-from src.core.errors import ArtifactNotFoundError
+from src.core.errors import ArtifactNotFoundError, RequestValidationError
 from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
 from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
@@ -17,6 +19,7 @@ from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
 from src.jobs.manager import job_manager
 from src.models.schemas import (
+    ArtifactOut,
     CADCatalog,
     CADGenerateRequest,
     EngineCapability,
@@ -68,6 +71,68 @@ def download_artifact(artifact_id: str) -> FileResponse:
     if not path.is_file():
         raise ArtifactNotFoundError(f"No artifact file for id '{artifact_id}'")
     return FileResponse(str(path), filename=path.name)
+
+
+# Extensions the native vision engine can actually decode. Anything else is
+# rejected at the edge with a list, rather than being stored and failing
+# later inside OpenCascade with a less useful message.
+UPLOAD_IMAGE_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"})
+
+
+@router.post("/uploads", response_model=ArtifactOut)
+async def upload_image(file: UploadFile = File(...)) -> dict:
+    """Store an uploaded image as an artifact and return its reference.
+
+    Uploads go through ArtifactManager like any engine output, so the file
+    gets a SHA-256 checksum and a database row. The returned artifact_id is
+    what the vision engine takes; the bridge resolves it to a concrete path
+    before handing it to the native process.
+    """
+    suffix = Path(file.filename or "").suffix.lower().lstrip(".")
+    if suffix not in UPLOAD_IMAGE_EXTENSIONS:
+        raise RequestValidationError(
+            "Unsupported image type",
+            details={
+                "filename": file.filename,
+                "supported": sorted(UPLOAD_IMAGE_EXTENSIONS),
+            },
+        )
+
+    # Never trust the client filename on disk: write to a generated name in a
+    # temp dir and let ArtifactManager own the final location.
+    staged_dir = settings.temp_dir / f"upload_{uuid.uuid4().hex}"
+    staged_dir.mkdir(parents=True, exist_ok=True)
+    staged = staged_dir / f"upload.{suffix}"
+
+    size = 0
+    limit = settings.max_upload_bytes
+    try:
+        with staged.open("wb") as fh:
+            while chunk := await file.read(1 << 20):
+                size += len(chunk)
+                if size > limit:
+                    raise RequestValidationError(
+                        f"Upload exceeds the {limit // (1024 * 1024)} MB limit",
+                        details={"limit_bytes": limit},
+                    )
+                fh.write(chunk)
+        if size == 0:
+            raise RequestValidationError("Uploaded file is empty")
+        ref = await asyncio.to_thread(
+            artifact_manager.store_file,
+            staged,
+            artifact_type="upload",
+        )
+    finally:
+        shutil.rmtree(staged_dir, ignore_errors=True)
+
+    return {
+        "artifact_id": ref.artifact_id,
+        "type": ref.type,
+        "path": ref.path,
+        "size_bytes": ref.size_bytes,
+        "checksum": ref.checksum,
+    }
 
 
 @router.post("/math/solve", response_model=ToolResponse)

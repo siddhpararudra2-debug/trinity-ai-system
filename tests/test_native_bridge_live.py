@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
+from tests.pnggen import png_bytes
 
 needs_binary = pytest.mark.skipif(
     not os.getenv("TRINITY_NATIVE_EXEC", ""),
@@ -156,6 +157,39 @@ def test_live_firmware_full_chain_generates_sources_and_validates():
         validated = _exec(client, "firmware", "validate", {"project": project})
         assert validated["success"] is True
         assert validated["result"]["passed"] is True
+
+
+@needs_binary
+def test_live_vision_resolves_an_uploaded_artifact_id():
+    """Upload, then inspect with no path at all.
+
+    The native engine refuses a bare artifact_id on purpose; the bridge is
+    what resolves it. That resolution only exists on the bridge path, so it
+    is only assertable with the binary attached.
+    """
+    png = png_bytes()
+    with TestClient(app) as client:
+        uploaded = client.post("/api/uploads", files={"file": ("live.png", png, "image/png")})
+        assert uploaded.status_code == 200, uploaded.text
+        artifact_id = uploaded.json()["artifact_id"]
+
+        body = _exec(
+            client, "vision", "image_inspect", {"artifact_id": artifact_id}
+        )
+    assert body["success"] is True, body.get("errors")
+    assert body["result"]["input"]["metadata"]["width"] == 8
+    assert body["result"]["input"]["metadata"]["format"] == "png"
+
+
+@needs_binary
+def test_live_vision_refuses_an_unknown_artifact_id():
+    with TestClient(app) as client:
+        body = _exec(
+            client, "vision", "image_inspect", {"artifact_id": "does-not-exist"}
+        )
+    assert body["success"] is False
+    assert body["errors"][0]["code"] == "request_validation_error"
+    assert "does-not-exist" in body["errors"][0]["message"]
 
 
 @needs_binary

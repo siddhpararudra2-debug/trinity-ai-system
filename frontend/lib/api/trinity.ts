@@ -229,6 +229,23 @@ export async function executeEngine(
   return payload as TrinityResult;
 }
 
+export async function uploadImage(file: File): Promise<ArtifactOut> {
+  const body = new FormData();
+  body.append('file', file);
+  const response = await fetch(`${TRINITY_API_URL}/uploads`, { method: 'POST', body });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw apiError(payload, response.status);
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('artifact_id' in payload) ||
+    !('checksum' in payload)
+  ) {
+    throw new Error('The upload returned an invalid response.');
+  }
+  return payload as ArtifactOut;
+}
+
 export function getArtifactUrl(artifactId: string): string {
   return `${TRINITY_API_URL}/artifacts/${artifactId}`;
 }

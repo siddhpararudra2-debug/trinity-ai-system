@@ -4,7 +4,9 @@ import { useState } from 'react';
 import {
   executeEngine,
   getArtifactUrl,
+  uploadImage,
   TrinityApiError,
+  type ArtifactOut,
   type TrinityResult,
 } from '@/lib/api/trinity';
 
@@ -22,7 +24,8 @@ import {
  *   robotics/kinematics    -> end_effector.{position,rotation}, frames
  *   robotics/trajectory    -> goal_reached, sample_count, trajectory[]
  *   firmware/create..build -> project, threaded step to step
- *   vision/image_inspect   -> input.metadata.{width,height,format,channels}
+ *   vision/image_inspect   -> upload an artifact, then read
+ *                             input.metadata.{width,height,format,channels}
  *
  * Where an operation exists natively but is not reachable through the
  * bridge, the panel says so instead of shipping a button that always fails.
@@ -736,14 +739,33 @@ function summarise(operation: string, data: Record<string, unknown>): string {
 }
 
 function VisionPanel() {
-  const [path, setPath] = useState('');
+  const [uploaded, setUploaded] = useState<ArtifactOut | null>(null);
+  const [fileName, setFileName] = useState('');
   const [state, setState] = useState<PanelState>(idle);
 
+  async function pick(file: File) {
+    if (state.busy) return;
+    setState({ busy: true, result: null, error: null });
+    setFileName(file.name);
+    try {
+      // Uploads go through ArtifactManager, so the file is checksummed and
+      // tracked like any engine output before it is ever read.
+      const ref = await uploadImage(file);
+      setUploaded(ref);
+      setState({ busy: false, result: null, error: null });
+    } catch (e) {
+      setUploaded(null);
+      setState({ busy: false, result: null, error: errorText(e) });
+    }
+  }
+
   async function inspect() {
-    if (!path.trim() || state.busy) return;
+    if (!uploaded || state.busy) return;
     setState({ busy: true, result: null, error: null });
     try {
-      const result = await executeEngine('vision', 'image_inspect', { path: path.trim() });
+      const result = await executeEngine('vision', 'image_inspect', {
+        artifact_id: uploaded.artifact_id,
+      });
       setState({
         busy: false,
         result,
@@ -762,18 +784,42 @@ function VisionPanel() {
     <article className="ws-panel">
       <h2>VISION · IMAGE INSPECT</h2>
       <p className="ws-empty">
-        Reads image metadata through the native vision engine. Takes an absolute path on the
-        server — there is no upload endpoint yet, so the file has to already be there.
+        Upload an image, then read its metadata through the native vision engine. The upload is
+        stored as a checksummed artifact and the engine is given its id, never a raw path.
       </p>
       <div className="ws-form" style={{ marginTop: 14 }}>
-        <Field label="ABSOLUTE_PATH" value={path} onChange={setPath} hint="C:\\images\\board.png" />
+        <label className="ws-field">
+          <span>IMAGE_FILE</span>
+          <input
+            className="ws-input"
+            type="file"
+            accept="image/png,image/jpeg,image/bmp,image/tiff,image/webp"
+            disabled={state.busy}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) pick(file);
+            }}
+          />
+        </label>
         <div>
-          <button className="btn-generate" type="button" disabled={state.busy || !path.trim()} onClick={inspect}>
+          <button className="btn-generate" type="button" disabled={state.busy || !uploaded} onClick={inspect}>
             {state.busy ? 'READING…' : 'INSPECT →'}
           </button>
         </div>
       </div>
       {state.error && <p className="ws-error">{state.error}</p>}
+
+      {uploaded && (
+        <Spec
+          rows={[
+            ['FILE', fileName || '—'],
+            ['ARTIFACT', uploaded.artifact_id.slice(0, 8)],
+            ['STORED_BYTES', uploaded.size_bytes],
+            ['CHECKSUM', uploaded.checksum.slice(0, 16)],
+          ]}
+        />
+      )}
+
       {state.result?.success && (
         <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
           <ResultHead result={state.result} />
@@ -790,8 +836,8 @@ function VisionPanel() {
         </div>
       )}
       <p className="ws-empty" style={{ marginTop: 14 }}>
-        Needs an OpenCascade-era OpenCV build of Trinity.exe — the plain build reports the
-        capability as unavailable rather than guessing.
+        Needs an OpenCV build of Trinity.exe — the plain build reports the capability as
+        unavailable rather than guessing.
       </p>
     </article>
   );
