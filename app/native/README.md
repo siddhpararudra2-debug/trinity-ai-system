@@ -289,6 +289,11 @@ rest marked `skipped`. Model refusal executes nothing.
 
 ## Intentionally left for later phases
 
+- `Trinity.exe --exec` (single-shot stdin→stdout bridge, consumed by
+  `src/engines/native_bridge.py`) is the only headless integration; there
+  is no cross-call engine state — `TRINITY_BRIDGE_STATE_DIR` is the
+  reserved protocol for it, persistence not yet implemented, so every
+  bridged op is fully parameterized and unmapped ops keep 501ing.
 - Math beyond single-variable numeric roots (transcendental systems,
   multi-variable solving, symbolic algebra)
 - CAD GLB export, kernel-backed STEP (CadQuery/OpenCascade adapters),
