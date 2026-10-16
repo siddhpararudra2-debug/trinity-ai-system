@@ -1,3 +1,4 @@
+# Core runtime — everything the API needs to start.
 fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
@@ -5,7 +6,17 @@ sympy>=1.12
 numpy>=1.26
 httpx>=0.27
 pyyaml>=6.0
+
+# LLM transports. The clients work without them; generate()/stream() then
+# raise CapabilityUnavailableError instead of pretending to answer.
 openai>=1.0
 anthropic>=0.34
+
+# Optional: real CAD kernel for STEP export (AP214 faceted B-rep via
+# OpenCascade). ~1 GB of wheels and a slow first import. Without it every
+# path stays honest — the catalog reports step as unavailable with a
+# reason and STL/GLB/JSON are unaffected.
+#   pip install cadquery>=2.8
+
 pytest>=8.0
 ruff==0.16.8

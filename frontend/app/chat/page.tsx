@@ -8,7 +8,9 @@ import {
   generateCad,
   getArtifactUrl,
   getCadCatalog,
+  getCadOutputs,
   TrinityApiError,
+  type CadOutputSpec,
   type CadPart,
   type ParseSummary,
   type TrinityResult,
@@ -215,6 +217,7 @@ export default function ChatPage() {
   const [formValues, setFormValues] = useState<Record<string, number>>({});
   const [editedFields, setEditedFields] = useState<Set<string>>(new Set());
   const [outputs, setOutputs] = useState<string[]>(['stl', 'glb', 'json']);
+  const [outputSpecs, setOutputSpecs] = useState<Record<string, CadOutputSpec>>({});
   const [formError, setFormError] = useState<{ message: string; suggestions: string[]; examples: string[] } | null>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -286,6 +289,23 @@ export default function ChatPage() {
       })
       .finally(() => {
         if (alive) setCatalogLoading(false);
+      });
+    return () => { alive = false; };
+  }, []);
+
+  // Output availability is per-environment (STEP needs a CAD kernel), so it
+  // is read from the backend rather than assumed.
+  useEffect(() => {
+    let alive = true;
+    getCadOutputs()
+      .then((specs) => {
+        if (!alive) return;
+        setOutputSpecs(specs);
+        setOutputs((current) => current.filter((format) => specs[format]?.available !== false));
+      })
+      .catch(() => {
+        // A catalog that will not load means the generate call will not
+        // either; the existing error banner already says so.
       });
     return () => { alive = false; };
   }, []);
@@ -578,13 +598,29 @@ export default function ChatPage() {
 
                       <fieldset className="cad-outputs">
                         <legend>OUTPUTS</legend>
-                        {(['stl', 'glb', 'json'] as const).map((output) => (
-                          <label key={output}>
-                            <input type="checkbox" checked={outputs.includes(output)} onChange={() => toggleOutput(output)} />
-                            <span>{output.toUpperCase()}</span>
-                          </label>
-                        ))}
+                        {(['stl', 'glb', 'json', 'step'] as const).map((output) => {
+                          const spec = outputSpecs[output];
+                          const unavailable = spec?.available === false;
+                          return (
+                            <label key={output} title={unavailable ? spec?.reason : undefined}>
+                              <input
+                                type="checkbox"
+                                checked={outputs.includes(output)}
+                                disabled={unavailable}
+                                onChange={() => toggleOutput(output)}
+                              />
+                              <span>{output.toUpperCase()}</span>
+                              {unavailable && <em className="cad-output-unavailable">no kernel</em>}
+                            </label>
+                          );
+                        })}
                       </fieldset>
+                      {outputSpecs.step?.available && (
+                        <p className="catalog-status">
+                          STEP is a faceted B-rep ({outputSpecs.step.schema}, {outputSpecs.step.unit}) written by{' '}
+                          {outputSpecs.step.kernel} — exact tessellated surfaces, not analytic curves.
+                        </p>
+                      )}
 
                       {formError && (
                         <ErrorHints

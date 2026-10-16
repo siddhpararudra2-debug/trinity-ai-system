@@ -25,15 +25,35 @@ from src.engines.cad.glb import write_glb
 from src.engines.cad.ir import PartIR
 from src.engines.cad.parts import DEFAULT_PART_TYPE, PartDefinition, get_part
 from src.engines.cad.primitives import Mesh, write_binary_stl
-
-NOT_YET_SUPPORTED_FORMATS = {"step"}
-
-STEP_UNAVAILABLE_REASON = (
-    "CAD_KERNEL_UNAVAILABLE: STEP requires CadQuery/OpenCascade or another "
-    "real CAD kernel."
-)
+from src.engines.cad.step import kernel_info, write_step
 
 DEFAULT_OUTPUTS = ("stl", "json")
+
+# Formats the pure-Python backend always writes. `step` is deliberately
+# absent: it needs an optional CAD kernel, so its availability is decided
+# per call, not baked in here.
+ALWAYS_SUPPORTED_FORMATS = ("stl", "glb", "json")
+
+
+def unsupported_formats() -> set[str]:
+    """Formats this environment cannot write right now.
+
+    `step` depends on an optional CAD kernel, so the answer is resolved at
+    call time instead of being frozen into a constant. Everything else is
+    pure Python and always available.
+    """
+    return set() if kernel_info()["available"] else {"step"}
+
+
+def format_reason(fmt: str) -> str:
+    """Why `fmt` is unavailable. Empty string when it is available."""
+    if fmt == "step":
+        return str(kernel_info().get("reason", ""))
+    return ""
+
+
+def step_unavailable_reason() -> str:
+    return format_reason("step")
 
 
 class CADEngine(BaseEngine):
@@ -107,26 +127,22 @@ class CADEngine(BaseEngine):
         )
         work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
         base_name = f"{part.filename_stem(ir)}_{uuid.uuid4().hex[:8]}"
-        pending_artifacts = [
-            (str(p), t) for p, t in self.export(mesh, outputs, work_dir, base_name, ir)
-        ]
+        written, step_stats = self.export(mesh, outputs, work_dir, base_name, ir)
         result: dict[str, Any] = {
             "type": part.name,
             "spec": ir.to_dict(),
             "triangle_count": len(mesh.triangles),
             "bounding_box_mm": mesh.bounding_box(),
         }
-        unavailable_formats = [f for f in outputs if f in NOT_YET_SUPPORTED_FORMATS]
-        if unavailable_formats:
-            result["unavailable_formats"] = {
-                fmt: STEP_UNAVAILABLE_REASON for fmt in unavailable_formats
-            }
+        if step_stats:
+            result["step"] = step_stats
+        self._report_unavailable(result, outputs, written)
         return EngineResult(
             success=True,
             engine=self.name,
             operation="export",
             result=result,
-            pending_artifacts=pending_artifacts,
+            pending_artifacts=[(str(p), t) for p, t in written],
             validation=ValidationResult(status="VALIDATED", checks=checks),
         )
 
@@ -145,26 +161,10 @@ class CADEngine(BaseEngine):
                 "Generated geometry failed validation", details={"checks": checks}
             )
 
-        pending_artifacts: list[tuple[str, str]] = []
-        unavailable_formats = [f for f in outputs if f in NOT_YET_SUPPORTED_FORMATS]
-
         work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
         base_name = f"{part.filename_stem(ir)}_{uuid.uuid4().hex[:8]}"
 
-        if "stl" in outputs:
-            stl_path = work_dir / f"{base_name}.stl"
-            write_binary_stl(mesh, str(stl_path))
-            pending_artifacts.append((str(stl_path), "stl"))
-
-        if "glb" in outputs:
-            glb_path = work_dir / f"{base_name}.glb"
-            write_glb(mesh, glb_path)
-            pending_artifacts.append((str(glb_path), "glb"))
-
-        if "json" in outputs:
-            json_path = work_dir / f"{base_name}.json"
-            json_path.write_text(_ir_json(ir))
-            pending_artifacts.append((str(json_path), "json"))
+        written, step_stats = self.export(mesh, outputs, work_dir, base_name, ir)
 
         result: dict[str, Any] = {
             "type": part.name,
@@ -172,19 +172,37 @@ class CADEngine(BaseEngine):
             "triangle_count": len(mesh.triangles),
             "bounding_box_mm": mesh.bounding_box(),
         }
-        if unavailable_formats:
-            result["unavailable_formats"] = {
-                fmt: STEP_UNAVAILABLE_REASON for fmt in unavailable_formats
-            }
+        if step_stats:
+            result["step"] = step_stats
+        self._report_unavailable(result, outputs, written)
 
         return EngineResult(
             success=True,
             engine=self.name,
             operation="generate",
             result=result,
-            pending_artifacts=pending_artifacts,
+            pending_artifacts=[(str(p), t) for p, t in written],
             validation=ValidationResult(status="VALIDATED", checks=checks),
         )
+
+    @staticmethod
+    def _report_unavailable(
+        result: dict[str, Any], outputs: list[str], written: list[tuple[Path, str]]
+    ) -> None:
+        """Name every requested format this call did not write, with the reason.
+
+        Driven by what actually landed on disk rather than by a hardcoded
+        list, so a format can never disappear silently: if it was asked for
+        and is not in `written`, it gets an entry here.
+        """
+        produced = {fmt for _, fmt in written}
+        missing = {
+            fmt: format_reason(fmt) or "NOT_WRITTEN: no writer produced this format."
+            for fmt in outputs
+            if fmt not in produced and fmt not in ALWAYS_SUPPORTED_FORMATS
+        }
+        if missing:
+            result["unavailable_formats"] = missing
 
     # ------------------------------------------------------------ validate ---
 
@@ -203,16 +221,22 @@ class CADEngine(BaseEngine):
         out_dir: Path,
         base_name: str,
         ir: PartIR | None = None,
-    ) -> list[tuple[Path, str]]:
-        """Write each requested format, returning (path, type) pairs.
+    ) -> tuple[list[tuple[Path, str]], dict[str, Any]]:
+        """Write each requested format. Returns ((path, type) pairs, step stats).
 
         `ir` is optional only for backward compatibility: JSON export needs
-        the spec, so callers requesting "json" must pass it. Unknown and
-        unavailable formats (e.g. "step") are reported by the caller, never
-        silently dropped here — every format in `formats` that this backend
-        can write produces exactly one pair.
+        the spec, so callers requesting "json" must pass it. Formats that
+        cannot be written here are never silently dropped — the caller
+        reports them from the returned pairs, so every format in `formats`
+        that this backend can write produces exactly one pair.
+
+        `step` differs from the pure-Python writers: without a CAD kernel
+        it is skipped rather than raising, so a caller asking for
+        stl+step still gets its STL and an honest reason for the STEP. With
+        a kernel present, a STEP failure IS an error and propagates.
         """
         pairs: list[tuple[Path, str]] = []
+        step_stats: dict[str, Any] = {}
         if "stl" in formats:
             p = out_dir / f"{base_name}.stl"
             write_binary_stl(mesh, str(p))
@@ -225,7 +249,11 @@ class CADEngine(BaseEngine):
             p = out_dir / f"{base_name}.json"
             p.write_text(_ir_json(ir))
             pairs.append((p, "json"))
-        return pairs
+        if "step" in formats and kernel_info()["available"]:
+            p = out_dir / f"{base_name}.step"
+            step_stats = write_step(mesh, p)
+            pairs.append((p, "step"))
+        return pairs, step_stats
 
     # ------------------------------------------------------------- preview ---
 

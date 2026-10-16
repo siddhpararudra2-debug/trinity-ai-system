@@ -110,9 +110,30 @@ POST /api/cad/generate
   "parameters": {
     "overall_size": 50
   },
-  "outputs": ["stl", "glb", "json"]
+  "outputs": ["stl", "glb", "json", "step"]
 }
 ```
+
+### Output Formats
+
+| Format | Availability | What it is |
+| --- | --- | --- |
+| `stl`, `glb`, `json` | always | Binary STL, GLB and the IR spec — pure Python, no kernel |
+| `step` | needs `pip install cadquery` | AP214 faceted B-rep from OpenCascade |
+
+STEP availability is decided per environment, not assumed. `GET /api/cad/catalog`
+reports it under `outputs.step` with `available`, `schema`, `unit`,
+`representation` and — when it is off — the reason. Asking for a format that
+cannot be written never fails silently: the engine returns what it did write
+and names the rest under `result.unavailable_formats`.
+
+`step` is **faceted**: every triangle becomes a planar face, and each
+connected body of the mesh becomes its own solid. A cylinder arrives as a
+polygonal prism. It is a valid, importable, correctly-scaled solid — it is
+not parametric and not the original analytic surface. Parts are assembled
+from interpenetrating boxes, and STEP keeps those surfaces rather than
+booleaning them, so the file inherits the mesh's own self-intersections.
+Reported volume is a geometry self-check, not a bill of materials.
 
 Every engine operation securely returns a standardized envelope:
 `{ success, engine, operation, result, artifacts, validation, errors, job_id }`

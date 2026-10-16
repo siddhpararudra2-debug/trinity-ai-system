@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from src.core.errors import RequestValidationError
 from src.engines.cad.engine import CADEngine
+from src.engines.cad.step import kernel_available
 from src.main import app
 
 ENGINE = CADEngine()
@@ -86,12 +87,20 @@ def test_execute_export_writes_all_three_formats():
     assert body["result"]["triangle_count"] == 108
 
 
-def test_execute_export_reports_step_without_failing():
+def test_execute_export_answers_step_honestly_either_way():
+    """stl must always land; step must land or be explained, never dropped."""
     with TestClient(app) as client:
         body = _execute(client, "export", {**GOOD, "outputs": ["stl", "step"]})
-    assert body["success"] is True
-    assert {a["type"] for a in body["artifacts"]} == {"stl"}
-    assert "step" in body["result"]["unavailable_formats"]
+    assert body["success"] is True, body.get("errors")
+    assert "stl" in {a["type"] for a in body["artifacts"]}
+    if kernel_available():
+        assert "step" in {a["type"] for a in body["artifacts"]}
+        assert "unavailable_formats" not in body["result"]
+        assert body["result"]["step"]["solid"] is True
+        assert body["result"]["step"]["volume_mm3"] > 0
+    else:
+        assert "step" not in {a["type"] for a in body["artifacts"]}
+        assert "CAD_KERNEL_UNAVAILABLE" in body["result"]["unavailable_formats"]["step"]
 
 
 def test_export_method_writes_glb_and_json(tmp_path):
@@ -100,9 +109,10 @@ def test_export_method_writes_glb_and_json(tmp_path):
     part = get_part("quadcopter_frame")
     ir = part.ir_class.from_request({"overall_size": 50})
     mesh = part.builder(ir)
-    pairs = ENGINE.export(mesh, ["stl", "glb", "json"], tmp_path, "frame", ir)
+    pairs, step_stats = ENGINE.export(mesh, ["stl", "glb", "json"], tmp_path, "frame", ir)
     assert {t for _, t in pairs} == {"stl", "glb", "json"}
     assert all(p.stat().st_size > 0 for p, _ in pairs)
+    assert step_stats == {}
 
 
 # -------------------------------------------------------------- unknown ---

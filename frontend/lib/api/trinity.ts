@@ -118,6 +118,35 @@ function apiError(payload: unknown, status: number): TrinityApiError {
   return new TrinityApiError(message, status, [...new Set(suggestions)], [...new Set(examples)]);
 }
 
+/** What the backend can actually write for each CAD output format. */
+export type CadOutputSpec = {
+  available: boolean;
+  reason?: string;
+  representation?: string;
+  schema?: string;
+  unit?: string;
+  kernel?: string;
+};
+
+const OUTPUT_FORMATS = ['stl', 'glb', 'json', 'step'] as const;
+
+export async function getCadOutputs(): Promise<Record<string, CadOutputSpec>> {
+  const response = await fetch(`${TRINITY_API_URL}/cad/catalog`, { cache: 'no-store' });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw apiError(payload, response.status);
+
+  const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const declared = body.outputs && typeof body.outputs === 'object' ? body.outputs as Record<string, unknown> : {};
+  const specs: Record<string, CadOutputSpec> = {};
+  for (const format of OUTPUT_FORMATS) {
+    const spec = declared[format];
+    specs[format] = spec && typeof spec === 'object' && 'available' in spec
+      ? spec as CadOutputSpec
+      : { available: false, reason: 'The backend did not report this format.' };
+  }
+  return specs;
+}
+
 export async function getCadCatalog(): Promise<CadPart[]> {
   const response = await fetch(`${TRINITY_API_URL}/cad/catalog`, { cache: 'no-store' });
   const payload: unknown = await response.json().catch(() => null);

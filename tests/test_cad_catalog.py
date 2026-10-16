@@ -15,12 +15,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from src.engines.cad.engine import (
-    CADEngine,
-    NOT_YET_SUPPORTED_FORMATS,
-    STEP_UNAVAILABLE_REASON,
-)
+from src.engines.cad.engine import CADEngine, unsupported_formats
 from src.engines.cad.parts import get_part, list_supported_types
+from src.engines.cad.step import kernel_available
 from src.main import app
 
 PART_PARAM_COUNTS = {
@@ -101,12 +98,16 @@ def test_catalog_declares_default_outputs_and_format_availability():
     assert list(outputs) == ["stl", "glb", "json", "step"]
     for fmt in ("stl", "glb", "json"):
         assert outputs[fmt] == {"available": True}
-    assert outputs["step"] == {
-        "available": False,
-        "reason": STEP_UNAVAILABLE_REASON,
-    }
+    step = outputs["step"]
+    assert step["available"] is kernel_available()
+    # Whether it works or not, the catalog always states the representation
+    # and the schema, so a client never has to guess what it would get.
+    assert step["schema"] == "AP214IS"
+    assert step["unit"] == "MM"
+    if not step["available"]:
+        assert "CAD_KERNEL_UNAVAILABLE" in step["reason"]
     unavailable = {fmt for fmt, spec in outputs.items() if not spec["available"]}
-    assert unavailable == NOT_YET_SUPPORTED_FORMATS
+    assert unavailable == unsupported_formats()
 
 
 def test_motor_count_is_exactly_integer_four():
@@ -159,7 +160,11 @@ def test_catalog_route_is_documented_in_openapi():
     assert "get" in spec["paths"].get("/api/cad/catalog", {})
 
 
-def test_step_unavailability_reason_matches_the_engine_constant():
+def test_step_request_is_answered_honestly_either_way():
+    """Requesting step must either produce a file or name the reason.
+
+    There is no third outcome: a silent drop is the bug this guards.
+    """
     payload = _catalog()
     with TestClient(app) as client:
         response = client.post(
@@ -168,8 +173,17 @@ def test_step_unavailability_reason_matches_the_engine_constant():
         )
     body = response.json()
     assert body["success"] is True, body.get("errors")
-    assert body["result"]["unavailable_formats"]["step"] == STEP_UNAVAILABLE_REASON
-    assert payload["outputs"]["step"]["reason"] == STEP_UNAVAILABLE_REASON
+
+    if kernel_available():
+        assert "unavailable_formats" not in body["result"]
+        step_artifacts = [a for a in body["artifacts"] if a["type"] == "step"]
+        assert len(step_artifacts) == 1, body["artifacts"]
+        assert step_artifacts[0]["size_bytes"] > 0
+        assert body["result"]["step"]["representation"] == "faceted_brep"
+        assert payload["outputs"]["step"]["available"] is True
+    else:
+        assert body["result"]["unavailable_formats"]["step"] == payload["outputs"]["step"]["reason"]
+        assert not [a for a in body["artifacts"] if a["type"] == "step"]
 
 
 # ---------------------------------------------------- drift guard: defaults ---

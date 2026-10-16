@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
@@ -9,11 +10,8 @@ from fastapi.responses import FileResponse
 from src.artifacts.manager import artifact_manager
 from src.core.config import settings
 from src.core.errors import ArtifactNotFoundError
-from src.engines.cad.engine import (
-    DEFAULT_OUTPUTS,
-    NOT_YET_SUPPORTED_FORMATS,
-    STEP_UNAVAILABLE_REASON,
-)
+from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
+from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
 from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
@@ -101,15 +99,13 @@ def cad_catalog() -> dict:
     rules and output-format availability, mirroring what the engine
     enforces. Nothing is generated, so the call has no side effects.
     """
-    availability: dict[str, dict[str, bool | str]] = {}
-    for fmt in ("stl", "glb", "json", *sorted(NOT_YET_SUPPORTED_FORMATS)):
-        if fmt in NOT_YET_SUPPORTED_FORMATS:
-            availability[fmt] = {
-                "available": False,
-                "reason": STEP_UNAVAILABLE_REASON,
-            }
-        else:
-            availability[fmt] = {"available": True}
+    availability: dict[str, dict[str, Any]] = {}
+    for fmt in (*ALWAYS_SUPPORTED_FORMATS, "step"):
+        availability[fmt] = (
+            {"available": True}
+            if fmt in ALWAYS_SUPPORTED_FORMATS
+            else dict(kernel_info())
+        )
 
     return {
         "parts": [
