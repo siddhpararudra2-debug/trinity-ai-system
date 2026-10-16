@@ -64,6 +64,11 @@ class EngineCapability(BaseModel):
     name: str
     version: str
     capabilities: list[str]
+    # Scaffold engines report status="scaffolded" from describe();
+    # real engines omit it (None == live). Without this field FastAPI's
+    # response_model silently stripped the status key, making all 8
+    # engines look identically real on GET /api/engines.
+    status: str | None = None
 
 
 # ----------------------------------------------------------------- math ---
