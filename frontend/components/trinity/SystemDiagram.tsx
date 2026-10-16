@@ -32,11 +32,11 @@ export default function SystemDiagram({ inputs, outputs, center }: Props) {
         {pathsIn.map((d, i) => (
           <path key={`in-${i}`} d={d} className={i === 1 ? 'is-accent' : ''} />
         ))}
-        <rect x={128} y={32} width={84} height={56} rx={4} fill="#FFFFFF" stroke="#111111" strokeWidth={0.9} />
-        <text x={170} y={58} textAnchor="middle" fontFamily="monospace" fontSize={6.5} fontWeight={700} letterSpacing={0.6} fill="#111111">
+        <rect x={128} y={32} width={84} height={56} rx={4} fill="#FFFFFF" stroke="#000000" strokeWidth={0.9} />
+        <text x={170} y={58} textAnchor="middle" fontFamily="monospace" fontSize={6.5} fontWeight={700} letterSpacing={0.6} fill="#000000">
           {center[0]}
         </text>
-        <text x={170} y={68} textAnchor="middle" fontFamily="monospace" fontSize={5} letterSpacing={0.8} fill="#5A5A56">
+        <text x={170} y={68} textAnchor="middle" fontFamily="monospace" fontSize={5} letterSpacing={0.8} fill="#5A5A5A">
           {center[1]}
         </text>
         {pathsOut.map((d, i) => (
@@ -50,7 +50,7 @@ export default function SystemDiagram({ inputs, outputs, center }: Props) {
               <motion.circle
                 key={`p-in-${i}`}
                 r={1.7}
-                fill={i === 1 ? '#315B73' : '#9A9A94'}
+                fill={i === 1 ? '#1A1A1A' : '#9A9A9A'}
                 initial={{ offsetDistance: '0%' }}
                 animate={{ offsetDistance: '100%' }}
                 transition={{ duration: 2.8 + i * 0.6, repeat: Infinity, ease: 'linear', delay: i * 0.4 }}
@@ -61,7 +61,7 @@ export default function SystemDiagram({ inputs, outputs, center }: Props) {
               <motion.circle
                 key={`p-out-${i}`}
                 r={1.7}
-                fill={i === 1 ? '#315B73' : '#9A9A94'}
+                fill={i === 1 ? '#1A1A1A' : '#9A9A9A'}
                 initial={{ offsetDistance: '0%' }}
                 animate={{ offsetDistance: '100%' }}
                 transition={{ duration: 2.6 + i * 0.5, repeat: Infinity, ease: 'linear', delay: 0.8 + i * 0.3 }}
@@ -72,12 +72,12 @@ export default function SystemDiagram({ inputs, outputs, center }: Props) {
         )}
 
         {inputs.slice(0, 3).map((label, i) => (
-          <text key={label} x={2} y={21 + i * 42} fontFamily="monospace" fontSize={5} letterSpacing={0.5} fill="#5A5A56">
+          <text key={label} x={2} y={21 + i * 42} fontFamily="monospace" fontSize={5} letterSpacing={0.5} fill="#5A5A5A">
             {label}
           </text>
         ))}
         {outputs.slice(0, 3).map((label, i) => (
-          <text key={label} x={318} y={21 + i * 42} textAnchor="end" fontFamily="monospace" fontSize={5} letterSpacing={0.5} fill="#315B73">
+          <text key={label} x={318} y={21 + i * 42} textAnchor="end" fontFamily="monospace" fontSize={5} letterSpacing={0.5} fill="#1A1A1A">
             {label}
           </text>
         ))}

@@ -4,11 +4,45 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { ContactShadows, Grid, OrbitControls, RoundedBox, useGLTF } from '@react-three/drei';
+import { ContactShadows, Grid, Line, OrbitControls, RoundedBox, useGLTF } from '@react-three/drei';
 import type { TrinityResult } from '@/lib/api/trinity';
 import { getArtifactUrl } from '@/lib/api/trinity';
 
 type Dimensions = [number, number, number];
+
+/**
+ * Monochrome axis triad. drei's <axesHelper> is hardwired red/green/blue,
+ * which is the one thing that cannot survive a black-and-white UI. Here the
+ * three axes are told apart the way a drafting sheet tells them apart —
+ * X solid and longest, Y dashed and medium, Z dotted and short — so the
+ * orientation is readable without any hue at all.
+ */
+function MonoAxes({ size = 19 }: { size?: number }) {
+  const bright = '#FAFAFA';
+  const mid = '#9E9E9E';
+  const dim = '#6B6B6B';
+  return (
+    <group>
+      <Line points={[[0, 0, 0], [size, 0, 0]]} color={bright} lineWidth={1.4} />
+      <Line
+        points={[[0, 0, 0], [0, size * 0.68, 0]]}
+        color={mid}
+        lineWidth={1.2}
+        dashed
+        dashSize={0.9}
+        gapSize={0.6}
+      />
+      <Line
+        points={[[0, 0, 0], [0, 0, size * 0.45]]}
+        color={dim}
+        lineWidth={1.2}
+        dashed
+        dashSize={0.3}
+        gapSize={0.5}
+      />
+    </group>
+  );
+}
 
 function readDimensions(result: TrinityResult | null): Dimensions {
   const bounds = result?.result.bounding_box_mm;
@@ -63,9 +97,9 @@ function ProceduralPreview({
   return (
     <group ref={yawRef}>
       <RoundedBox args={previewSize} radius={radius} smoothness={3}>
-        <meshStandardMaterial color={wireframe ? '#EDEDE8' : '#F4F4F1'} wireframe={wireframe} roughness={0.42} metalness={0.14} />
+        <meshStandardMaterial color={wireframe ? '#EDEDED' : '#F4F4F4'} wireframe={wireframe} roughness={0.42} metalness={0.14} />
       </RoundedBox>
-      {showAxes && <axesHelper args={[19]} />}
+      {showAxes && <MonoAxes size={19} />}
     </group>
   );
 }
@@ -125,7 +159,7 @@ function ViewerScene({
     <>
       <ambientLight intensity={0.95} />
       <directionalLight position={[12, 14, 14]} intensity={1.05} />
-      <directionalLight position={[-10, -8, 8]} intensity={0.30} color="#DDE8F0" />
+      <directionalLight position={[-10, -8, 8]} intensity={0.30} color="#E8E8E8" />
       {glbUrl
         ? <GLBModel url={glbUrl} wireframe={wireframe} spin={spin} />
         : <ProceduralPreview dimensions={dimensions} wireframe={wireframe} showAxes={showAxes} spin={spin} />}
@@ -142,7 +176,7 @@ function ViewerScene({
         infiniteGrid
       />
       <ContactShadows position={[0, 0, -1.82]} opacity={0.28} scale={56} blur={2.4} far={9} color="#000000" />
-      {showAxes && <axesHelper args={[18]} />}
+      {showAxes && <MonoAxes size={18} />}
       <OrbitControls
         enablePan={false}
         enableZoom
@@ -187,7 +221,7 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
     <section className="viewer-panel" aria-labelledby="viewer-title">
       <div className="viewer-top">
         <span id="viewer-title">TRINITY / GEOMETRY VIEWER</span>
-        <strong style={{ color: glbUrl ? '#7fdba0' : 'rgba(255,255,255,0.6)' }}>{glbUrl ? 'GLB' : 'PREVIEW'}</strong>
+        <strong style={{ color: glbUrl ? '#FAFAFA' : 'rgba(255,255,255,0.6)' }}>{glbUrl ? 'GLB' : 'PREVIEW'}</strong>
       </div>
 
       <div className="viewer-canvas-wrap">
@@ -196,8 +230,8 @@ export default function GeometryViewer({ result }: { result: TrinityResult | nul
           dpr={[1, 1.25]}
           gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
           frameloop={spinning ? 'always' : 'demand'}
-          style={{ background: '#0E0F0E' }}
-          onCreated={({ gl }) => gl.setClearColor('#0E0F0E', 1)}
+          style={{ background: '#0E0E0E' }}
+          onCreated={({ gl }) => gl.setClearColor('#0E0E0E', 1)}
         >
           <Suspense fallback={null}>
             <ViewerScene glbUrl={glbUrl} dimensions={dimensions} wireframe={wireframe} showAxes={showAxes} spin={spinning} />

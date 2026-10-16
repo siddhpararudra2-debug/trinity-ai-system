@@ -25,12 +25,12 @@ export default function ValidationPanel({ result }: { result: TrinityResult | nu
       <section className="validation-panel" aria-labelledby="validation-title">
         <div className="validation-head">
           <h3 id="validation-title">VALIDATION ENGINE</h3>
-          <p style={{ margin: '8px 0 0', fontSize: '0.82rem', color: '#707070', lineHeight: 1.6 }}>
+          <p style={{ margin: '8px 0 0', fontSize: '0.82rem', color: '#6B6B6B', lineHeight: 1.6 }}>
             Every geometry leaves with a verdict.
           </p>
         </div>
         <div style={{ padding: '20px' }}>
-          <p style={{ margin: 0, fontSize: '0.84rem', color: '#707070', lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontSize: '0.84rem', color: '#6B6B6B', lineHeight: 1.6 }}>
             Dimensional accuracy, topology, symmetry and manufacturability checks
             appear here — validation is independent of generation.
           </p>
@@ -38,7 +38,7 @@ export default function ValidationPanel({ result }: { result: TrinityResult | nu
             {['Dimensional accuracy', 'Topology', 'Symmetry', 'Geometry integrity', 'Manufacturability'].map((l) => (
               <li key={l}>
                 <span>{l}</span>
-                <b style={{ color: '#707070' }}>READY</b>
+                <b style={{ color: '#6B6B6B' }}>READY</b>
               </li>
             ))}
           </ul>
@@ -54,7 +54,7 @@ export default function ValidationPanel({ result }: { result: TrinityResult | nu
     <section className="validation-panel" aria-labelledby="validation-title">
       <div className="validation-head">
         <h3 id="validation-title">VALIDATION ENGINE</h3>
-        <p style={{ margin: '8px 0 0', fontSize: '0.82rem', color: '#707070', lineHeight: 1.6 }}>
+        <p style={{ margin: '8px 0 0', fontSize: '0.82rem', color: '#6B6B6B', lineHeight: 1.6 }}>
           Every geometry leaves with a verdict.
         </p>
       </div>
@@ -65,7 +65,7 @@ export default function ValidationPanel({ result }: { result: TrinityResult | nu
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: isPassed ? '#2D6A4F' : isFailed ? '#B42318' : '#D0D0CA',
+            background: isPassed ? '#1A1A1A' : isFailed ? '#000000' : '#D0D0D0',
             flex: '0 0 auto',
           }}
           aria-hidden="true"
@@ -97,7 +97,7 @@ export default function ValidationPanel({ result }: { result: TrinityResult | nu
         )}
       </ul>
 
-      <div style={{ padding: '12px 20px', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: '#707070', borderTop: '1px solid #F1F1ED' }}>
+      <div style={{ padding: '12px 20px', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', color: '#6B6B6B', borderTop: '1px solid #F2F2F2' }}>
         Independent of generation · {Object.keys(validation.checks).length} checks
       </div>
     </section>

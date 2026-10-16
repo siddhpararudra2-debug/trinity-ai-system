@@ -1,11 +1,11 @@
 import Link from 'next/link';
 
 const engineLinks = [
-  { href: '/#workspace', label: 'Workspace' },
-  { href: '/#projects', label: 'Projects' },
-  { href: '/#systems', label: 'Systems' },
+  { href: '/', label: 'Workspace' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/systems', label: 'Systems' },
   { href: '/#artifacts', label: 'Artifacts' },
-  { href: '/#about', label: 'About' },
+  { href: '/about', label: 'About' },
 ];
 
 const systemLinks = [
@@ -38,7 +38,7 @@ export default function Footer() {
               ENGINEERING INTELLIGENCE / 2026
             </div>
           </div>
-          <Link href="/#workspace" className="btn btn-primary">
+          <Link href="/" className="btn btn-primary">
             OPEN WORKSPACE
           </Link>
         </div>

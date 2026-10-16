@@ -6,11 +6,11 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from '@/components/trinity/ThemeProvider';
 
 const navLinks = [
-  { href: '/#workspace', label: 'Workspace' },
-  { href: '/#systems', label: 'Systems' },
+  { href: '/', label: 'Workspace' },
+  { href: '/systems', label: 'Systems' },
   { href: '/#artifacts', label: 'Artifacts' },
-  { href: '/#projects', label: 'Projects' },
-  { href: '/#about', label: 'About' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/about', label: 'About' },
 ];
 
 export default function Navbar() {
@@ -77,7 +77,7 @@ export default function Navbar() {
             <span aria-hidden="true">{theme === 'light' ? '◐' : '◑'}</span>
             <span>{theme === 'light' ? 'DARK' : 'LIGHT'}</span>
           </button>
-          <Link href="/#workspace" className="btn btn-primary">
+          <Link href="/" className="btn btn-primary">
             OPEN WORKSPACE
           </Link>
         </div>
@@ -98,7 +98,7 @@ export default function Navbar() {
             {link.label}
           </Link>
         ))}
-        <Link href="/#workspace" onClick={closeMenu}>
+        <Link href="/" onClick={closeMenu}>
           Open Workspace
         </Link>
       </div>

@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
-import Hero from '@/components/trinity/Hero';
-import EngineStrip from '@/components/trinity/EngineStrip';
-import SystemFlow from '@/components/trinity/SystemFlow';
 import TrinityWorkspace from '@/components/trinity/TrinityWorkspace';
-import BridgedEngines from '@/components/trinity/BridgedEngines';
-import EngineeringSystems from '@/components/trinity/EngineeringSystems';
-import Projects from '@/components/trinity/Projects';
-import Philosophy from '@/components/trinity/Philosophy';
-import Reveal from '@/components/sections/Reveal';
+
+/**
+ * The workspace is the product, so `/` is the app rather than a landing page:
+ * the command bar and its live result fill the viewport, and the bridged
+ * engine consoles sit directly underneath as the next thing you can run.
+ *
+ * The narrative content that used to live here — hero, system flow, engine
+ * grid, project showcase, philosophy — moved to `/systems` and `/about`
+ * rather than being deleted, and the navbar points at those routes.
+ */
 
 export const metadata: Metadata = {
   title: 'Trinity AI — Engineering Operating System',
@@ -17,27 +19,8 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <main>
+    <main className="app-shell">
       <TrinityWorkspace />
-      <BridgedEngines />
-      <Reveal variant="up">
-        <Hero />
-      </Reveal>
-      <Reveal variant="up">
-        <SystemFlow />
-      </Reveal>
-      <Reveal variant="fade" delay={60}>
-        <EngineeringSystems />
-      </Reveal>
-      <Reveal variant="up" delay={60}>
-        <Projects />
-      </Reveal>
-      <Reveal variant="fade" delay={60}>
-        <Philosophy />
-      </Reveal>
-
-      {/* Engine registry strip — live from GET /api/engines, static fallback */}
-      <EngineStrip />
     </main>
   );
 }

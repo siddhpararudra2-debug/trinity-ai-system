@@ -452,7 +452,7 @@ export default function ChatPage() {
           <i aria-hidden="true" />
           SYSTEM READY
         </span>
-        <Link href="/#workspace" className="chat-topbar-cta">
+        <Link href="/" className="chat-topbar-cta">
           OPEN WORKSPACE <span aria-hidden="true">→</span>
         </Link>
       </header>

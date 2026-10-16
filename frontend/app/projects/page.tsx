@@ -148,7 +148,7 @@ export default function ProjectsPage() {
 
           <Reveal>
             <div style={{ marginTop: 40, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Link className="btn btn-primary" href="/#workspace">
+              <Link className="btn btn-primary" href="/">
                 Generate one now <span aria-hidden="true">↗</span>
               </Link>
               <Link className="btn btn-ghost" href="/services">

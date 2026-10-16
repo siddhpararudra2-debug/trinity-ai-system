@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Philosophy from '@/components/trinity/Philosophy';
 import Reveal from '@/components/sections/Reveal';
 
 export const metadata: Metadata = {
@@ -196,13 +197,15 @@ export default function AboutPage() {
 
           <Reveal>
             <div style={{ marginTop: 40 }}>
-              <Link className="btn btn-ghost" href="/#workspace">
+              <Link className="btn btn-ghost" href="/">
                 See it execute <span aria-hidden="true">→</span>
               </Link>
             </div>
           </Reveal>
         </div>
       </section>
+
+      <Philosophy />
     </main>
   );
 }

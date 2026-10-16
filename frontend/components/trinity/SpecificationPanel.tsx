@@ -80,7 +80,7 @@ export default function SpecificationPanel({ result }: { result: TrinityResult |
               )}
             </dl>
           </div>
-          <div style={{ padding: '12px 20px', borderTop: '1px solid #F1F1ED', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', letterSpacing: '0.08em', color: '#707070' }}>
+          <div style={{ padding: '12px 20px', borderTop: '1px solid #F2F2F2', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono-plex), monospace', fontSize: '0.62rem', letterSpacing: '0.08em', color: '#6B6B6B' }}>
             <span>JOB {result?.job_id.slice(0, 8)}</span>
             <span>{result?.engine.toUpperCase()} · {result?.operation.toUpperCase()}</span>
           </div>

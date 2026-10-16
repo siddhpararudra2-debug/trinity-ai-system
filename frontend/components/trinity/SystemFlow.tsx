@@ -81,7 +81,7 @@ export default function SystemFlow() {
 
         <div className="flow-panel-detail" aria-live="polite">
           <div>
-            <strong style={{ color: '#111111', fontSize: '0.76rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <strong style={{ color: '#000000', fontSize: '0.76rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               {NODES[active].label}
             </strong>
             <div style={{ marginTop: 8, lineHeight: 1.6 }}>
@@ -94,10 +94,10 @@ export default function SystemFlow() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5A5A56', marginBottom: 8 }}>
+            <div style={{ fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5A5A5A', marginBottom: 8 }}>
               CONTRACT
             </div>
-            <code style={{ display: 'block', padding: 12, background: '#FFFFFF', border: '1px solid #D0D0CA', fontSize: '0.72rem', lineHeight: 1.6 }}>
+            <code style={{ display: 'block', padding: 12, background: '#FFFFFF', border: '1px solid #D0D0D0', fontSize: '0.72rem', lineHeight: 1.6 }}>
               {active === 0 && 'POST /api/requirements/execute\n{ "text": "Create a 50 mm quadcopter frame" }'}
               {active === 1 && 'RequirementRequest\n{ text: string (1–1000) }'}
               {active === 2 && 'CADGenerateRequest\n{ type: "quadcopter_frame", parameters: { overall_size: 50 } }'}
