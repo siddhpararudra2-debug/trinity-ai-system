@@ -20,7 +20,7 @@ import {
  * Every panel below was built against the live engine, not its docstring:
  *   research/search        -> hits, hit_count
  *   simulation/simulate    -> result.result.{method,step_count,final_state}
- *   pcb/generate|validate  -> design, rules
+ *   pcb/generate|add_net|validate|export -> design, rules, kicad_pcb
  *   robotics/kinematics    -> end_effector.{position,rotation}, frames
  *   robotics/trajectory    -> goal_reached, sample_count, trajectory[]
  *   firmware/create..build -> project, threaded step to step
@@ -251,8 +251,10 @@ function PcbPanel() {
   const [width, setWidth] = useState('50');
   const [height, setHeight] = useState('40');
   const [preset, setPreset] = useState('esp32');
+  const [projectName, setProjectName] = useState('trinity_board');
+  const [nets, setNets] = useState<string[]>([]);
   const [state, setState] = useState<PanelState>(idle);
-  // Kept separately so VALIDATE stays available after a failing check.
+  // Kept separately so VALIDATE and EXPORT stay available after a failing check.
   const [design, setDesign] = useState<Record<string, unknown> | null>(null);
 
   const PRESETS: Record<string, Array<Record<string, string>>> = {
@@ -264,6 +266,7 @@ function PcbPanel() {
   async function generate() {
     if (state.busy) return;
     setState({ busy: true, result: null, error: null });
+    setNets([]);
     try {
       const result = await executeEngine('pcb', 'generate', {
         width_mm: Number(width),
@@ -271,11 +274,62 @@ function PcbPanel() {
         components: PRESETS[preset] ?? [],
       });
       const next = (result.result as Record<string, unknown> | undefined)?.design;
-      setDesign(typeof next === 'object' && next !== null ? (next as Record<string, unknown>) : null);
-      setState({ busy: false, result, error: result.success ? null : (result.errors[0]?.message ?? 'Board generation failed') });
+      const initial = typeof next === 'object' && next !== null ? (next as Record<string, unknown>) : null;
+      setDesign(initial);
+      if (!result.success || !initial) {
+        setState({ busy: false, result, error: result.errors[0]?.message ?? 'Board generation failed' });
+        return;
+      }
+      // create_board leaves every power pin on no net, which its own DRC then
+      // rejects — so a board with components could never be exported. Wire
+      // each distinct power-pin name into its own net here, and show what was
+      // created rather than doing it silently.
+      const netted = await autoNet(initial);
+      setDesign(netted);
+      setState({
+        busy: false,
+        result,
+        error: netted === null ? 'Board generated, but automatic net wiring failed' : null,
+      });
     } catch (e) {
       setState({ busy: false, result: null, error: errorText(e) });
     }
+  }
+
+  /** One net per distinct power-pin name. Returns the design unchanged when
+   *  there is nothing to wire — a bare board must not gain phantom nets. */
+  async function autoNet(board: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    const parts = (board.components ?? []) as Array<Record<string, unknown>>;
+    const groups = new Map<string, string[]>();
+    for (const part of parts) {
+      const ref = String(part.ref ?? '');
+      for (const pin of (part.pins ?? []) as Array<Record<string, unknown>>) {
+        if (pin.electrical !== 'power_in' && pin.electrical !== 'power_out') continue;
+        const name = String(pin.name ?? '');
+        if (!name) continue;
+        const list = groups.get(name) ?? [];
+        list.push(`${ref}.${String(pin.number ?? '')}`);
+        groups.set(name, list);
+      }
+    }
+    if (groups.size === 0) return board;
+
+    let current = board;
+    const created: string[] = [];
+    for (const [name, pins] of groups) {
+      const response = await executeEngine('pcb', 'add_net', {
+        design: current,
+        name,
+        pins,
+      });
+      if (!response.success) return null;
+      const next = (response.result as Record<string, unknown> | undefined)?.design;
+      if (typeof next !== 'object' || next === null) return null;
+      current = next as Record<string, unknown>;
+      created.push(`${name} (${pins.length})`);
+    }
+    setNets(created);
+    return current;
   }
 
   async function validate() {
@@ -290,18 +344,39 @@ function PcbPanel() {
     }
   }
 
+  async function exportKicad() {
+    if (!design || state.busy) return;
+    setState({ busy: true, result: state.result, error: null });
+    try {
+      const result = await executeEngine('pcb', 'export', { design, project: projectName.trim() });
+      setState({
+        busy: false,
+        result,
+        error: result.success
+          ? null
+          : (result.errors[0]?.message ?? 'Export refused'),
+      });
+    } catch (e) {
+      setState({ busy: false, result: state.result, error: errorText(e) });
+    }
+  }
+
   const board = (state.result?.result ?? {}) as Record<string, unknown>;
   const components = (design?.components ?? []) as Array<Record<string, unknown>>;
   const rules = (board.rules ?? []) as Array<Record<string, unknown>>;
   const failed = rules.filter((r) => r.passed === false);
   const ranValidate = typeof board.passed === 'boolean';
+  const exported = state.result?.artifacts.some((a) => a.type === 'kicad_pcb') ?? false;
   const componentCount =
     typeof board.component_count === 'number' ? board.component_count : components.length;
 
   return (
     <article className="ws-panel">
-      <h2>PCB · BOARD + VALIDATE</h2>
-      <p className="ws-empty">Create a board through the native PCB engine, then run the design-rule check on it.</p>
+      <h2>PCB · BOARD + VALIDATE + EXPORT</h2>
+      <p className="ws-empty">
+        Create a board through the native PCB engine, wire its power pins into nets, run the
+        design-rule check, then export a real KiCad board file.
+      </p>
       <div className="ws-form" style={{ marginTop: 14 }}>
         <Field label="WIDTH_MM" value={width} onChange={setWidth} hint="50" />
         <Field label="HEIGHT_MM" value={height} onChange={setHeight} hint="40" />
@@ -313,6 +388,7 @@ function PcbPanel() {
             <option value="esp32+regulator">ESP32 + SOT-223 regulator</option>
           </select>
         </label>
+        <Field label="PROJECT_NAME" value={projectName} onChange={setProjectName} hint="trinity_board" />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn-generate" onClick={generate} disabled={state.busy} type="button">
             {state.busy ? 'WORKING…' : 'GENERATE →'}
@@ -326,6 +402,15 @@ function PcbPanel() {
           >
             VALIDATE →
           </button>
+          <button
+            className="btn-generate"
+            onClick={exportKicad}
+            disabled={state.busy || !design}
+            type="button"
+            title="Export a KiCad .kicad_pcb file. The engine refuses to export a board that fails its own checks."
+          >
+            EXPORT KICAD →
+          </button>
         </div>
       </div>
       {state.error && <p className="ws-error">{state.error}</p>}
@@ -337,7 +422,19 @@ function PcbPanel() {
             {ranValidate
               ? ` · ${board.passed ? `ALL ${rules.length} RULES PASSED` : `${failed.length} OF ${rules.length} RULES FAILED`}`
               : ''}
+            {exported ? ' · KICAD EXPORTED' : ''}
           </p>
+          {/* Nets wired automatically after generation — shown, not hidden. */}
+          {nets.length > 0 && (
+            <ul className="ws-checks">
+              {nets.map((net, i) => (
+                <li key={i}>
+                  <b>▸</b>
+                  <span>NET {net}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {/* DRC output renders whether it passed or failed — that is the point of the check. */}
           {rules.length > 0 && (
             <ul className="ws-checks">

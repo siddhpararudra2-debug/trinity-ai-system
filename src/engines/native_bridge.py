@@ -42,7 +42,7 @@ STDERR_TAIL = 2000
 # Engines the bridge can serve, with the same capabilities the scaffolds
 # advertise so describe() shape is unchanged apart from status.
 NATIVE_ENGINES: dict[str, list[str]] = {
-    "pcb": ["inspect", "validate", "generate", "export"],
+    "pcb": ["inspect", "validate", "generate", "export", "add_net"],
     # The firmware chain the native engine actually implements. `create` is
     # the entry point; the rest are the steps build needs before it can run.
     # The old ["create", "build", "test", "compile"] list advertised build
@@ -89,6 +89,10 @@ OP_MAP: dict[str, dict[str, str]] = {
         "validate": "validate_design",
         "generate": "create_board",
         "export": "export",
+        # Nets are the only way a board's power pins become DRC-clean, and
+        # without this mapping no board with components could ever pass
+        # validation -- so export was unreachable for every real design.
+        "add_net": "add_net",
     },
     "vision": {"image_inspect": "load_image"},
 }

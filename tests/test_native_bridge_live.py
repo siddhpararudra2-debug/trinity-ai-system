@@ -160,6 +160,89 @@ def test_live_firmware_full_chain_generates_sources_and_validates():
 
 
 @needs_binary
+def _pcb_board(client, components):
+    body = _exec(
+        client,
+        "pcb",
+        "generate",
+        {"width_mm": 50.0, "height_mm": 40.0, "components": components},
+    )
+    assert body["success"] is True, body.get("errors")
+    return body["result"]["design"]
+
+
+def _auto_net(client, design):
+    """One net per distinct power-pin name, mirroring the PCB console."""
+    groups: dict[str, list[str]] = {}
+    for component in design.get("components", []):
+        for pin in component.get("pins", []):
+            if pin.get("electrical") in ("power_in", "power_out"):
+                groups.setdefault(pin["name"], []).append(
+                    f"{component['ref']}.{pin['number']}"
+                )
+    current = design
+    for name, pins in groups.items():
+        body = _exec(client, "pcb", "add_net", {"design": current, "name": name, "pins": pins})
+        assert body["success"] is True, body.get("errors")
+        current = body["result"]["design"]
+    return current, groups
+
+
+@needs_binary
+@pytest.mark.parametrize(
+    ("label", "components"),
+    [
+        ("bare", []),
+        ("esp32", [{"part": "esp32"}]),
+        ("esp32_regulator", [{"part": "esp32"}, {"part": "regulator"}]),
+    ],
+)
+def test_live_pcb_generate_net_validate_export(label, components):
+    """The whole console chain, ending in a real KiCad file.
+
+    This is the path that was previously impossible: create_board leaves
+    power pins on no net, its own DRC rejects that, and export refuses a
+    board that fails. Wiring the nets is what unblocks it.
+    """
+    with TestClient(app) as client:
+        design = _pcb_board(client, components)
+        netted, groups = _auto_net(client, design)
+
+        # A board with no power pins must not gain phantom nets.
+        if components:
+            assert groups, "a component board should have power pins to wire"
+            assert len(netted["nets"]) == len(groups)
+        else:
+            assert groups == {}
+            assert netted["nets"] == []
+
+        checked = _exec(client, "pcb", "validate", {"design": netted})
+        assert checked["success"] is True
+        assert checked["result"]["passed"] is True, checked["result"].get("rules")
+
+        exported = _exec(
+            client, "pcb", "export", {"design": netted, "project": f"trinity_{label}"}
+        )
+        assert exported["success"] is True, exported.get("errors")
+        kicad = [a for a in exported["artifacts"] if a["type"] == "kicad_pcb"]
+        assert len(kicad) == 1, exported["artifacts"]
+        assert kicad[0]["size_bytes"] > 0
+
+
+@needs_binary
+def test_live_pcb_export_refuses_a_board_with_unwired_power_pins():
+    """The refusal must survive, or the auto-netting is masking a real check."""
+    with TestClient(app) as client:
+        design = _pcb_board(client, [{"part": "esp32"}])
+        exported = _exec(
+            client, "pcb", "export", {"design": design, "project": "trinity_unwired"}
+        )
+    assert exported["success"] is False
+    assert not [a for a in exported["artifacts"] if a["type"] == "kicad_pcb"]
+    assert "validation" in exported["errors"][0]["message"].lower()
+
+
+@needs_binary
 def test_live_vision_resolves_an_uploaded_artifact_id():
     """Upload, then inspect with no path at all.
 
