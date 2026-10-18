@@ -256,6 +256,11 @@ function PcbPanel() {
   const [state, setState] = useState<PanelState>(idle);
   // Kept separately so VALIDATE and EXPORT stay available after a failing check.
   const [design, setDesign] = useState<Record<string, unknown> | null>(null);
+  // Tracked separately from `result`, which every later call replaces. Reading
+  // "exported" off the current result made both the badge AND the download
+  // link vanish the moment you ran VALIDATE, even though the file was still
+  // on disk and still downloadable.
+  const [kicad, setKicad] = useState<{ type: string; sizeBytes: number; url: string } | null>(null);
 
   const PRESETS: Record<string, Array<Record<string, string>>> = {
     none: [],
@@ -267,6 +272,7 @@ function PcbPanel() {
     if (state.busy) return;
     setState({ busy: true, result: null, error: null });
     setNets([]);
+    setKicad(null);
     try {
       const result = await executeEngine('pcb', 'generate', {
         width_mm: Number(width),
@@ -349,6 +355,18 @@ function PcbPanel() {
     setState({ busy: true, result: state.result, error: null });
     try {
       const result = await executeEngine('pcb', 'export', { design, project: projectName.trim() });
+      if (result.success) {
+        const file = result.artifacts.find((a) => a.type === 'kicad_pcb');
+        setKicad(
+          file
+            ? {
+                type: file.type,
+                sizeBytes: file.size_bytes,
+                url: getArtifactUrl(file.artifact_id),
+              }
+            : null,
+        );
+      }
       setState({
         busy: false,
         result,
@@ -366,7 +384,6 @@ function PcbPanel() {
   const rules = (board.rules ?? []) as Array<Record<string, unknown>>;
   const failed = rules.filter((r) => r.passed === false);
   const ranValidate = typeof board.passed === 'boolean';
-  const exported = state.result?.artifacts.some((a) => a.type === 'kicad_pcb') ?? false;
   const componentCount =
     typeof board.component_count === 'number' ? board.component_count : components.length;
 
@@ -422,7 +439,7 @@ function PcbPanel() {
             {ranValidate
               ? ` · ${board.passed ? `ALL ${rules.length} RULES PASSED` : `${failed.length} OF ${rules.length} RULES FAILED`}`
               : ''}
-            {exported ? ' · KICAD EXPORTED' : ''}
+            {kicad ? ` · KICAD EXPORTED (${(kicad.sizeBytes / 1024).toFixed(1)} KB)` : ''}
           </p>
           {/* Nets wired automatically after generation — shown, not hidden. */}
           {nets.length > 0 && (
@@ -433,6 +450,20 @@ function PcbPanel() {
                   <span>NET {net}</span>
                 </li>
               ))}
+            </ul>
+          )}
+          {/* The exported file, pinned independently of the current result. */}
+          {kicad && (
+            <ul className="ws-checks">
+              <li>
+                <b>▸</b>
+                <span>
+                  {kicad.type.toUpperCase()} · {(kicad.sizeBytes / 1024).toFixed(1)} KB ·{' '}
+                  <a href={kicad.url} target="_blank" rel="noopener noreferrer">
+                    DOWNLOAD
+                  </a>
+                </span>
+              </li>
             </ul>
           )}
           {/* DRC output renders whether it passed or failed — that is the point of the check. */}

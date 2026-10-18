@@ -40,7 +40,10 @@ _VERB_RE = re.compile(
     re.IGNORECASE,
 )
 _NUMBER_RE = re.compile(
-    rf"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*({_UNIT_ALT})?\b",
+    # The optional minus is part of the number, not a separator: without it
+    # "a -5 mm standoff" parsed as 5 mm, silently discarding the sign and
+    # reporting a positive size the user never asked for.
+    rf"(?<![a-z0-9.])(\-?\d+(?:\.\d+)?)\s*({_UNIT_ALT})?\b",
     re.IGNORECASE,
 )
 
@@ -172,7 +175,7 @@ def _phrase_re(phrases: tuple[str, ...]) -> re.Pattern[str]:
 def _named_re(part: str) -> re.Pattern[str]:
     keywords = "|".join(sorted(_KEYWORD_MAP[part], key=len, reverse=True))
     return re.compile(
-        rf"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*({_UNIT_ALT})?\s*"
+        rf"(?<![a-z0-9.])(\-?\d+(?:\.\d+)?)\s*({_UNIT_ALT})?\s*"
         rf"(?<![a-z])({keywords})(?![a-z])",
         re.IGNORECASE,
     )
@@ -505,6 +508,12 @@ _MCU_RE = re.compile(r"\b(?:esp32|stm32f401re|rp2040)\b", re.IGNORECASE)
 _FIRMWARE_RE = re.compile(
     r"\b(?:firmware|microcontroller project|mcu project|embedded project)\b", re.IGNORECASE
 )
+# Verb and filler words that must not end up in a derived project name.
+_STOP_WORDS_RE = re.compile(
+    r"\b(?:make|create|build|design|generate|new|for|an?|the|project|microcontroller|"
+    r"mcu|embedded|esp32|stm32f401re|rp2040)\b",
+    re.IGNORECASE,
+)
 
 
 def _extract_firmware_create(text: str) -> dict | None:
@@ -512,7 +521,19 @@ def _extract_firmware_create(text: str) -> dict | None:
         return None
     mcu = _MCU_RE.search(text)
     named = re.search(r"\bnamed\s+([\w.-]+)", text, re.IGNORECASE)
-    project = named.group(1) if named else (text.strip()[:40] or "firmware_project")
+    if named:
+        project = named.group(1)
+    else:
+        # Strip the trigger words before slugifying. The old fallback used the
+        # whole sentence, so "make firmware for the rover" produced a project
+        # literally called make_firmware_for_the_rover.
+        residue = _FIRMWARE_RE.sub(" ", text)
+        residue = _STOP_WORDS_RE.sub(" ", residue)
+        project = re.sub(r"\W+", "_", residue).strip("_")[:40]
+        if not project:
+            project = (
+                f"{mcu.group(0).lower()}_project" if mcu else "firmware_project"
+            )
     parameters: dict[str, Any] = {"name": re.sub(r"\W+", "_", project)}
     if mcu:
         parameters["mcu"] = mcu.group(0).upper()
