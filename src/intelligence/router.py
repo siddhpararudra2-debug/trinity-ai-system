@@ -142,6 +142,14 @@ EXAMPLE_SENTENCES: dict[str, tuple[str, ...]] = {
     "l_bracket": ("Build a bracket 40 x 40 x 20 mm",),
     "standoff": ("Make a 20 mm standoff",),
     "math": ("Solve x**2 - 4 = 0",),
+    "research": ("Search the documents for thermal runaway",),
+    "simulation": ("Simulate a projectile for 2 s at 5 m/s",),
+    "pcb": ("Make a pcb 50 x 40 mm with an esp32 and a regulator",),
+    "robotics": (
+        "Compute forward kinematics with joints 0.5, -0.3",
+        "Plan a trajectory from 0, 0 to 1.0, -1.0 over 1 s",
+    ),
+    "firmware": ("Create firmware for an esp32 named rover_controller",),
 }
 
 
@@ -268,10 +276,269 @@ def _extract_math(text: str) -> dict | None:
     }
 
 
-# Order matters: math first (so "solve ..." never falls into CAD), then
-# parts from most specific phrase to most generic.
+# ---------------------------------------------------------------------------
+# Bridged engines.
+#
+# These route to engines that only exist when the native backend is attached.
+# Without it the call still parses — and then fails truthfully at the job
+# level with capability_unavailable — rather than being rejected at the router
+# as if the request were nonsense. A rule that silently hid six working
+# engines behind "no parser matched" was the actual bug.
+#
+# Every extractor below emits the exact parameter contract its engine
+# declares. Anything it cannot derive is left at the engine's default; the
+# router never invents a value.
+# ---------------------------------------------------------------------------
+
+_SEARCH_RE = re.compile(
+    r"\b(?:search|research|look\s+up|find)\b[^.?!]*?\b(?:for|about|on|documents?|"
+    r"docs?|index|papers?|literature)\b\s*(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _extract_research_search(text: str) -> dict | None:
+    match = _SEARCH_RE.search(text.strip())
+    if not match:
+        return None
+    # The keyword alternation can itself be "for"/"about"/"on", so a leading
+    # one has to come off before the rest is treated as the query.
+    query = re.sub(
+        r"^\s*(?:for|about|on)\s+", "", match.group(1), flags=re.IGNORECASE
+    ).strip().strip("\"'?. ")
+    if not query:
+        return None
+    return {
+        "domain": "research",
+        "operation": "search",
+        "object": "research",
+        "parameters": {"query": query},
+        "units": "",
+    }
+
+
+_SIM_RE = re.compile(
+    r"\b(?:simulate|simulate a|simulation|run a simulation|projectile)\b",
+    re.IGNORECASE,
+)
+_DURATION_RE = re.compile(
+    r"(?:for|over|duration(?: of)?)\s*(\d+(?:\.\d+)?)\s*(?:s\b|sec|secs|second|seconds)",
+    re.IGNORECASE,
+)
+_SPEED_RE = re.compile(
+    r"(?:at|initial\s+speed(?: of)?|velocity\s+of)\s*(\d+(?:\.\d+)?)\s*m/s",
+    re.IGNORECASE,
+)
+_ACCEL_RE = re.compile(
+    r"(?:accelerat\w*(?:ion)?\s*(?:of|at)?|a\s*=)\s*(\d+(?:\.\d+)?)\s*m/s(?:\^?2|2)",
+    re.IGNORECASE,
+)
+
+
+def _extract_simulation(text: str) -> dict | None:
+    if not _SIM_RE.search(text):
+        return None
+    parameters: dict[str, Any] = {}
+    for regex, key in (
+        (_DURATION_RE, "duration_s"),
+        (_SPEED_RE, "initial_velocity_m_s"),
+        (_ACCEL_RE, "acceleration_m_s2"),
+    ):
+        match = regex.search(text)
+        if match:
+            parameters[key] = float(match.group(1))
+    if not parameters:
+        return None
+    return {
+        "domain": "simulation",
+        "operation": "simulate",
+        "object": "simulation",
+        "parameters": parameters,
+        "units": "s, m/s, m/s^2",
+    }
+
+
+# Part presets the native PCB engine actually has footprints for. A word that
+# is not here is ignored rather than routed: the engine would reject it, and
+# a board with a silently dropped component is worse than a clear one.
+_PCB_PARTS: dict[str, tuple[str, ...]] = {
+    "esp32": ("esp32", "esp-32"),
+    "imu": ("imu", "mpu6050", "mpu-6050", "mpu9250", "mpu-9250", "accelerometer", "gyroscope"),
+    "regulator": ("regulator", "ams1117", "ldo"),
+    "resistor": ("resistor",),
+    "capacitor": ("capacitor", "cap"),
+    "led": ("led",),
+}
+_PCB_RE = re.compile(r"\b(?:pcb|printed circuit board|circuit board|board layout)\b", re.IGNORECASE)
+
+
+def _extract_pcb_generate(text: str) -> dict | None:
+    if not _PCB_RE.search(text):
+        return None
+    lowered = text.lower()
+    components = [
+        {"part": part}
+        for part, aliases in _PCB_PARTS.items()
+        if any(re.search(rf"(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])", lowered) for a in aliases)
+    ]
+    if not components:
+        return None
+    parameters: dict[str, Any] = {"components": components}
+    dims = re.findall(
+        r"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*(mm|cm|inch|inches)?", text, re.IGNORECASE
+    )
+    values = [_to_mm(float(v), u, "mm") for v, u in dims]
+    for key, value in zip(("width_mm", "height_mm"), values, strict=False):
+        parameters.setdefault(key, value)
+    return {
+        "domain": "pcb",
+        "operation": "generate",
+        "object": "pcb",
+        "parameters": parameters,
+        "units": "mm",
+    }
+
+
+_JOINT_LIST_RE = re.compile(r"(?:joints?|angles?)\s*[:=]?\s*([-\d.,\s]+)", re.IGNORECASE)
+
+
+def _joints(text: str) -> list[float]:
+    match = _JOINT_LIST_RE.search(text)
+    if not match:
+        return []
+    values = []
+    for token in re.split(r"[,\s]+", match.group(1).strip()):
+        if not token:
+            continue
+        try:
+            values.append(float(token))
+        except ValueError:
+            break
+    return values
+
+
+_KINEMATICS_RE = re.compile(
+    r"\b(?:forward kinematics|kinematics|end effector|end-effector)\b", re.IGNORECASE
+)
+
+
+def _extract_robotics_kinematics(text: str) -> dict | None:
+    if not _KINEMATICS_RE.search(text):
+        return None
+    angles = _joints(text)
+    if not angles:
+        return None
+    return {
+        "domain": "robotics",
+        "operation": "kinematics",
+        "object": "robotics",
+        "parameters": {"joint_angles": angles},
+        "units": "rad",
+    }
+
+
+_TRAJECTORY_RE = re.compile(
+    r"\b(?:trajectory|joint[- ]space path|plan a path|motion plan)\b", re.IGNORECASE
+)
+# A joint list is numbers, optionally comma separated. Capturing the list as
+# a unit (rather than lazily up to a delimiter) is what stops "to 1.0, -1.0"
+# from being cut to "1" by the "." it contains.
+_JOINT_LIST_PATTERN = r"-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?)*"
+_FROM_TO_RE = re.compile(
+    rf"\bfrom\s*({_JOINT_LIST_PATTERN})\s*(?:to|->|→)\s*({_JOINT_LIST_PATTERN})",
+    re.IGNORECASE,
+)
+
+
+def _numbers(raw: str) -> list[float]:
+    values = []
+    for token in re.split(r"[,\s]+", raw.strip()):
+        if not token:
+            continue
+        try:
+            values.append(float(token))
+        except ValueError:
+            return []
+    return values
+
+
+def _extract_robotics_trajectory(text: str) -> dict | None:
+    if not _TRAJECTORY_RE.search(text):
+        return None
+    match = _FROM_TO_RE.search(text)
+    parameters: dict[str, Any] = {}
+    if match:
+        start, goal = _numbers(match.group(1)), _numbers(match.group(2))
+        if not start or len(start) != len(goal):
+            raise RequestValidationError(
+                "A trajectory needs the same number of joints in start and goal",
+                details={"start": start, "goal": goal},
+            )
+        parameters["joint_start"] = start
+        parameters["joint_goal"] = goal
+    duration = _DURATION_RE.search(text)
+    if duration:
+        parameters["duration_s"] = float(duration.group(1))
+    if not parameters:
+        return None
+    return {
+        "domain": "robotics",
+        "operation": "trajectory_plan",
+        "object": "robotics",
+        "parameters": parameters,
+        "units": "rad, s",
+    }
+
+
+_MCU_RE = re.compile(r"\b(?:esp32|stm32f401re|rp2040)\b", re.IGNORECASE)
+_FIRMWARE_RE = re.compile(
+    r"\b(?:firmware|microcontroller project|mcu project|embedded project)\b", re.IGNORECASE
+)
+
+
+def _extract_firmware_create(text: str) -> dict | None:
+    if not _FIRMWARE_RE.search(text):
+        return None
+    mcu = _MCU_RE.search(text)
+    named = re.search(r"\bnamed\s+([\w.-]+)", text, re.IGNORECASE)
+    project = named.group(1) if named else (text.strip()[:40] or "firmware_project")
+    parameters: dict[str, Any] = {"name": re.sub(r"\W+", "_", project)}
+    if mcu:
+        parameters["mcu"] = mcu.group(0).upper()
+    return {
+        "domain": "firmware",
+        "operation": "create",
+        "object": "firmware",
+        "parameters": parameters,
+        "units": "",
+    }
+
+
+# Order matters: math first (so "solve ..." never falls into anything else),
+# then the bridged engines whose triggers are specific, then CAD parts from
+# most specific phrase to most generic. Bridged rules sit above CAD because
+# their vocabulary (pcb, firmware, trajectory, kinematics, search) does not
+# overlap any CAD part phrase.
 RULES: tuple[Rule, ...] = (
     Rule("math_solve", ("solve",), _extract_math),
+    Rule("research_search", ("search", "research", "look up"), _extract_research_search),
+    Rule("simulation_simulate", ("simulate", "simulation", "projectile"), _extract_simulation),
+    Rule("pcb_generate", ("pcb", "circuit board", "board layout"), _extract_pcb_generate),
+    Rule(
+        "robotics_trajectory",
+        ("trajectory", "plan a path", "motion plan"),
+        _extract_robotics_trajectory,
+    ),
+    Rule(
+        "robotics_kinematics",
+        ("forward kinematics", "kinematics", "end effector"),
+        _extract_robotics_kinematics,
+    ),
+    Rule(
+        "firmware_create",
+        ("firmware", "microcontroller project", "mcu project"),
+        _extract_firmware_create,
+    ),
     *(
         Rule(part, phrases, _make_cad_extractor(part, phrases))
         for part, phrases in _PART_PHRASES.items()
@@ -310,7 +577,8 @@ def parse_requirement(text: str) -> dict:
         details={
             "supported_example": _SUPPORTED_EXAMPLE,
             "parser_scope": (
-                "cad part generation and math solve (V1 deterministic "
+                "cad part generation, math solve, and the bridged engines "
+                "research/simulation/pcb/robotics/firmware (V1 deterministic "
                 "rule-list router)"
             ),
             "nearest_parts": _nearest_parts(text),

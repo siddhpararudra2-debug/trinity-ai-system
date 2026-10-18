@@ -213,20 +213,21 @@ def cad_catalog() -> dict:
 @router.post("/requirements/execute", response_model=ToolResponse)
 async def execute_requirement(req: RequirementRequest) -> dict:
     parsed = parse_requirement(req.text)
-    if parsed["domain"] == "math":
-        return await asyncio.to_thread(
-            job_manager.run_sync,
-            parsed["domain"],
-            parsed["operation"],
-            parsed["parameters"],
-        )
-    return await asyncio.to_thread(
-        job_manager.run_sync,
-        parsed["domain"],
-        parsed["operation"],
-        {
+    domain = parsed["domain"]
+    # CAD is the only domain whose engine takes a {type, parameters, outputs}
+    # envelope; the bridged engines take their own parameter contract flat.
+    # Assuming otherwise was why routing to them produced nonsense requests.
+    if domain == "cad":
+        parameters: dict[str, Any] = {
             "type": parsed["object"],
             "parameters": parsed["parameters"],
             "outputs": ["stl", "glb", "json"],
-        },
+        }
+    else:
+        parameters = parsed["parameters"]
+    return await asyncio.to_thread(
+        job_manager.run_sync,
+        domain,
+        parsed["operation"],
+        parameters,
     )

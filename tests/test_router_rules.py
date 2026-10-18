@@ -38,6 +38,12 @@ def test_original_sentence_parses_to_the_same_output():
 def test_rule_list_is_named_and_ordered():
     assert [rule.name for rule in RULES] == [
         "math_solve",
+        "research_search",
+        "simulation_simulate",
+        "pcb_generate",
+        "robotics_trajectory",
+        "robotics_kinematics",
+        "firmware_create",
         "quadcopter_frame",
         "enclosure",
         "mounting_plate",
