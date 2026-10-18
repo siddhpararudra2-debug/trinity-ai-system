@@ -291,11 +291,14 @@ function PcbPanel() {
       // each distinct power-pin name into its own net here, and show what was
       // created rather than doing it silently.
       const netted = await autoNet(initial);
-      setDesign(netted);
+      setDesign(netted.design);
+      setNets(netted.nets);
       setState({
         busy: false,
         result,
-        error: netted === null ? 'Board generated, but automatic net wiring failed' : null,
+        error: netted.error
+          ? `Board generated, but automatic net wiring failed: ${netted.error}`
+          : null,
       });
     } catch (e) {
       setState({ busy: false, result: null, error: errorText(e) });
@@ -303,8 +306,13 @@ function PcbPanel() {
   }
 
   /** One net per distinct power-pin name. Returns the design unchanged when
-   *  there is nothing to wire — a bare board must not gain phantom nets. */
-  async function autoNet(board: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+   *  there is nothing to wire — a bare board must not gain phantom nets.
+   *  On failure, retain the last usable design and explain which net failed. */
+  async function autoNet(board: Record<string, unknown>): Promise<{
+    design: Record<string, unknown>;
+    nets: string[];
+    error: string | null;
+  }> {
     const parts = (board.components ?? []) as Array<Record<string, unknown>>;
     const groups = new Map<string, string[]>();
     for (const part of parts) {
@@ -318,7 +326,7 @@ function PcbPanel() {
         groups.set(name, list);
       }
     }
-    if (groups.size === 0) return board;
+    if (groups.size === 0) return { design: board, nets: [], error: null };
 
     let current = board;
     const created: string[] = [];
@@ -328,14 +336,25 @@ function PcbPanel() {
         name,
         pins,
       });
-      if (!response.success) return null;
+      if (!response.success) {
+        return {
+          design: current,
+          nets: created,
+          error: response.errors[0]?.message ?? `Could not add net ${name}`,
+        };
+      }
       const next = (response.result as Record<string, unknown> | undefined)?.design;
-      if (typeof next !== 'object' || next === null) return null;
+      if (typeof next !== 'object' || next === null) {
+        return {
+          design: current,
+          nets: created,
+          error: `Native backend returned no design after adding net ${name}`,
+        };
+      }
       current = next as Record<string, unknown>;
       created.push(`${name} (${pins.length})`);
     }
-    setNets(created);
-    return current;
+    return { design: current, nets: created, error: null };
   }
 
   async function validate() {

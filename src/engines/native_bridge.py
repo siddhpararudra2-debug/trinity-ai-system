@@ -322,30 +322,37 @@ class NativeBridgeEngine(BaseEngine):
         then removes the first entry's parent dir (manager.py), so a single
         dir here means zero litter with no extra cleanup step.
         """
-        scratch = Path(tempfile.mkdtemp(prefix="trinity_bridge_"))
+        scratch: Path | None = None
         pending: list[tuple[str, str]] = []
-        for key in ("pending_artifacts", "artifacts"):
-            items = envelope.get(key)
-            if not isinstance(items, list):
-                continue
-            for item in items:
-                if not isinstance(item, dict):
+        try:
+            for key in ("pending_artifacts", "artifacts"):
+                items = envelope.get(key)
+                if not isinstance(items, list):
                     continue
-                path, artifact_type = str(item.get("path", "")), str(
-                    item.get("type", "")
-                )
-                if not (path and artifact_type):
-                    continue
-                if not Path(path).is_file():
-                    raise EngineExecutionError(
-                        "Native backend reported a missing artifact file",
-                        details={
-                            "engine": self.name,
-                            "operation": operation,
-                            "path": path,
-                        },
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    path, artifact_type = str(item.get("path", "")), str(
+                        item.get("type", "")
                     )
-                dest = scratch / Path(path).name
-                shutil.copyfile(path, dest)
-                pending.append((str(dest), artifact_type))
+                    if not (path and artifact_type):
+                        continue
+                    if not Path(path).is_file():
+                        raise EngineExecutionError(
+                            "Native backend reported a missing artifact file",
+                            details={
+                                "engine": self.name,
+                                "operation": operation,
+                                "path": path,
+                            },
+                        )
+                    if scratch is None:
+                        scratch = Path(tempfile.mkdtemp(prefix="trinity_bridge_"))
+                    dest = scratch / Path(path).name
+                    shutil.copyfile(path, dest)
+                    pending.append((str(dest), artifact_type))
+        except Exception:
+            if scratch is not None:
+                shutil.rmtree(scratch, ignore_errors=True)
+            raise
         return pending

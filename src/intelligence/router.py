@@ -550,11 +550,9 @@ def _extract_firmware_create(text: str) -> dict | None:
 # then the bridged engines whose triggers are unambiguous, then the CAD
 # parts from most specific phrase to most generic.
 #
-# research sits BELOW the CAD rules on purpose. Its verbs -- find, look up,
-# search -- are ordinary English, so placing it above CAD let it claim
-# "find a bracket for a 40 mm build" and hand a geometry request to the
-# index. CAD part phrases are specific and must win first; a genuine search
-# contains no part phrase and falls through to research on its own.
+# The public rule list keeps research after the CAD entries so introspection
+# stays stable. parse_requirement() checks explicit document retrieval intent
+# before CAD, except when a CAD part and dimensions make it a geometry request.
 RULES: tuple[Rule, ...] = (
     Rule("math_solve", ("solve",), _extract_math),
     Rule("simulation_simulate", ("simulate", "simulation", "projectile"), _extract_simulation),
@@ -606,7 +604,23 @@ def _all_examples() -> list[str]:
 def parse_requirement(text: str) -> dict:
     for rule in RULES:
         parsed = rule.extractor(text)
-        if parsed is not None:
+        if rule.name == "math_solve":
+            if parsed is not None:
+                return parsed
+            # Require both retrieval language and a document noun before
+            # choosing research. If a CAD part and dimensions are also
+            # present, leave it to the CAD rules (or refuse if no CAD verb
+            # was given) instead of silently searching for a geometry job.
+            research = _extract_research_search(text)
+            if research is not None:
+                has_part = any(
+                    _phrase_re(phrases).search(text)
+                    for phrases in _PART_PHRASES.values()
+                )
+                has_dimensions = bool(_NUMBER_RE.search(text))
+                if not (has_part and has_dimensions):
+                    return research
+        elif rule.name != "research_search" and parsed is not None:
             return parsed
     raise RequestValidationError(
         "No deterministic V1 parser matched this requirement",
