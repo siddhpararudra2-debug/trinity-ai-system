@@ -290,9 +290,16 @@ def _extract_math(text: str) -> dict | None:
 # router never invents a value.
 # ---------------------------------------------------------------------------
 
+# A search request has to look like a search: a retrieval verb AND a
+# document-ish noun. An earlier version also accepted "for"/"about"/"on"
+# as keywords, which hijacked half the CAD vocabulary -- "find a bracket
+# for a 40 mm build" became a research query because "for" is a
+# near-universal preposition. Requiring the noun keeps research from
+# eating geometry requests, and a search the router cannot recognise is
+# refused honestly rather than misrouted.
 _SEARCH_RE = re.compile(
-    r"\b(?:search|research|look\s+up|find)\b[^.?!]*?\b(?:for|about|on|documents?|"
-    r"docs?|index|papers?|literature)\b\s*(.+)$",
+    r"\b(?:search|research|look\s+up|find)\b[^.?!]*?"
+    r"\b(?:documents?|docs?|index|papers?|literature|corpus|notes?)\b\s*(.+)$",
     re.IGNORECASE,
 )
 
@@ -301,10 +308,14 @@ def _extract_research_search(text: str) -> dict | None:
     match = _SEARCH_RE.search(text.strip())
     if not match:
         return None
-    # The keyword alternation can itself be "for"/"about"/"on", so a leading
-    # one has to come off before the rest is treated as the query.
+    # The document noun can be followed by a preposition -- "find papers
+    # about X" -- so one leading preposition comes off before the rest is
+    # treated as the query. Safe now that the noun already gated the match.
     query = re.sub(
-        r"^\s*(?:for|about|on)\s+", "", match.group(1), flags=re.IGNORECASE
+        r"^\s*(?:for|about|on|regarding|concerning)\s+",
+        "",
+        match.group(1),
+        flags=re.IGNORECASE,
     ).strip().strip("\"'?. ")
     if not query:
         return None
@@ -515,13 +526,16 @@ def _extract_firmware_create(text: str) -> dict | None:
 
 
 # Order matters: math first (so "solve ..." never falls into anything else),
-# then the bridged engines whose triggers are specific, then CAD parts from
-# most specific phrase to most generic. Bridged rules sit above CAD because
-# their vocabulary (pcb, firmware, trajectory, kinematics, search) does not
-# overlap any CAD part phrase.
+# then the bridged engines whose triggers are unambiguous, then the CAD
+# parts from most specific phrase to most generic.
+#
+# research sits BELOW the CAD rules on purpose. Its verbs -- find, look up,
+# search -- are ordinary English, so placing it above CAD let it claim
+# "find a bracket for a 40 mm build" and hand a geometry request to the
+# index. CAD part phrases are specific and must win first; a genuine search
+# contains no part phrase and falls through to research on its own.
 RULES: tuple[Rule, ...] = (
     Rule("math_solve", ("solve",), _extract_math),
-    Rule("research_search", ("search", "research", "look up"), _extract_research_search),
     Rule("simulation_simulate", ("simulate", "simulation", "projectile"), _extract_simulation),
     Rule("pcb_generate", ("pcb", "circuit board", "board layout"), _extract_pcb_generate),
     Rule(
@@ -543,6 +557,7 @@ RULES: tuple[Rule, ...] = (
         Rule(part, phrases, _make_cad_extractor(part, phrases))
         for part, phrases in _PART_PHRASES.items()
     ),
+    Rule("research_search", ("search", "research", "look up"), _extract_research_search),
 )
 
 

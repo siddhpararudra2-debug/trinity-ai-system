@@ -38,7 +38,6 @@ def test_original_sentence_parses_to_the_same_output():
 def test_rule_list_is_named_and_ordered():
     assert [rule.name for rule in RULES] == [
         "math_solve",
-        "research_search",
         "simulation_simulate",
         "pcb_generate",
         "robotics_trajectory",
@@ -49,10 +48,64 @@ def test_rule_list_is_named_and_ordered():
         "mounting_plate",
         "l_bracket",
         "standoff",
+        # Below CAD on purpose: its verbs are ordinary English.
+        "research_search",
     ]
     for rule in RULES:
         assert rule.phrases
         assert callable(rule.extractor)
+
+
+# ------------------------------------------------ research must not eat CAD ---
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Find a mounting plate for a drone 100 x 60 mm",
+        "Find a bracket for a 40 mm build",
+        "Look up a drone frame for a 50 mm build",
+        "Research a bracket 40 x 40 x 20 mm",
+        "Search for a 100 x 60 x 40 mm box",
+    ],
+)
+def test_research_rule_does_not_hijack_cad_requests(sentence):
+    """Regression: a search-ish verb plus "for" must not become research.
+
+    These all read like geometry requests. They were routed to the research
+    index because the search rule treated "for" as a search keyword and sat
+    above the CAD rules. Either outcome is acceptable -- CAD, or an honest
+    refusal -- but landing on research would have silently called the wrong
+    engine.
+    """
+    try:
+        parsed = parse_requirement(sentence)
+    except RequestValidationError:
+        return
+    assert parsed["domain"] != "research", f"hijacked into research: {parsed}"
+    assert parsed["domain"] == "cad"
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Build a bracket 40 x 40 x 20 mm for the docs",
+        "Create a 50 mm quadcopter frame in the index",
+    ],
+)
+def test_cad_wins_over_research_when_both_could_match(sentence):
+    assert parse_requirement(sentence)["domain"] == "cad"
+
+
+def test_research_still_matches_real_search_requests():
+    for sentence in EXAMPLE_SENTENCES["research"]:
+        assert parse_requirement(sentence)["domain"] == "research"
+    assert (
+        parse_requirement("Find papers about battery thermal runaway")["parameters"][
+            "query"
+        ]
+        == "battery thermal runaway"
+    )
 
 
 # -------------------------------------------------------------- verbs ---
