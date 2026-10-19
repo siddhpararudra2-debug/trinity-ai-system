@@ -205,6 +205,11 @@ jobs:
         run: |
           cmake --preset windows-debug-vcpkg -DCMAKE_PREFIX_PATH="$env:Qt6_Dir"
           cmake --build --preset windows-debug-vcpkg
+          # Log the binary's path and timestamp. When a run fails, the first
+          # question is always which executable ran and how old it is, and
+          # the launcher picks between several candidate builds.
+          $exe = Resolve-Path build/debug-vcpkg/Debug/Trinity.exe
+          Write-Host "Trinity.exe: $exe ($((Get-Item $exe).LastWriteTime))"
 
       - name: Install Python dependencies
         run: |
