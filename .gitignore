@@ -39,6 +39,7 @@ venv/
 *.egg-info/
 
 # runtime state — regenerated on startup, shouldn't be versioned
+.run/
 data/*.db
 data/*.db-*
 data/**/*.db
