@@ -664,6 +664,7 @@ function FirmwarePanel() {
   const [state, setState] = useState<PanelState>(idle);
   const [steps, setSteps] = useState<Step[]>([]);
   const [project, setProject] = useState<Record<string, unknown> | null>(null);
+  const [validateReport, setValidateReport] = useState<{ passed: boolean; rules: unknown } | null>(null);
 
   async function run(operation: string, parameters: Record<string, unknown>) {
     const result = await executeEngine('firmware', operation, parameters);
@@ -690,6 +691,7 @@ function FirmwarePanel() {
     setState({ busy: true, result: null, error: null });
     setSteps([]);
     setProject(null);
+    setValidateReport(null);
     try {
       const created = await run('create', { name: name.trim() });
       let current = created.project;
@@ -724,6 +726,12 @@ function FirmwarePanel() {
       const generated = await run('generate', { project: current });
       current = generated.project ?? current;
       await run('validate', { project: current });
+      const checked = await executeEngine('firmware', 'validate', { project: current });
+      const report = (checked.result ?? {}) as Record<string, unknown>;
+      setValidateReport({
+        passed: report.passed === true,
+        rules: report.rules,
+      });
       setState({ busy: false, result: generated.result, error: null });
     } catch {
       // run() already recorded the failing step and set the error message.
@@ -752,8 +760,11 @@ function FirmwarePanel() {
 
   const mcuInfo = (project?.mcu ?? {}) as Record<string, unknown>;
   const sources = (project?.sources ?? []) as Array<Record<string, unknown>>;
-  const validation = (state.result?.result as Record<string, unknown> | undefined)?.rules;
-  const validated = (state.result?.result as Record<string, unknown> | undefined)?.passed;
+  // Tracked separately: the pipeline's final state.result is the GENERATE
+  // response, not VALIDATE's, so reading these off it showed "—" next to a
+  // VALIDATED label even when every rule had passed.
+  const validation = validateReport?.rules;
+  const validated = validateReport?.passed;
 
   return (
     <article className="ws-panel">
