@@ -31,7 +31,7 @@ jobs:
     name: Build & Test (MSVC + Qt 6, no OpenCV)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -67,7 +67,7 @@ jobs:
     name: Build & Test (MSVC + Qt 6 + vcpkg OpenCV)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -99,7 +99,7 @@ jobs:
         run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 
       - name: Cache vcpkg packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
