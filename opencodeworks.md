@@ -10,11 +10,6 @@ change it describes — never on its own.
 
 ## In progress
 
-- [ ] **Step 2 — Root `README.md`**
-  Four entry points (`run.bat`, `start.ps1`, `desktop.py`, `e2e/run.mjs`) and
-  no top-level documentation for any of them. Read the current file first —
-  this gap is asserted, not yet confirmed.
-
 - [ ] **Step 3 — Prove the desktop shell's window**
   `desktop.py --no-window` is verified end to end. The pywebview path has
   never opened a window, so its shutdown has never been observed. Needs
@@ -47,6 +42,15 @@ change it describes — never on its own.
 ---
 
 ## Done
+
+- [x] **Step 2 — Root `README.md`**
+  The gap was real but narrower than claimed: there *was* a Getting Started
+  section, it just documented the old two-terminal manual flow, and there was
+  no testing section at all in a project whose identity is verification. Now:
+  launcher-first quick start, the optional native engine, the Qt gotcha, a
+  Testing section covering pytest + the browser suites, and an explicit note
+  on why LLM transport tests are skipped. Every command in it was executed and
+  every file and number in it checked before committing.
 
 - [x] **Step 1 — STEP kernel into CI**
   Added a `cad-kernel` job and a `cad` extra in `pyproject.toml`, so the

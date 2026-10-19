@@ -36,62 +36,94 @@ API Request
 
 ```text
 trinity-ai-system/
-├── app/native/           # C++20 / Qt6 Native Windows Application
-├── config/               # System configurations (YAML)
-├── data/                 # Caches, embeddings, and evaluation sets
-├── docs/                 # Architectural documentation
-├── frontend/             # Next.js 16 Web Application
-├── notebooks/            # Jupyter notebooks for prompt experimentation
-├── src/                  # Python FastAPI Backend
-│   ├── agents/           # Domain-specific AI agents
-│   ├── api/              # FastAPI endpoints
-│   ├── engines/          # Deterministic execution engines
-│   ├── llm/              # Model provider clients
-│   └── ...               
-└── tests/                # Comprehensive Python test suites
+├── run.bat                  # double-clickable launcher
+├── start.ps1                # starts API + frontend, health-checks, shuts down clean
+├── desktop.py               # same stack in a native window
+├── opencodeworks.md         # shared work log (Codex and OpenCode both tick this)
+├── app/native/              # C++20 / Qt6 native engine (Trinity.exe)
+├── config/                  # system configurations (YAML)
+├── data/                    # caches, artifacts, evaluation sets
+├── docs/                    # architectural documentation
+├── frontend/                # Next.js 16 web application
+│   └── e2e/                 # browser suites driven over the DevTools protocol
+├── notebooks/               # Jupyter notebooks for prompt experimentation
+├── src/                     # Python FastAPI backend
+│   ├── agents/              # domain-specific AI agents
+│   ├── api/                 # FastAPI endpoints
+│   ├── engines/             # deterministic execution engines
+│   ├── llm/                 # model provider clients
+│   └── ...
+└── tests/                   # Python test suites
 ```
 
 ## 🛠️ Getting Started
 
-### 1. Python Backend
+### The short version
 
-The backend is built with FastAPI and requires Python 3.11+.
-
-```bash
-# Install the package in editable mode
+```powershell
 python -m pip install -e .
-
-# Run the FastAPI server (dev mode)
-uvicorn src.main:app --reload
-```
-
-The API will be available at `http://localhost:8000/api`.
-
-### 2. Next.js Frontend
-
-The frontend is a modern web application built with Next.js 16. It communicates with the backend via the `NEXT_PUBLIC_TRINITY_API_URL` environment variable.
-
-```bash
-# Install dependencies
 npm --prefix frontend install
 
-# Start the development server
+run.bat          # or: .\start.ps1
+```
+
+`start.ps1` finds `Trinity.exe` and Qt by itself, starts the API and the
+frontend, waits until **both actually answer**, opens a browser, and shuts
+both down on Ctrl+C. It builds the frontend on first run.
+
+| Entry point | What it does |
+| --- | --- |
+| `run.bat` | Double-clickable. Hands straight to `start.ps1`. |
+| `start.ps1` | The launcher. `-Dev` for hot reload, plus `-NoBuild`, `-NoBrowser`, `-ApiPort`, `-WebPort`. |
+| `python desktop.py` | Same stack in a native window. Needs `pip install -r requirements-desktop.txt`; falls back to the system browser without it. |
+
+The native engine is optional. If `Trinity.exe` has not been built, everything
+still starts — `cad` and `math` run in-process, and the six bridged consoles
+report the backend unavailable rather than faking output. `start.ps1` prefers
+the vcpkg/OpenCV build, because the plain build has no OpenCV and the vision
+engine says that capability is missing instead of guessing.
+
+> `start.ps1` does not open on a "healthy" API alone. It makes a real engine
+> call first and reports what actually answered, because all eight engines are
+> native and a healthy API with a dead bridge is a dead shell. If it cannot
+> find Qt it says so — `Trinity.exe` links `Qt6Core` and ships no Qt DLLs
+> beside itself.
+
+### Running the two servers by hand
+
+Useful when you want one server restarting independently.
+
+```bash
+# backend — http://localhost:8000/api
+python -m pip install -e .
+uvicorn src.main:app --reload
+
+# frontend — http://localhost:3000
+npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
-The UI will be available at `http://localhost:3000`.
+The frontend reads `NEXT_PUBLIC_TRINITY_API_URL`, which is **inlined at build
+time** — set it before `npm run build`, not just before starting the server.
 
-### 3. Native Windows App (C++ / Qt 6)
+### Native Windows App (C++ / Qt 6)
 
-Trinity AI includes a high-performance native host built with C++20, CMake, and Qt 6. See [`app/native/README.md`](app/native/README.md) for detailed architecture, testing, and build instructions.
+See [`app/native/README.md`](app/native/README.md) for architecture and build
+instructions. Two things there are not optional: CMake needs an initialized
+MSVC environment (a Developer Command Prompt, or `vcvars64.bat` sourced), and
+the OpenCV leg needs vcpkg's manifest installed first.
 
-```powershell
-cd app/native
-$env:CMAKE_PREFIX_PATH = "C:\Qt\6.8.3\msvc2022_64"
-cmake --preset windows-debug
-cmake --build --preset windows-debug
-.\build\debug\Debug\Trinity.exe
+### Optional: the CAD kernel
+
+STEP export needs OpenCascade — about 1 GB of wheels, and deliberately not a
+core requirement.
+
+```bash
+pip install ".[cad]"
 ```
+
+Without it the catalog reports `step` as unavailable **with a reason**, and
+STL/GLB/JSON are unaffected.
 
 ## 📡 API Reference
 
@@ -119,7 +151,7 @@ POST /api/cad/generate
 | Format | Availability | What it is |
 | --- | --- | --- |
 | `stl`, `glb`, `json` | always | Binary STL, GLB and the IR spec — pure Python, no kernel |
-| `step` | needs `pip install cadquery` | AP214 faceted B-rep from OpenCascade |
+| `step` | needs `pip install ".[cad]"` | AP214 faceted B-rep from OpenCascade |
 
 STEP availability is decided per environment, not assumed. `GET /api/cad/catalog`
 reports it under `outputs.step` with `available`, `schema`, `unit`,
@@ -141,3 +173,49 @@ Every engine operation securely returns a standardized envelope:
 ## 📖 Documentation
 
 For a deeper dive into the system's design patterns and capabilities, please refer to the [Architecture Documentation](docs/ARCHITECTURE.md).
+
+## 🧪 Testing
+
+Verification is the point of this system, so the tests are the interesting part.
+
+```bash
+# Python — 312 with the native bridge, 294 without
+python -m pytest -q
+
+# With engines: point at the binary and the Qt runtime
+$env:TRINITY_NATIVE_EXEC = "app\native\build\debug-vcpkg\Debug\Trinity.exe"
+$env:Path = "C:\Qt\6.8.3\msvc2022_64\bin;" + $env:Path
+python -m pytest -q
+```
+
+The **browser suites** are the ones that earn their keep. They drive a real
+browser over the DevTools protocol — no Playwright, no puppeteer, nothing to
+install but Node — and they found 8 real product bugs, 6 of them in paths that
+had no coverage at all.
+
+```bash
+node frontend/e2e/run.mjs                  # all 10 suites, 81 assertions
+node frontend/e2e/run.mjs pcb vision       # just these two
+```
+
+It needs the stack already running and a browser listening:
+
+```powershell
+$edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+Start-Process $edge -ArgumentList '--headless=new','--remote-debugging-port=9222',`
+  '--user-data-dir=$env:TEMP\e2e','--no-first-run','about:blank'
+```
+
+Suites: `chat`, `firmware`, `math`, `pcb`, `registry`, `research`, `robotics`,
+`simulation`, `theme`, `vision` — one per engine, plus the registry. They run
+in CI too, in the `e2e` job of `native-windows.yml`.
+
+Native tests: `ctest` after a CMake build, or
+`app/native/build/<preset>/trinity_tests.exe`.
+
+### What is deliberately not tested
+
+LLM transport tests are skipped by design — they need a real `OPENAI_API_KEY`
+or `ANTHROPIC_API_KEY`, and a mocked one would only prove the mock. Without a
+key, `generate()` raises `CapabilityUnavailableError` rather than inventing an
+answer, and there are tests for *that*.
