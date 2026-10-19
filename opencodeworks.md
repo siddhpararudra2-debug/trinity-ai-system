@@ -37,7 +37,30 @@ _Nothing in progress._
 
 ---
 
+## Open decisions — settled
+
+- **Step 5 — Desktop shell: thin.** Decided: keep the pywebview window.
+  `start.ps1` / `run.bat` already cover the need; a native titlebar is a
+  nice-to-have that would triple the build surface for no functional gain.
+  Recorded here so it stops being re-opened.
+
 ## Done
+
+- [x] **Step 6 — Canonical binary rebuilt, launcher decoupled from path length**
+  The launcher had been silently running `build/verify-vcpkg` — a scratch
+  directory created to avoid clobbering a known-good binary — purely because
+  its path was shorter. Delete that folder and the launcher would flip to a
+  different executable with no signal.
+
+  Fixed at the cause rather than papered over: rebuilt
+  `build/debug-vcpkg` through the **documented preset**, so the build the
+  README tells people to use is the one that produces the binary we run. It
+  reports `OpenCV found: 4.14.0` and passed 354 native cases / 5,882
+  assertions plus all five vision ops. Then deleted the scratch tree — 847 MB
+  reclaimed — and confirmed the launcher now resolves
+  `build/debug-vcpkg/Debug/Trinity.exe`, matching `CMakePresets`.
+
+  No tracked files changed: this was build state, not source.
 
 - [x] **Step 3 — Desktop shell's window, proven**
   Added `--window-timeout N`, which closes the window from another thread so
