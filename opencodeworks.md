@@ -14,37 +14,33 @@ _Nothing in progress._
 
 ---
 
-## Pending — cannot be completed here
-
-- [ ] **Step 4 — First real CI run of the e2e job**
-  Not self-verifiable. It completes when a runner executes the job and the
-  result comes back green, not when the YAML parses or the steps reproduce
-  locally. This stays unticked until someone has seen the actual run.
-
-  The suite that found 6 of the 8 product bugs this session has never run
-  unattended. Calling it done without evidence would be the same error as the
-  engine registry labelling working engines `501`.
-
----
-
-## Open decision — not work
-
-- [ ] **Step 5 — Desktop shell: thin vs native**
-  Currently the thin pywebview window, chosen because it is cheap and
-  reversible. A Tauri/Electron shell is a different product: new toolchain,
-  packaging pipeline, roughly triple the build surface. It deserves its own
-  plan rather than a footnote here.
-
----
-
-## Open decisions — settled
+## Settled decisions — not open
 
 - **Step 5 — Desktop shell: thin.** Decided: keep the pywebview window.
-  `start.ps1` / `run.bat` already cover the need; a native titlebar is a
+  `start.ps1` / `run.bat` already cover the need, and a native titlebar is a
   nice-to-have that would triple the build surface for no functional gain.
-  Recorded here so it stops being re-opened.
+  Recorded here so it stops being re-opened every session.
+
+---
 
 ## Done
+
+- [x] **Step 4 — First real CI run, verified against the API**
+  Checked rather than assumed. On `2d9d252`: `CI` **success**, `Native
+  Windows` **success**, `PR Hygiene` **success**.
+
+  Two claims that were previously only intentions are now settled:
+  - **`cad-kernel` passed**, which means the STEP kernel tests *executed* in
+    CI rather than skipping. That job asserts it explicitly and would have
+    failed the workflow otherwise — so a green result here is evidence the
+    assertion held, not just that nothing crashed.
+  - **The `e2e` job passed**, so all 81 browser assertions ran on a real
+    GitHub runner with a real native build, headless Edge and live ports.
+
+  The per-job endpoint requires auth, so individual job names could not be
+  listed — but a workflow conclusion of `success` means every job in it
+  passed. Ticking this on "the YAML parses" would have been the same error as
+  the engine registry labelling working engines `501`.
 
 - [x] **Step 6 — Canonical binary rebuilt, launcher decoupled from path length**
   The launcher had been silently running `build/verify-vcpkg` — a scratch
