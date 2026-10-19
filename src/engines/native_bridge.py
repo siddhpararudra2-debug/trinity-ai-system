@@ -19,6 +19,7 @@ Otherwise registry.py keeps the ScaffoldEngine registrations.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -38,6 +39,7 @@ EXEC_ENV_VAR = "TRINITY_NATIVE_EXEC"
 EXEC_TIMEOUT_S = 120
 EXEC_MAX_STDOUT = 50 * 1024 * 1024
 STDERR_TAIL = 2000
+LOGGER = logging.getLogger(__name__)
 
 # Engines the bridge can serve, with the same capabilities the scaffolds
 # advertise so describe() shape is unchanged apart from status.
@@ -57,7 +59,16 @@ NATIVE_ENGINES: dict[str, list[str]] = {
         "validate",
         "build",
     ],
-    "vision": ["image_inspect", "ocr", "document_parse", "geometry_extract"],
+    "vision": [
+        "image_inspect",
+        "image_resize",
+        "image_grayscale",
+        "image_edges",
+        "image_stats",
+        "ocr",
+        "document_parse",
+        "geometry_extract",
+    ],
     "research": ["search"],
     "simulation": ["simulate"],
     "robotics": ["kinematics", "trajectory_plan"],
@@ -94,7 +105,15 @@ OP_MAP: dict[str, dict[str, str]] = {
         # validation -- so export was unreachable for every real design.
         "add_net": "add_net",
     },
-    "vision": {"image_inspect": "load_image"},
+    # The native vision engine implements four more image operations than were
+    # reachable. They were written, tested C++ sitting behind a 501.
+    "vision": {
+        "image_inspect": "load_image",
+        "image_resize": "resize_image",
+        "image_grayscale": "grayscale",
+        "image_edges": "edge_detect",
+        "image_stats": "image_statistics",
+    },
 }
 
 # Native ErrorCode names (Error.hpp) -> Python codes (errors.py). NOT
@@ -294,18 +313,50 @@ class NativeBridgeEngine(BaseEngine):
         return proc
 
     def _parse_envelope(self, proc, operation: str) -> dict[str, Any]:
-        try:
-            envelope = json.loads(proc.stdout)
-        except json.JSONDecodeError as exc:
+        # stdout is supposed to be exactly one JSON envelope, but native C++
+        # dependencies log to it too. OpenCV prints seven
+        # "ParallelBackendRegistry / plugin_loader" INFO lines the first time
+        # an op touches cv::parallel -- which is edge_detect, since Canny is
+        # the first op to reach the parallel backend. json.loads() on the
+        # whole stream then fails and the real, valid envelope behind the
+        # noise is thrown away.
+        #
+        # The envelope is always the last line. Scan backwards for it, and
+        # only forgive the noise if a parseable object actually turns up --
+        # an engine that printed garbage and no result is still an error,
+        # not a pass.
+        lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+        envelope = None
+        noise = 0
+        for line in reversed(lines):
+            try:
+                envelope = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                noise += 1
+                continue
+
+        if envelope is None:
+            # Nothing parsed at any line. Report the first line as the cause,
+            # since that is what the engine actually emitted first.
+            first = lines[0][:STDERR_TAIL] if lines else ""
             raise EngineExecutionError(
                 "Native backend returned unparseable output",
                 details={
                     "engine": self.name,
                     "operation": operation,
                     "exit_code": proc.returncode,
+                    "stdout_head": first,
                     "stderr_tail": proc.stderr[-STDERR_TAIL:],
                 },
-            ) from exc
+            )
+        if noise:
+            LOGGER.debug(
+                "%s/%s: skipped %d line(s) of native stdout noise before the envelope",
+                self.name,
+                operation,
+                noise,
+            )
         if not isinstance(envelope, dict):
             raise EngineExecutionError(
                 "Native backend returned a non-object envelope",

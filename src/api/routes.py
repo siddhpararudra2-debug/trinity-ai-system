@@ -73,10 +73,11 @@ def download_artifact(artifact_id: str) -> FileResponse:
     return FileResponse(str(path), filename=path.name)
 
 
-# Extensions the native vision engine can actually decode. Anything else is
-# rejected at the edge with a list, rather than being stored and failing
-# later inside OpenCascade with a less useful message.
-UPLOAD_IMAGE_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"})
+# Extensions the native vision engine can actually decode. Kept in step with
+# VisionEngine::supportedFormats() in app/native -- it returns png, jpg, jpeg
+# and bmp only. Accepting anything else meant storing a file that then failed
+# inside OpenCascade with a decode error instead of being refused here.
+UPLOAD_IMAGE_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "bmp"})
 
 
 @router.post("/uploads", response_model=ArtifactOut)

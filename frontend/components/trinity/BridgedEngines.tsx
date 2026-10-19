@@ -896,9 +896,39 @@ function summarise(operation: string, data: Record<string, unknown>): string {
   }
 }
 
+type VisionOp =
+  | 'image_inspect'
+  | 'image_resize'
+  | 'image_grayscale'
+  | 'image_edges'
+  | 'image_stats';
+
+const VISION_LABEL: Record<VisionOp, string> = {
+  image_inspect: 'INSPECT',
+  image_resize: 'RESIZE',
+  image_grayscale: 'GRAYSCALE',
+  image_edges: 'EDGE DETECT',
+  image_stats: 'STATISTICS',
+};
+
+const round2 = (n: unknown) =>
+  typeof n === 'number' ? Math.round(n * 100) / 100 : String(n ?? '—');
+
+/** Per-channel triples arrive as arrays; a scalar stays scalar. */
+const fmtChannels = (v: unknown) => {
+  if (Array.isArray(v)) return v.map((n) => round2(n)).join(' / ');
+  return round2(v);
+};
+
 function VisionPanel() {
   const [uploaded, setUploaded] = useState<ArtifactOut | null>(null);
+  const [source, setSource] = useState<ArtifactOut | null>(null);
   const [fileName, setFileName] = useState('');
+  const [op, setOp] = useState<VisionOp>('image_inspect');
+  const [width, setWidth] = useState('640');
+  const [height, setHeight] = useState('480');
+  const [low, setLow] = useState('50');
+  const [high, setHigh] = useState('150');
   const [state, setState] = useState<PanelState>(idle);
 
   async function pick(file: File) {
@@ -910,40 +940,106 @@ function VisionPanel() {
       // tracked like any engine output before it is ever read.
       const ref = await uploadImage(file);
       setUploaded(ref);
+      setSource(ref);
       setState({ busy: false, result: null, error: null });
     } catch (e) {
       setUploaded(null);
+      setSource(null);
       setState({ busy: false, result: null, error: errorText(e) });
     }
   }
 
-  async function inspect() {
-    if (!uploaded || state.busy) return;
+  async function run() {
+    if (!source || state.busy) return;
+
+    const parameters: Record<string, unknown> = { artifact_id: source.artifact_id };
+    if (op === 'image_resize') {
+      // Checked here rather than at the API: OpenCV would throw on a
+      // zero or negative extent, and the resulting error names OpenCV
+      // instead of the field the user got wrong.
+      const w = Number(width);
+      const h = Number(height);
+      if (!Number.isInteger(w) || w < 1 || !Number.isInteger(h) || h < 1) {
+        setState({
+          busy: false,
+          result: null,
+          error: 'WIDTH_PX and HEIGHT_PX must be whole pixels of at least 1.',
+        });
+        return;
+      }
+      parameters.width = w;
+      parameters.height = h;
+    }
+    if (op === 'image_edges') {
+      parameters.low = Number(low);
+      parameters.high = Number(high);
+    }
+
     setState({ busy: true, result: null, error: null });
     try {
-      const result = await executeEngine('vision', 'image_inspect', {
-        artifact_id: uploaded.artifact_id,
-      });
+      const result = await executeEngine('vision', op, parameters);
       setState({
         busy: false,
         result,
-        error: result.success ? null : (result.errors[0]?.message ?? 'Inspection failed'),
+        error: result.success ? null : (result.errors[0]?.message ?? 'Vision operation failed'),
       });
+      // Chain: the produced image becomes the next operation's input, so
+      // resize -> grayscale -> edges is a pipeline rather than five
+      // disconnected buttons that each start over from the upload.
+      const produced = result.artifacts?.find((a) => a.type === 'Image');
+      if (produced) setSource(produced);
     } catch (e) {
       setState({ busy: false, result: null, error: errorText(e) });
     }
   }
 
-  const input = ((state.result?.result as Record<string, unknown> | undefined)?.input ??
-    {}) as Record<string, unknown>;
-  const meta = (input.metadata ?? {}) as Record<string, unknown>;
+  const payload = (state.result?.result ?? {}) as Record<string, unknown>;
+  const inMeta = ((payload.input ?? {}) as Record<string, unknown>).metadata as
+    | Record<string, unknown>
+    | undefined;
+  const outMeta = ((payload.output ?? {}) as Record<string, unknown>).metadata as
+    | Record<string, unknown>
+    | undefined;
+  const stats = (payload.statistics ?? {}) as Record<string, unknown>;
+
+  // An inspect has no output to report; a transform's whole point is the
+  // new image. Showing input dimensions for a resize would claim nothing
+  // changed.
+  const isTransform = op === 'image_resize' || op === 'image_grayscale' || op === 'image_edges';
+
+  const dimensionRows: [string, unknown][] = isTransform
+    ? [
+        ['FORMAT', outMeta?.format],
+        ['WIDTH_PX', outMeta?.width],
+        ['HEIGHT_PX', outMeta?.height],
+        ['CHANNELS', outMeta?.channels],
+        ['SIZE_BYTES', outMeta?.size_bytes],
+      ]
+    : [
+        ['FORMAT', inMeta?.format],
+        ['WIDTH_PX', inMeta?.width],
+        ['HEIGHT_PX', inMeta?.height],
+        ['CHANNELS', inMeta?.channels],
+        ['SIZE_BYTES', inMeta?.size_bytes],
+      ];
+
+  // What the transform started from, so "1280 → 640" is visible rather than
+  // implied.
+  const wasRows: [string, unknown][] = isTransform
+    ? [
+        ['WAS_WIDTH_PX', inMeta?.width],
+        ['WAS_HEIGHT_PX', inMeta?.height],
+        ['WAS_CHANNELS', inMeta?.channels],
+      ]
+    : [];
 
   return (
     <article className="ws-panel">
-      <h2>VISION · IMAGE INSPECT</h2>
+      <h2>VISION · IMAGE</h2>
       <p className="ws-empty">
-        Upload an image, then read its metadata through the native vision engine. The upload is
-        stored as a checksummed artifact and the engine is given its id, never a raw path.
+        Upload an image, then run it through the native OpenCV processors. The upload is stored
+        as a checksummed artifact and the engine is given its id, never a raw path. Each
+        transform feeds the next operation.
       </p>
       <div className="ws-form" style={{ marginTop: 14 }}>
         <label className="ws-field">
@@ -951,7 +1047,7 @@ function VisionPanel() {
           <input
             className="ws-input"
             type="file"
-            accept="image/png,image/jpeg,image/bmp,image/tiff,image/webp"
+            accept="image/png,image/jpeg,image/bmp"
             disabled={state.busy}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -959,9 +1055,76 @@ function VisionPanel() {
             }}
           />
         </label>
+
+        <label className="ws-field">
+          <span>OPERATION</span>
+          <select
+            className="ws-input"
+            value={op}
+            disabled={state.busy || !source}
+            onChange={(e) => setOp(e.target.value as VisionOp)}
+          >
+            <option value="image_inspect">INSPECT · metadata only</option>
+            <option value="image_resize">RESIZE · to WIDTH_PX × HEIGHT_PX</option>
+            <option value="image_grayscale">GRAYSCALE · single channel</option>
+            <option value="image_edges">EDGE DETECT · Canny</option>
+            <option value="image_stats">STATISTICS · per-channel</option>
+          </select>
+        </label>
+
+        {op === 'image_resize' && (
+          <>
+            <label className="ws-field">
+              <span>WIDTH_PX</span>
+              <input
+                className="ws-input"
+                value={width}
+                inputMode="numeric"
+                disabled={state.busy}
+                onChange={(e) => setWidth(e.target.value)}
+              />
+            </label>
+            <label className="ws-field">
+              <span>HEIGHT_PX</span>
+              <input
+                className="ws-input"
+                value={height}
+                inputMode="numeric"
+                disabled={state.busy}
+                onChange={(e) => setHeight(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+
+        {op === 'image_edges' && (
+          <>
+            <label className="ws-field">
+              <span>CANNY_LOW</span>
+              <input
+                className="ws-input"
+                value={low}
+                inputMode="numeric"
+                disabled={state.busy}
+                onChange={(e) => setLow(e.target.value)}
+              />
+            </label>
+            <label className="ws-field">
+              <span>CANNY_HIGH</span>
+              <input
+                className="ws-input"
+                value={high}
+                inputMode="numeric"
+                disabled={state.busy}
+                onChange={(e) => setHigh(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+
         <div>
-          <button className="btn-generate" type="button" disabled={state.busy || !uploaded} onClick={inspect}>
-            {state.busy ? 'READING…' : 'INSPECT →'}
+          <button className="btn-generate" type="button" disabled={state.busy || !source} onClick={run}>
+            {state.busy ? 'RUNNING…' : `${VISION_LABEL[op]} →`}
           </button>
         </div>
       </div>
@@ -974,6 +1137,9 @@ function VisionPanel() {
             ['ARTIFACT', uploaded.artifact_id.slice(0, 8)],
             ['STORED_BYTES', uploaded.size_bytes],
             ['CHECKSUM', uploaded.checksum.slice(0, 16)],
+            ...(source && source.artifact_id !== uploaded.artifact_id
+              ? ([['INPUT_ARTIFACT', source.artifact_id.slice(0, 8)]] as [string, unknown][])
+              : []),
           ]}
         />
       )}
@@ -981,15 +1147,24 @@ function VisionPanel() {
       {state.result?.success && (
         <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
           <ResultHead result={state.result} />
-          <Spec
-            rows={[
-              ['FORMAT', meta.format],
-              ['WIDTH_PX', meta.width],
-              ['HEIGHT_PX', meta.height],
-              ['CHANNELS', meta.channels],
-              ['SIZE_BYTES', meta.size_bytes],
-            ]}
-          />
+
+          {op === 'image_stats' ? (
+            <Spec
+              rows={[
+                ['WIDTH_PX', stats.width],
+                ['HEIGHT_PX', stats.height],
+                ['CHANNELS', stats.channels],
+                ['MEAN', fmtChannels(stats.mean)],
+                ['MIN', fmtChannels(stats.min)],
+                ['MAX', fmtChannels(stats.max)],
+                ['OVERALL_MEAN', round2(stats.overall_mean)],
+                ['OVERALL_MIN', round2(stats.overall_min)],
+                ['OVERALL_MAX', round2(stats.overall_max)],
+              ]}
+            />
+          ) : (
+            <Spec rows={[...dimensionRows, ...wasRows]} />
+          )}
           <Artifacts result={state.result} />
         </div>
       )}

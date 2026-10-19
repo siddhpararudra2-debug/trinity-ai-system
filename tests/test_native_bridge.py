@@ -199,6 +199,41 @@ def test_execute_garbage_stdout_is_an_error(monkeypatch):
         engine.execute("search", {})
 
 
+def test_execute_tolerates_native_stdout_noise(monkeypatch):
+    """OpenCV logs to stdout before the envelope; the result must still parse.
+
+    Canny is the first vision op to reach cv::parallel, and the first call
+    in a process makes OpenCV print seven plugin_loader INFO lines on
+    stdout. json.loads() over the whole stream then failed and the real
+    envelope behind the noise was discarded.
+    """
+    noise = (
+        "[ INFO:0@0.043] global registry_parallel.impl.hpp:96 "
+        "cv::parallel::ParallelBackendRegistry core(parallel): Enabled backends(3)\n"
+        "[ INFO:0@0.047] global plugin_loader.impl.hpp:67 cv::plugin::impl::"
+        "DynamicLib::libraryLoad load opencv_core_parallel_tbb4140_64d.dll => FAILED\n"
+    )
+    _patch_exe(monkeypatch)
+    monkeypatch.setattr(
+        "src.engines.native_bridge.subprocess.run",
+        lambda *a, **k: _Proc(noise + json.dumps(_envelope()) + "\n", returncode=0),
+    )
+    engine = NativeBridgeEngine("vision", NATIVE_ENGINES["vision"])
+    assert engine.execute("image_edges", {"path": "x.png", "low": 50, "high": 150}).success
+
+
+def test_execute_noise_without_an_envelope_is_still_an_error(monkeypatch):
+    """Forgiving leading lines must not turn pure noise into a success."""
+    _patch_exe(monkeypatch)
+    monkeypatch.setattr(
+        "src.engines.native_bridge.subprocess.run",
+        lambda *a, **k: _Proc("[ INFO:0] something\nstill not json\n", returncode=0),
+    )
+    engine = NativeBridgeEngine("vision", NATIVE_ENGINES["vision"])
+    with pytest.raises(EngineExecutionError, match="unparseable"):
+        engine.execute("image_edges", {"path": "x.png"})
+
+
 def test_execute_flows_through_jobs_and_artifacts(monkeypatch, tmp_path):
     """End-to-end through run_sync with a mocked binary: job tracked, file persisted."""
     victim = tmp_path / "result.json"
