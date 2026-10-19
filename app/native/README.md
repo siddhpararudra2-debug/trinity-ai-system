@@ -115,6 +115,12 @@ it on the side. Under Ninja it would go missing, the engines would compile
 with C4530 warnings, and every `try`/`catch` would silently lose unwind
 semantics rather than failing the build.
 
+One more thing before you commit: vcpkg **manifest mode** installs into
+`app/native/vcpkg_installed/`, inside the repository. It is gitignored, but
+if you stage files with a broad `git add` while a build is still running,
+git cannot index its lock file and the add fails partway through. Stage after
+the build finishes, or narrow the pathspec.
+
 ## Launch Trinity.exe
 
 ```powershell
