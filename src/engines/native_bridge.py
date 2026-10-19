@@ -44,7 +44,10 @@ LOGGER = logging.getLogger(__name__)
 # Engines the bridge can serve, with the same capabilities the scaffolds
 # advertise so describe() shape is unchanged apart from status.
 NATIVE_ENGINES: dict[str, list[str]] = {
-    "pcb": ["inspect", "validate", "generate", "export", "add_net"],
+    # No "inspect": PcbEngine has no such operation. It used to be listed
+    # here anyway, which made the capability list promise a call that could
+    # only ever answer 501. Same trap as firmware's test/compile below.
+    "pcb": ["validate", "generate", "export", "add_net"],
     # The firmware chain the native engine actually implements. `create` is
     # the entry point; the rest are the steps build needs before it can run.
     # The old ["create", "build", "test", "compile"] list advertised build
@@ -59,15 +62,15 @@ NATIVE_ENGINES: dict[str, list[str]] = {
         "validate",
         "build",
     ],
+    # Exactly VisionEngine's C++ capability list. ocr, document_parse and
+    # geometry_extract used to be advertised here and do not exist in the
+    # engine at all -- there was nothing to map them to.
     "vision": [
         "image_inspect",
         "image_resize",
         "image_grayscale",
         "image_edges",
         "image_stats",
-        "ocr",
-        "document_parse",
-        "geometry_extract",
     ],
     "research": ["search"],
     "simulation": ["simulate"],
@@ -75,9 +78,13 @@ NATIVE_ENGINES: dict[str, list[str]] = {
 }
 
 # Python op -> native op. Scaffolds never had parameter contracts, so each
-# mapped op defines a fresh one (mirroring --selftest shapes). Anything not
-# listed here stays 501: firmware/test, firmware/compile, pcb/inspect,
-# vision/ocr, vision/document_parse, vision/geometry_extract.
+# mapped op defines a fresh one (mirroring --selftest shapes).
+#
+# Every op in NATIVE_ENGINES must appear here; the reverse also holds, and a
+# test pins both directions. An advertised op with no mapping answers 501
+# while the capability list claims it works, which is how pcb/inspect and
+# three vision ops sat there for so long. Unmapped ops are simply not
+# advertised, so a caller can trust what it is told.
 OP_MAP: dict[str, dict[str, str]] = {
     "research": {"search": "search"},
     "robotics": {

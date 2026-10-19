@@ -4,11 +4,14 @@ Every mapped op is single-shot with full parameters (no cross-call state
 needed), so these mirror --selftest shapes with deterministic assertions.
 """
 
+import json
 import os
+import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
 
+from src.engines.native_bridge import NATIVE_ENGINES, OP_MAP, native_exe_path
 from src.main import app
 from tests.pnggen import png_bytes
 
@@ -25,6 +28,74 @@ def _exec(client, engine, operation, parameters):
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+def _describe(engine):
+    """Ask the binary directly what it can do.
+
+    `describe` is deliberately not bridged -- it is an introspection op,
+    not a product capability -- so it cannot be reached through /api/execute.
+    That is exactly why nothing ever noticed the capability list disagreeing
+    with reality, so the check has to go around the bridge.
+
+    The envelope is the last line of stdout: OpenCV prints plugin_loader
+    chatter there on first use.
+    """
+    proc = subprocess.run(
+        [native_exe_path(), "--exec"],
+        input=json.dumps(
+            {"request_id": "cap", "engine": engine, "operation": "describe", "parameters": {}}
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+    assert lines, f"{engine} describe produced no stdout: {proc.stderr[-400:]}"
+    envelope = json.loads(lines[-1])
+    assert envelope["success"], f"{engine} describe failed: {envelope}"
+    return envelope["result"]
+
+
+@needs_binary
+def test_every_bridged_op_exists_in_the_binary():
+    """The mapping must name operations the native engine really has.
+
+    The static test proves we advertise only what we map. This proves each
+    mapped name is a capability the binary itself reports, which is the
+    only way to catch a mapping pointing at an operation that was renamed,
+    removed, or never existed -- all four phantom capabilities were Python
+    inventions with nothing behind them at all.
+    """
+    with TestClient(app) as client:
+        assert client.get("/api/health").status_code == 200
+
+    for engine in NATIVE_ENGINES:
+        native_caps = set(_describe(engine).get("capabilities", []))
+        for py_op, native_op in OP_MAP[engine].items():
+            assert native_op in native_caps, (
+                f"{engine}/{py_op} maps to '{native_op}', which {engine} "
+                f"does not implement. Binary reports: {sorted(native_caps)}"
+            )
+
+
+@needs_binary
+def test_native_vision_formats_match_the_upload_endpoint():
+    """The API must not accept an extension the native engine cannot decode.
+
+    These drifted once: uploads took tif/tiff/webp, stored and checksummed
+    them with a 200, then failed later inside OpenCV with a decode error --
+    while VisionEngine::supportedFormats() has always been png/jpg/jpeg/bmp.
+    """
+    from src.api.routes import UPLOAD_IMAGE_EXTENSIONS
+
+    native_formats = set(_describe("vision").get("supported_formats", []))
+    assert UPLOAD_IMAGE_EXTENSIONS == native_formats, (
+        f"upload accepts {sorted(UPLOAD_IMAGE_EXTENSIONS)} but the native "
+        f"engine can decode {sorted(native_formats)}"
+    )
 
 
 @needs_binary

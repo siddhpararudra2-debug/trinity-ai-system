@@ -24,17 +24,12 @@ from src.engines.native_bridge import (
 from src.engines.scaffold import ScaffoldEngine
 from src.main import app
 
-# Every scaffolded capability must be either bridged or explicitly documented
-# as unmapped (no native equivalent). This test fails loudly if someone adds
-# a capability without deciding its fate.
-DOCUMENTED_UNMAPPED = {
-    ("firmware", "test"),
-    ("firmware", "compile"),
-    ("pcb", "inspect"),
-    ("vision", "ocr"),
-    ("vision", "document_parse"),
-    ("vision", "geometry_extract"),
-}
+# There used to be a DOCUMENTED_UNMAPPED set of (engine, op) pairs allowed
+# to be advertised while unmapped, on the grounds that documenting them was
+# enough. It was not: pcb/inspect and three vision ops sat in that set while
+# the capability endpoint advertised them, so every caller was told they
+# worked and every call answered 501. The escape hatch is gone. An
+# advertised operation either works or is not listed.
 
 NATIVE_CODES = {
     "TrinityError",
@@ -48,13 +43,28 @@ NATIVE_CODES = {
 }
 
 
-def test_every_scaffold_capability_is_decided():
+def test_every_advertised_capability_is_actually_mapped():
+    """Advertised and mapped must be identical, in both directions.
+
+    Forward: an op advertised but unmapped answers 501 while claiming to
+    work. Backward: an op mapped but not advertised is fully implemented
+    and unreachable -- the four-vision-ops bug in a different costume.
+    """
     for engine, capabilities in NATIVE_ENGINES.items():
-        for op in capabilities:
-            mapped = op in OP_MAP.get(engine, {})
-            documented = (engine, op) in DOCUMENTED_UNMAPPED
-            assert mapped or documented, f"{engine}/{op}: mapped or documented?"
-    assert set(OP_MAP) <= set(NATIVE_ENGINES)
+        advertised = set(capabilities)
+        mapped = set(OP_MAP.get(engine, {}))
+        assert advertised == mapped, (
+            f"{engine}: advertised-but-unmapped={sorted(advertised - mapped)} "
+            f"mapped-but-unadvertised={sorted(mapped - advertised)}"
+        )
+    assert set(OP_MAP) == set(NATIVE_ENGINES)
+
+
+def test_no_duplicate_operations_within_an_engine():
+    for engine, capabilities in NATIVE_ENGINES.items():
+        assert len(capabilities) == len(set(capabilities)), (
+            f"{engine}: duplicate op in the advertised list"
+        )
 
 
 def test_error_code_table_is_complete():

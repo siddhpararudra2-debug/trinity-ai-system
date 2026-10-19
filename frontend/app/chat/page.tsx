@@ -108,7 +108,12 @@ function UnderstoodPanel({ result, parse, part }: { result: TrinityResult; parse
   const specification = result.result.spec?.parameters ?? {};
   const values = nestedParameters ?? (Object.keys(extracted).length ? extracted : specification);
   const defaults = defaultNames(parsed?.defaults ?? parsed?.defaults_filled);
-  const partName = String(extracted.type ?? extracted.object ?? extracted.part ?? result.result.type ?? part?.name ?? 'CAD part');
+  // For a math result there is no part, no extracted type and no spec, so
+  // the CAD chain below fell through to the literal string 'CAD part' and
+  // the panel announced an equation had been understood as a CAD part.
+  const partName = result.engine === 'math'
+    ? String(result.result.expression ?? 'Equation')
+    : String(extracted.type ?? extracted.object ?? extracted.part ?? result.result.type ?? part?.name ?? 'CAD part');
   const rule = parsed?.matched_rule ?? parsed?.rule;
   const ruleName = typeof rule === 'string' ? rule : rule && typeof rule.name === 'string' ? rule.name : undefined;
   const rows = Object.entries(values).filter(([key, value]) => {
@@ -183,9 +188,39 @@ function ErrorHints({
   );
 }
 
+/** Sympy returns floats; -2.0 should read as -2, not -2.000000. */
+function fmtNumber(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return String(value ?? '—');
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)));
+}
+
 function ResultContent({ result }: { result: TrinityResult }) {
   const failure = result.errors?.[0]?.message;
   if (!result.success) return <span>{failure || 'Operation failed.'}</span>;
+
+  // A math answer carries its result inline -- no artifact, no triangle
+  // count. Falling through to the CAD branch made every solved equation come
+  // back as "CAD part generated": the engine had answered correctly
+  // underneath (x = -2, 2) and the UI discarded it and invented a CAD part.
+  if (result.engine === 'math') {
+    const solvedFor = String(result.result.solved_for ?? '');
+    const raw = result.result.result;
+    const solutions = (Array.isArray(raw) ? raw : [raw]).filter((v) => v !== undefined && v !== null);
+    return (
+      <div className="result-content">
+        <strong>
+          {solvedFor ? `${solvedFor} = ` : ''}
+          {solutions.length ? solutions.map(fmtNumber).join(', ') : 'no real solution'}
+        </strong>
+        <span>
+          {String(result.result.expression ?? '')}
+          {solutions.length > 0 &&
+            ` · ${solutions.length} solution${solutions.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
+    );
+  }
+
   const part = result.result.type ? humanize(String(result.result.type)) : 'CAD part';
   const triangles = result.result.triangle_count;
   return (
