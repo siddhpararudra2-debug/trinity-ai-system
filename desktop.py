@@ -28,6 +28,7 @@ import argparse
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -64,14 +65,22 @@ def find_native() -> Path | None:
     return found[0] if found else None
 
 
-def find_qt() -> Path | None:
-    """Trinity.exe links Qt6Core but ships no Qt DLLs beside itself."""
+def find_qt() -> tuple[Path | None, bool]:
+    """Resolve the Qt runtime.
+
+    Returns (directory_to_add, ok). These are separate answers because
+    "already on PATH" and "not installed" both need no directory to add but
+    mean opposite things -- conflating them made the shell warn that the
+    native engine would not start, and then watch it answer a call.
+
+    Trinity.exe links Qt6Core but ships no Qt DLLs beside itself.
+    """
     override = os.getenv(QT_HINT)
     if override and (Path(override) / "Qt6Core.dll").exists():
-        return Path(override)
+        return Path(override), True
     for entry in os.getenv("Path", os.getenv("PATH", "")).split(os.pathsep):
         if entry and (Path(entry) / "Qt6Core.dll").exists():
-            return None  # already resolvable
+            return None, True  # resolvable already
     root = Path("C:/Qt")
     if root.is_dir():
         for version in sorted(root.iterdir()):
@@ -80,8 +89,8 @@ def find_qt() -> Path | None:
             for kit in sorted(version.iterdir()):
                 candidate = kit / "bin"
                 if (candidate / "Qt6Core.dll").exists():
-                    return candidate
-    return None
+                    return candidate, True
+    return None, False
 
 
 def healthy(url: str, timeout: float = 3.0) -> bool:
@@ -146,6 +155,13 @@ def main() -> int:
     parser.add_argument("--api-port", type=int, default=8000)
     parser.add_argument("--web-port", type=int, default=3000)
     parser.add_argument("--no-window", action="store_true", help="do not open a window")
+    parser.add_argument(
+        "--window-timeout",
+        type=float,
+        default=0,
+        help="close the window after N seconds (0 = wait for the user). "
+        "Lets the shutdown path be tested rather than asserted.",
+    )
     args = parser.parse_args()
 
     api_url = f"http://127.0.0.1:{args.api_port}"
@@ -160,11 +176,13 @@ def main() -> int:
         os.environ["TRINITY_NATIVE_EXEC"] = str(native)
         kind = "OpenCV build" if "vcpkg" in str(native).lower() else "plain build, no OpenCV"
         ok(f"native: {native} ({kind})")
-        qt = find_qt()
-        if qt:
+        qt, qt_ok = find_qt()
+        if qt is not None:
             os.environ["Path"] = f"{qt};{os.environ.get('Path', '')}"
             os.environ["PATH"] = os.environ["Path"]
             ok(f"qt:     {qt}")
+        elif qt_ok:
+            ok("qt:     already on PATH")
         else:
             warn("qt:     Qt6Core.dll not found; the native engine will not start")
             ok(f"set {QT_HINT} to the directory holding it")
@@ -255,6 +273,21 @@ def main() -> int:
             return 0
 
         webview.create_window("Trinity AI", web_url, width=1440, height=900)
+
+        if args.window_timeout > 0:
+            # webview.start() blocks until every window closes, so the
+            # timeout has to fire a close on another thread. Without this
+            # flag, "closing the window shuts both processes down" is a
+            # claim only a human can verify.
+            def _auto_close() -> None:
+                time.sleep(args.window_timeout)
+                try:
+                    webview.windows[0].destroy()
+                except Exception:  # noqa: BLE001 - teardown is best-effort
+                    pass
+
+            threading.Thread(target=_auto_close, daemon=True).start()
+
         webview.start()  # blocks until the window is closed
         return 0
     except KeyboardInterrupt:

@@ -10,11 +10,7 @@ change it describes — never on its own.
 
 ## In progress
 
-- [ ] **Step 3 — Prove the desktop shell's window**
-  `desktop.py --no-window` is verified end to end. The pywebview path has
-  never opened a window, so its shutdown has never been observed. Needs
-  `--window-timeout N` so the window closes itself and shutdown becomes a
-  tested claim rather than an asserted one.
+_Nothing in progress._
 
 ---
 
@@ -42,6 +38,19 @@ change it describes — never on its own.
 ---
 
 ## Done
+
+- [x] **Step 3 — Desktop shell's window, proven**
+  Added `--window-timeout N`, which closes the window from another thread so
+  `webview.start()` returns and the shutdown path actually runs. That converts
+  "closing the window kills both processes" from a hand-waved claim into
+  something observed: window opened, auto-closed, **ports 3000 and 8000
+  released, no leak**.
+
+  Testing it surfaced a bug I had just introduced. `find_qt()` returned
+  `None` both for "Qt is already on PATH, nothing to add" and "Qt is not
+  installed", so the caller warned *"the native engine will not start"* and
+  then watched the bridge answer a call two lines later. It now returns
+  `(directory_to_add, ok)` and all three states are verified separately.
 
 - [x] **Step 2 — Root `README.md`**
   The gap was real but narrower than claimed: there *was* a Getting Started
