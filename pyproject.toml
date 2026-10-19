@@ -16,6 +16,13 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+# STEP export (AP214 faceted B-rep via OpenCascade). ~1 GB of wheels and a
+# slow first import, so it is an extra rather than a core requirement.
+# Without it every path stays honest: the catalog reports step as
+# unavailable with a reason, and STL/GLB/JSON are unaffected.
+cad = ["cadquery>=2.8"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

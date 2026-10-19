@@ -18,7 +18,12 @@ anthropic>=0.34
 # OpenCascade). ~1 GB of wheels and a slow first import. Without it every
 # path stays honest — the catalog reports step as unavailable with a
 # reason and STL/GLB/JSON are unaffected.
-#   pip install cadquery>=2.8
+#   pip install ".[cad]"     # declared in pyproject.toml as the `cad` extra
+#
+# Worth stating the consequence: without the kernel the 8 kernel-gated tests
+# in tests/test_cad_step_kernel.py skip. They DO run in CI, in the
+# cad-kernel job — which asserts they executed rather than trusting a green
+# exit, because a skip goes green too.
 
 pytest>=8.0
 ruff==0.16.8
