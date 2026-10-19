@@ -291,13 +291,22 @@ rest marked `skipped`. Model refusal executes nothing.
 
 - `Trinity.exe --exec` (single-shot stdin→stdout bridge, consumed by
   `src/engines/native_bridge.py`) is the only headless integration: every
-  op is fully parameterized, stateless, and unmapped ops keep 501ing.
-  No cross-call state by design.
+  op is fully parameterized and stateless, by design.
+  Ops with no implementation here are not advertised by the Python bridge at
+  all, rather than advertised and answering 501 — a capability list that
+  overstates itself is worse than a short one.
 - Math beyond single-variable numeric roots (transcendental systems,
   multi-variable solving, symbolic algebra)
 - Kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
+- A standalone SPI peripheral engine — deliberately, not overlooked.
+  `configure_peripheral` already refuses `kind: "spi"` with a named
+  `CapabilityUnavailableError("SPI is not supported by FirmwareEngine V1")`,
+  the UI offers only uart/i2c/pwm, and nothing in the repo consumes one.
+  Building an engine with no consumer is how pcb/inspect and three vision
+  ops ended up advertised while answering 501, so the refusal stays until
+  there is hardware and a caller.
 - Real `IModelProvider` transport implementations (OpenAI, Anthropic,
   local, custom Trinity model — the factory + example + planner are
   ready; only the transport is missing)

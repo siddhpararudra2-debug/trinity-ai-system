@@ -21,6 +21,9 @@
 
 # native C++ (CMake/MSVC/Qt)
 app/native/build/
+# vcpkg manifest mode installs its tree here, inside the repo. It is
+# hundreds of MB of vendored binaries and must never be staged.
+app/native/vcpkg_installed/
 **/CMakeCache.txt
 **/CMakeFiles/
 **/cmake_install.cmake

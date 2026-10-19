@@ -1,0 +1,6 @@
+# Desktop shell only. desktop.py works without this — it falls back to the
+# system browser — so this stays optional on purpose and is not merged into
+# requirements.txt.
+#
+#     pip install -r requirements-desktop.txt
+pywebview>=5.0

@@ -135,3 +135,150 @@ jobs:
         env:
           TRINITY_STORAGE_ROOT: ${{ runner.temp }}/trinity-data
         run: ./Trinity.exe --selftest
+
+  e2e:
+    name: Browser E2E (real browser, real engines)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Qt is needed at run time, not just build time: Trinity.exe links
+      # Qt6Core but ships no Qt DLLs beside itself.
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkg) {
+            $vcpkg = Join-Path $env:RUNNER_TEMP 'vcpkg'
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkg
+          }
+          & (Join-Path $vcpkg 'bootstrap-vcpkg.bat') -disableMetrics
+          "VCPKG_ROOT=$vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $binCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
+          "VCPKG_DEFAULT_BINARY_CACHE=$binCache" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-opencv4-${{ runner.os }}-
+
+      - name: Build Trinity.exe (OpenCV leg)
+        working-directory: app/native
+        shell: pwsh
+        run: |
+          cmake --preset windows-debug-vcpkg -DCMAKE_PREFIX_PATH="$env:Qt6_Dir"
+          cmake --build --preset windows-debug-vcpkg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # windows-latest ships Edge. The suite speaks the DevTools Protocol
+      # directly over Node's built-in WebSocket, so there is no Playwright
+      # or puppeteer install -- the browser just has to be listening.
+      - name: Launch headless Edge
+        shell: pwsh
+        run: |
+          $edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+          if (-not (Test-Path $edge)) { $edge = "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe" }
+          if (-not (Test-Path $edge)) { Write-Error "msedge.exe not found on the runner"; exit 1 }
+          Start-Process $edge -ArgumentList `
+            '--headless=new', '--disable-gpu', '--remote-debugging-port=9222', `
+            "--user-data-dir=$env:RUNNER_TEMP\e2e-profile", '--no-first-run', `
+            '--disable-extensions', 'about:blank'
+          Start-Sleep -Seconds 10
+          $targets = Invoke-RestMethod http://127.0.0.1:9222/json/list
+          if (-not ($targets | Where-Object { $_.type -eq 'page' })) {
+            Write-Error "Edge did not expose a debuggable page"
+            exit 1
+          }
+
+      # start.ps1 resolves Qt and the native binary itself, and only reports
+      # ready once a real engine call has answered -- so running the e2e
+      # against it also covers the launcher itself.
+      - name: Start the stack
+        shell: pwsh
+        run: |
+          $p = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList `
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'start.ps1', '-NoBrowser'
+          "LAUNCHER_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Wait for the stack
+        shell: pwsh
+        run: |
+          $deadline = (Get-Date).AddMinutes(8)
+          $api = $false; $web = $false
+          while ((Get-Date) -lt $deadline -and (-not ($api -and $web))) {
+            Start-Sleep -Seconds 5
+            try { $api = (Invoke-WebRequest http://127.0.0.1:8000/api/health -UseBasicParsing -TimeoutSec 5).StatusCode -eq 200 } catch { $api = $false }
+            try { $web = (Invoke-WebRequest http://127.0.0.1:3000/ -UseBasicParsing -TimeoutSec 5).StatusCode -eq 200 } catch { $web = $false }
+          }
+          if (-not ($api -and $web)) {
+            Write-Host "api=$api web=$web"
+            Get-Content .run\api.err.log -Tail 40 -ErrorAction SilentlyContinue
+            Get-Content .run\web.log -Tail 40 -ErrorAction SilentlyContinue
+            Write-Error "stack did not come up in time"
+            exit 1
+          }
+
+      # One retry: these are real ports, a real browser and real timing, so
+      # a flake here is more likely infrastructure than a product defect.
+      # A second failure is real.
+      - name: Run e2e suites
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $failed = $true
+          for ($attempt = 1; $attempt -le 2; $attempt++) {
+            Write-Host "=== attempt $attempt ==="
+            node e2e/run.mjs
+            if ($LASTEXITCODE -eq 0) { $failed = $false; break }
+            if ($attempt -lt 2) { Start-Sleep -Seconds 20 }
+          }
+          if ($failed) { Write-Error "e2e failed on both attempts"; exit 1 }
+
+      - name: Dump launcher logs on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-Content .run\api.log -Tail 60 -ErrorAction SilentlyContinue
+          Get-Content .run\api.err.log -Tail 60 -ErrorAction SilentlyContinue
+          Get-Content .run\web.log -Tail 60 -ErrorAction SilentlyContinue
+          Get-Content .run\web.err.log -Tail 60 -ErrorAction SilentlyContinue
+
+      - name: Stop the stack
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:LAUNCHER_PID) {
+            & taskkill /PID $env:LAUNCHER_PID /T /F 2>&1 | Out-Null
+          }
+          foreach ($port in 3000, 8000) {
+            $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            if ($c) { $c | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { & taskkill /PID $_ /T /F 2>&1 | Out-Null } }
+          }
