@@ -25,6 +25,27 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **CI: the e2e suite stops being cancelled mid-run**
+  The commit that first added the e2e job was cancelled before it ran, as was
+  the push before it — the suite could pass once by luck and then never run
+  again on an active repo. Cause was workflow-level `cancel-in-progress:
+  true`, which kills the entire run.
+
+  **The first fix was wrong.** Job-level `concurrency` with
+  `cancel-in-progress: false` does *not* exempt a job from its workflow's
+  cancellation policy — the run still came back `cancelled`. A job cannot opt
+  out of the workflow that contains it.
+
+  The working fix was splitting the file: `.github/workflows/e2e.yml` with
+  `cancel-in-progress: false` at workflow level, which is the only level that
+  governs. `native-windows.yml` keeps `true`, so the cheap vcpkg builds still
+  cancel on push.
+
+  **Observed, not asserted**: `222fb03` stayed `in_progress` while `0bc105a`
+  landed, and the new run went `pending` behind it — running one finishes,
+  newest queued one follows. `native-windows` on the same pair was
+  `cancelled`, as intended.
+
 - [x] **Step 4 — First real CI run, verified against the API**
   Checked rather than assumed. On `2d9d252`: `CI` **success**, `Native
   Windows` **success**, `PR Hygiene` **success**.
