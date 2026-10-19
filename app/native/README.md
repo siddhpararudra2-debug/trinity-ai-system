@@ -85,12 +85,35 @@ app/native/
 
 ## Configure / build
 
+Run these from a **Developer Command Prompt** (or any shell where
+`vcvars64.bat` has been sourced). Without an initialized MSVC environment
+CMake reports `No CMAKE_CXX_COMPILER could be found`, which reads like a
+missing toolchain when the toolchain is in fact installed.
+
 ```powershell
+# "x64 Native Tools Command Prompt for VS 2022", or:
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
 cd app/native
 $env:CMAKE_PREFIX_PATH = "C:\Qt\6.8.3\msvc2022_64"
 cmake --preset windows-debug
 cmake --build --preset windows-debug
 ```
+
+The vcpkg leg needs its manifest installed. `cmake --preset
+windows-debug-vcpkg` triggers that on configure, but doing it up front
+keeps the failure obvious instead of burying it in configure output:
+
+```powershell
+$env:VCPKG_ROOT = "C:\Users\<you>\vcpkg"
+& "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows
+```
+
+`/EHsc` is set explicitly in `CMakeLists.txt` for a reason: MSVC does not
+enable exception unwinding by default, and the Visual Studio generator adds
+it on the side. Under Ninja it would go missing, the engines would compile
+with C4530 warnings, and every `try`/`catch` would silently lose unwind
+semantics rather than failing the build.
 
 ## Launch Trinity.exe
 

@@ -11,7 +11,14 @@ option(TRINITY_BUILD_TESTS "Build native unit tests" ON)
 option(TRINITY_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 
 if(MSVC)
-    add_compile_options(/W4 /permissive- /utf-8 /FS)
+    # /EHsc is not a compiler default. The Visual Studio generator injects
+    # it into CMAKE_CXX_FLAGS on its own, which is why this went unnoticed:
+    # every documented build used that generator. Under Ninja it is absent,
+    # MSVC emits C4530 for every try/catch, and the engines -- which use
+    # exceptions for all control flow -- silently lose unwind semantics
+    # instead of failing loudly. doctest does fail loudly, which is how it
+    # surfaced. Set it explicitly so the build is correct either way.
+    add_compile_options(/W4 /permissive- /utf-8 /FS /EHsc)
     if(TRINITY_WARNINGS_AS_ERRORS)
         add_compile_options(/WX)
     endif()
