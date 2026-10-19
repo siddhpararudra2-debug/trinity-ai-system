@@ -4,7 +4,13 @@ import Footer from '@/components/layout/Footer';
 import { ThemeProvider } from '@/components/trinity/ThemeProvider';
 import './globals.css';
 
+// Without this, the relative /og-image.png below resolves against
+// http://localhost:3000 and every shared link gets a broken preview.
+// Set NEXT_PUBLIC_TRINITY_SITE_URL in deployment to the public origin.
+const siteUrl = process.env.NEXT_PUBLIC_TRINITY_SITE_URL ?? 'http://localhost:3000';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'Trinity AI — Engineering Operating System',
     template: '%s | Trinity AI',
