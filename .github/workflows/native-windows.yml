@@ -140,6 +140,23 @@ jobs:
     name: Browser E2E (real browser, real engines)
     runs-on: windows-latest
     timeout-minutes: 45
+
+    # The workflow-level concurrency cancels in progress, which is right for
+    # the cheap jobs but wrong for this one. This job spends 20+ minutes
+    # building OpenCV through vcpkg, and a commit landing in that window used
+    # to cancel it outright -- the commit that first introduced this job
+    # (b8be393) was cancelled before it ever ran, and so was the one before
+    # it. A cancelled workflow reports no result, so a suite that only ever
+    # runs on quiet periods is not really coverage.
+    #
+    # cancel-in-progress: false means the running job finishes and the most
+    # recent queued one runs after it. GitHub keeps only one pending run per
+    # group, so a burst of pushes collapses to a single follow-up instead of
+    # queueing unbounded work.
+    concurrency:
+      group: e2e-${{ github.ref }}
+      cancel-in-progress: false
+
     steps:
       - uses: actions/checkout@v4
 
