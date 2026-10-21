@@ -25,6 +25,47 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M6: the vector store seam ships a working local store (refusal Gone)**
+  `src/utils/vector_store.py` used to raise NotImplementedError on add/query;
+  the seam now carries a real implementation with zero new dependencies:
+  deterministic hashed n-gram embeddings (FNV-1a bucketing, words + 3-grams,
+  L2-normalized, 256 dims by default), cosine ranking, and persistence in a
+  private SQLite file (vectors.db under settings.embeddings_dir) with
+  insert-or-replace rows carrying JSON metadata. API: add / add_text /
+  query / search / delete / clear / count / close, plus module-level embed
+  and cosine. Honest scope is stated in the docstring: it is a utility on
+  top of (not a replacement for) SQLite lineage; embeddings are lexical, not
+  a learned model; no network, no API keys; cross-source vectors may be
+  stored but mixing dims stays the caller's responsibility; degenerate zero
+  vectors score 0.0 rather than throwing. Tests: new test_vector_store.py
+  (13 cases: determinism, normalization, empty-text zero vector, tiny-dim
+  rejection, cosine bounds incl. degenerates, exact-match-first ranking,
+  metadata round trip + upsert, delete/count/clear, empty-store query, k
+  bounding + descending scores, bad-input refusals, mixed explicit/text
+  vectors, persistence across reopen — with one fix: the test asserting
+  score exactly 1.0 on a non-identical query text was wrong, cosine 0.82 was
+  the correct answer for "quadcopter frame CAD" vs the stored
+  "...generation"). test_new_modules.test_utils once asserted the refusal;
+  it now asserts the default-path contract while functional behavior lives
+  in the dedicated file. Full Python suite: 307 passed (+13) / 20 skipped
+  (the settled no-key/no-exe gates), no regressions.
+
+- [x] **M7: "restore Python engines" closed as a plan correction, not code**
+  The milestone plan said to restore RoboticsEngine/SimulationEngine/
+  ResearchEngine from git history (fc40fec / cebb8c1 / f2395ca) behind a
+  TRINITY_PYTHON_ENGINES gate. The premise was wrong, and the history
+  proves it: those commits are NATIVE (C++) engine feature commits —
+  there was never a Python class of any of those names at any point in the
+  repo's full history (checked with git log -S over *.py: zero hits). The
+  Python side already implements the designed state: native_bridge routes
+  those engines to Trinity.exe --exec when the exe exists, ScaffoldEngine
+  refuses truthfully with status="scaffolded" when it does not, and the
+  registry prefers native. Restoring "Python engines from history" would
+  have reinvented what shipped natively and violated the settled
+  bridge-over-duplication decision. No code change; the work log is the
+  record this milestone leaves behind, and the remaining genuinely-open
+  Python seams (persistent bridge, packaging) are M8/M9.
+
 - [x] **M2: SPI peripheral codegen shipped (the V1 refusal is history)**
   `configure_peripheral kind:"spi"` used to answer
   `CapabilityUnavailableError("SPI is not supported by FirmwareEngine V1")`

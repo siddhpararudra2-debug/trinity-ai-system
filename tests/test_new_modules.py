@@ -64,5 +64,5 @@ def test_utils():
     RateLimiter(calls_per_minute=600).acquire()
     vs = VectorStore()
     assert vs.persist_dir.name == "embeddings"
-    with pytest.raises(NotImplementedError):
-        vs.query([0.0])
+    # The former NotImplementedError seam ships a functioning local store;
+    # functional behavior lives in tests/test_vector_store.py (tmp isolation).
