@@ -25,6 +25,14 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **PR #31 — the Actions bump was still applicable, so it is merged**
+  Dependabot's checkout 4→7 / setup-python 5→7 / setup-node 4→7 / cache 4→6
+  PR had sat open since Sept 24; its failing native leg was the same
+  Verify-OpenCV bug just fixed, not the bump. Merged locally (conflicts
+  auto-resolved) rather than left dangling: every workflow now pins
+  checkout@v7, setup-python@v7, setup-node@v7, cache@v6 — verified by grep
+  across .github/workflows before pushing.
+
 - [x] **CI: the vcpkg OpenCV leg hardened after the Verify-OpenCV failure**
   The leg failed at "Verify OpenCV found" on `0bc105a` — Configure had exited 0
   because `find_package(OpenCV QUIET)` does not fail on a miss, while the
