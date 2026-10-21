@@ -16,7 +16,9 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <cmath>
+#include <sstream>
 #include <thread>
+#include <vector>
 
 #include "trinity/artifacts/Artifact.hpp"
 #include "trinity/core/Logger.hpp"
@@ -416,11 +418,14 @@ void MainWindow::buildUi() {
     auto* fwPeriRow = new QHBoxLayout();
     fwKind_ = new QComboBox(leftPane);
     fwKind_->addItems({QStringLiteral("uart"), QStringLiteral("i2c"),
-                       QStringLiteral("pwm")});
+                       QStringLiteral("spi"), QStringLiteral("pwm")});
     fwPinA_ = new QLineEdit(leftPane);
     fwPinA_->setPlaceholderText(QStringLiteral("TX/SDA/pin"));
+    fwPinA_->setToolTip(
+        QStringLiteral("SPI: comma-separated MOSI,MISO,SCK pins"));
     fwPinB_ = new QLineEdit(leftPane);
     fwPinB_->setPlaceholderText(QStringLiteral("RX/SCL"));
+    fwPinB_->setToolTip(QStringLiteral("SPI: CS pin (optional)"));
     fwParam_ = new QLineEdit(leftPane);
     fwParam_->setPlaceholderText(QStringLiteral("baud/freq"));
     fwParam_->setText(QStringLiteral("115200"));
@@ -443,6 +448,11 @@ void MainWindow::buildUi() {
             fwPinB_->setPlaceholderText(QStringLiteral("SCL (GPIO22)"));
             fwParam_->setPlaceholderText(QStringLiteral("(unused)"));
             fwParam_->setText(QString());
+        } else if (kind == QStringLiteral("spi")) {
+            fwPinA_->setPlaceholderText(QStringLiteral("MOSI,MISO,SCK"));
+            fwPinB_->setPlaceholderText(QStringLiteral("CS (optional)"));
+            fwParam_->setPlaceholderText(QStringLiteral("freq Hz"));
+            fwParam_->setText(QStringLiteral("1000000"));
         } else {
             fwPinA_->setPlaceholderText(QStringLiteral("PWM pin (GPIO18)"));
             fwPinB_->setPlaceholderText(QStringLiteral("(unused)"));
@@ -2549,6 +2559,38 @@ void MainWindow::handleFwConfigurePeripheral() {
         params["peripheral"] = "I2C0";
         params["sda"] = a;
         params["scl"] = b;
+    } else if (kind == "spi") {
+        // SPI carries three mandatory pins (MOSI/MISO/SCK) plus optional CS,
+        // comma-separated in the single-line pin field.
+        std::vector<std::string> pins;
+        std::string token;
+        std::istringstream stream(a);
+        while (std::getline(stream, token, ',')) {
+            const auto stripped = [](std::string value) {
+                while (!value.empty() && (value.front() == ' ')) value.erase(value.begin());
+                while (!value.empty() && (value.back() == ' ')) value.pop_back();
+                return value;
+            };
+            const std::string pin = stripped(token);
+            if (!pin.empty()) {
+                pins.push_back(pin);
+            }
+        }
+        if (pins.size() < 3) {
+            fwOutput_->setPlainText(
+                QStringLiteral("Firmware: SPI requires MOSI,MISO,SCK pins"));
+            return;
+        }
+        params["peripheral"] = "SPI0";
+        params["mosi"] = pins[0];
+        params["miso"] = pins[1];
+        params["sck"] = pins[2];
+        if (!b.empty()) {
+            params["cs"] = b;
+        }
+        if (!param.empty()) {
+            params["freq_hz"] = std::atoi(param.c_str());
+        }
     } else {
         if (a.empty()) {
             fwOutput_->setPlainText(QStringLiteral("Firmware: PWM requires a pin"));

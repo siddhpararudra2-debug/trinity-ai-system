@@ -344,9 +344,55 @@ EngineResult FirmwareEngine::executeConfigurePeripheral(
         applyPeripheralPin(project, scl, "i2c_scl", peripheral,
                            firmware::PinDirection::Output);
     } else if (kind == "spi") {
-        throw core::CapabilityUnavailableError(
-            "SPI is not supported by FirmwareEngine V1",
-            {{"kind", kind}}, "engines");
+        const std::string mosi =
+            requireString(request.parameters, "mosi", "configure_peripheral");
+        const std::string miso =
+            requireString(request.parameters, "miso", "configure_peripheral");
+        const std::string sck =
+            requireString(request.parameters, "sck", "configure_peripheral");
+        std::string cs;
+        if (request.parameters.contains("cs") &&
+            request.parameters["cs"].is_string()) {
+            cs = request.parameters["cs"].get<std::string>();
+        }
+        const int freqHz = request.parameters.value("freq_hz", 1000000);
+        if (freqHz <= 0) {
+            throw core::RequestValidationError(
+                "SPI frequency must be positive", {{"freq_hz", freqHz}}, "engines");
+        }
+        std::vector<std::string> pins = {mosi, miso, sck};
+        if (!cs.empty()) {
+            pins.push_back(cs);
+        }
+        for (const auto& pinName : pins) {
+            if (project.mcu.findPin(pinName) == nullptr) {
+                throw core::RequestValidationError(
+                    "Pin '" + pinName + "' does not exist on " + project.mcu.model,
+                    {{"pin", pinName}}, "engines");
+            }
+            if (project.findMapping(pinName) != nullptr) {
+                throw core::RequestValidationError(
+                    "Pin '" + pinName + "' is already configured",
+                    {{"pin", pinName}}, "engines");
+            }
+        }
+        req.kind = firmware::RequirementKind::Spi;
+        params = core::Json{{"instance", peripheral},
+                            {"mosi", mosi},
+                            {"miso", miso},
+                            {"sck", sck},
+                            {"freq_hz", freqHz}};
+        if (!cs.empty()) {
+            params["cs"] = cs;
+            applyPeripheralPin(project, cs, "spi_cs", peripheral,
+                               firmware::PinDirection::Output);
+        }
+        applyPeripheralPin(project, mosi, "spi_mosi", peripheral,
+                           firmware::PinDirection::Output);
+        applyPeripheralPin(project, miso, "spi_miso", peripheral,
+                           firmware::PinDirection::Input);
+        applyPeripheralPin(project, sck, "spi_sck", peripheral,
+                           firmware::PinDirection::Output);
     } else if (kind == "pwm") {
         const std::string pinName =
             requireString(request.parameters, "pin", "configure_peripheral");

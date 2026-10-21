@@ -91,6 +91,17 @@ void emitConfig(std::ostringstream& out, const FirmwareProject& project) {
                     << params.value("sda", "?") << " SCL=" << params.value("scl", "?")
                     << "\n";
                 break;
+            case RequirementKind::Spi:
+                out << "// SPI " << params.value("instance", "SPI0") << ": MOSI="
+                    << params.value("mosi", "?") << " MISO=" << params.value("miso", "?")
+                    << " SCK=" << params.value("sck", "?");
+                if (params.contains("cs")) {
+                    out << " CS=" << params["cs"].get<std::string>();
+                }
+                out << " @ " << params.value("freq_hz", 1000000) << " Hz\n";
+                out << "#define " << sanitize(params.value("instance", "SPI0"))
+                    << "_FREQ_HZ " << params.value("freq_hz", 1000000) << "\n";
+                break;
             case RequirementKind::Pwm:
                 out << "// PWM on " << params.value("pin", "?") << " @ "
                     << params.value("freq_hz", 1000) << " Hz\n";
@@ -134,8 +145,13 @@ void emitSetup(std::ostringstream& out, const FirmwareProject& project) {
                 << ", PIN_" << sanitize(req.params.value("scl", "?")) << ");\n";
         }
         if (req.kind == RequirementKind::Spi) {
-            out << "  // SPI " << req.params.value("instance", "SPI0") << "\n";
+            out << "  // SPI " << req.params.value("instance", "SPI0") << " on "
+                << req.params.value("mosi", "?") << "/" << req.params.value("miso", "?")
+                << "/" << req.params.value("sck", "?") << " @ "
+                << req.params.value("freq_hz", 1000000) << " Hz\n";
             out << "  SPI.begin();\n";
+            out << "  SPI.beginTransaction(SPISettings("
+                << req.params.value("freq_hz", 1000000) << ", MSBFIRST, SPI_MODE0));\n";
         }
     }
     for (const auto& mapping : project.pinMappings) {

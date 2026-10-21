@@ -257,8 +257,9 @@ rest marked `skipped`. Model refusal executes nothing.
   StlWriter,Validators`): 108-triangle validated geometry, binary STL +
   spec JSON artifacts via `JobManager`, STEP reported
   `CAD_KERNEL_UNAVAILABLE`
-- `FirmwareEngine` (project/MCU/pin/peripheral config, Arduino-style
-  source generation, controlled Windows `CreateProcess` build),
+- `FirmwareEngine` (project/MCU/pin/peripheral config incl. UART/I2C/SPI/
+  PWM with pin-map + codegen for all four, Arduino-style source generation,
+  controlled Windows `CreateProcess` build),
   `VisionEngine` (OpenCV-gated load/resize/grayscale/edge/stats with
   truthful refusal when OpenCV is absent), `SimulationEngine`
   (kinematics + basic dynamics, CSV/JSON exports), `ResearchEngine`
@@ -334,21 +335,8 @@ rest marked `skipped`. Model refusal executes nothing.
 - Kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis
-- A standalone SPI peripheral engine — deliberately, not overlooked.
-  `configure_peripheral` already refuses `kind: "spi"` with a named
-  `CapabilityUnavailableError("SPI is not supported by FirmwareEngine V1")`,
-  the UI offers only uart/i2c/pwm, and nothing in the repo consumes one.
-  Building an engine with no consumer is how pcb/inspect and three vision
-  ops ended up advertised while answering 501, so the refusal stays until
-  there is hardware and a caller.
-- Real `IModelProvider` transport implementations: **shipped** — `openai`,
-  `anthropic`, and `local` (any OpenAI-compatible server: Ollama `/v1`,
-  LM Studio, llama.cpp-server), over an injectable `IHttpTransport`
-  (WinHTTP in production, fixtures in tests; contract tests fully offline).
-  Tool calls map to `trinity_execute` → `ToolCall` on both wire formats.
-  Incremental SSE streaming remains unshipped on purpose: `streamPlan`
-  performs one full planning round trip and emits a single final chunk,
-  which the docs say plainly. Live provider round trips are a skipped doctest
-  case (gated on TRINITY_LLM_API_KEY; the settled no-key decision stands).
+- Incremental SSE streaming from the model providers — `streamPlan`
+  deliberately performs one full planning round trip and emits a single
+  final chunk; chunked delivery is a future phase, and the docs say so.
 - Installer/packaging (CPack/NSIS), code signing, update channel
 - QML workspace, project tree, settings dialogs

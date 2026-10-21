@@ -25,6 +25,31 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M2: SPI peripheral codegen shipped (the V1 refusal is history)**
+  `configure_peripheral kind:"spi"` used to answer
+  `CapabilityUnavailableError("SPI is not supported by FirmwareEngine V1")`
+  while McuDatabase already defined SPI0/SPI1/SPI2 on three MCU families and
+  CodeGen already emitted `#include <SPI.h>`. Closed as decided in the
+  milestone plan (codegen counts as sufficient; no hardware required):
+  the engine now validates mosi/miso/sck (+ optional cs) the same way
+  UART/I2C validate their pins — existence on the selected MCU and
+  not-already-mapped conflicts — stores a
+  `{instance, mosi, miso, sck, cs?, freq_hz}` requirement, and applies the
+  pin mappings (mosi/cs out, miso in, sck out); the frequency must be
+  positive. Validators.cpp now checks `hasPeripheralKind("spi")` exactly
+  like uart/i2c/pwm (the old always-INVALID rule is gone). CodeGen emits
+  `#define <instance>_FREQ_HZ` in config.h and a real
+  `SPI.begin()` + `SPI.beginTransaction(SPISettings(...MSBFIRST,
+  SPI_MODE0))` in setup. The UI combo gains "spi" with
+  MOSI,MISO,SCK-in-one-field entry and optional CS. Tests: renamed the
+  peripheral case (supports uart i2c spi pwm) with a full-SPI success path
+  asserting all four pin mappings, plus missing-pin / freq 0 / pin-conflict
+  refusals; validator case asserts SPI requirement stays VALIDATED on ESP32
+  and goes INVALID on an IR with an empty peripheral list; the
+  deterministic-generation case gains a Config D asserting
+  `#include <SPI.h>`, the SPISettings line, `SPI0_FREQ_HZ 2000000` and the
+  MOSI pin define. Native: 365 cases / 5,953 assertions, all green locally.
+
 - [x] **M1: real LLM transports behind IModelProvider (openai / anthropic / local)**
   The skeleton providers answered "networking is not implemented" — now real.
   An injectable `IHttpTransport` seam (synchronous POST, timeout budget,

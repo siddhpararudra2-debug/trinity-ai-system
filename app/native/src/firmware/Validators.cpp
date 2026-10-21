@@ -170,11 +170,11 @@ validation::ValidationResult validateFirmwareProject(const FirmwareProject& proj
                 addRule(out, "requirement.i2c_supported", validation::Severity::Error,
                         false, "I2C is not available on " + project.mcu.model);
             }
-            if (req.kind == RequirementKind::Spi) {
-                // SPI is intentionally out of scope for V1: refuse truthfully.
+            if (req.kind == RequirementKind::Spi && project.hasMcu &&
+                !project.mcu.hasPeripheralKind("spi")) {
                 ok = false;
                 addRule(out, "requirement.spi_supported", validation::Severity::Error,
-                        false, "SPI is not supported by FirmwareEngine V1");
+                        false, "SPI is not available on " + project.mcu.model);
             }
             if (req.kind == RequirementKind::Pwm && project.hasMcu &&
                 !project.mcu.hasPeripheralKind("pwm")) {

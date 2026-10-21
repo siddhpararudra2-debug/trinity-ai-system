@@ -277,7 +277,7 @@ TEST_CASE("configure_pin assigns pins and rejects invalid or duplicates") {
     CHECK_FALSE(noMcu.success);
 }
 
-TEST_CASE("peripheral configuration supports uart i2c pwm and refuses spi") {
+TEST_CASE("peripheral configuration supports uart i2c spi pwm") {
     trinity::engines::FirmwareEngine engine;
     auto project = selectMcu(engine, createProject(engine, "peri-demo"), "ESP32");
 
@@ -334,15 +334,62 @@ TEST_CASE("peripheral configuration supports uart i2c pwm and refuses spi") {
                                          {"pin", "GPIO34"}}));
     CHECK_FALSE(noPwm.success);
 
-    // SPI refused truthfully for V1.
+    // SPI on a fresh project: full pin set + CS + frequency.
     auto clean4 = selectMcu(engine, createProject(engine, "peri-spi"), "ESP32");
-    const auto spi = engine.execute(
+    const auto spi =
+        configurePeripheral(engine, clean4,
+                            {{"peripheral", "SPI0"},
+                             {"kind", "spi"},
+                             {"mosi", "GPIO23"},
+                             {"miso", "GPIO19"},
+                             {"sck", "GPIO25"},
+                             {"cs", "GPIO5"},
+                             {"freq_hz", 2000000}});
+    REQUIRE(spi.is_object());
+    REQUIRE(spi.contains("pin_mappings"));
+    {
+        bool sawMosi = false;
+        bool sawMiso = false;
+        bool sawSck = false;
+        bool sawCs = false;
+        for (const auto& mapping : spi["pin_mappings"]) {
+            const std::string function = mapping.value("function", "");
+            sawMosi = sawMosi || function == "spi_mosi";
+            sawMiso = sawMiso || function == "spi_miso";
+            sawSck = sawSck || function == "spi_sck";
+            sawCs = sawCs || function == "spi_cs";
+        }
+        CHECK(sawMosi);
+        CHECK(sawMiso);
+        CHECK(sawSck);
+        CHECK(sawCs);
+    }
+
+    // SPI refusals: missing pins, non-positive frequency, pinned reuse.
+    const auto spiMissing = engine.execute(
         makeReq("configure_peripheral", {{"project", clean4},
-                                         {"peripheral", "SPI0"},
-                                         {"kind", "spi"}}));
-    CHECK_FALSE(spi.success);
-    REQUIRE_FALSE(spi.errors.empty());
-    CHECK(spi.errors.front().value("code", "") == "capability_unavailable");
+                                         {"peripheral", "SPI1"},
+                                         {"kind", "spi"},
+                                         {"mosi", "GPIO4"},
+                                         {"miso", "GPIO2"}}));
+    CHECK_FALSE(spiMissing.success);
+    const auto spiBadFreq = engine.execute(
+        makeReq("configure_peripheral", {{"project", clean4},
+                                         {"peripheral", "SPI1"},
+                                         {"kind", "spi"},
+                                         {"mosi", "GPIO4"},
+                                         {"miso", "GPIO2"},
+                                         {"sck", "GPIO13"},
+                                         {"freq_hz", 0}}));
+    CHECK_FALSE(spiBadFreq.success);
+    const auto spiConflict = engine.execute(
+        makeReq("configure_peripheral", {{"project", spi},
+                                         {"peripheral", "SPI1"},
+                                         {"kind", "spi"},
+                                         {"mosi", "GPIO4"},
+                                         {"miso", "GPIO2"},
+                                         {"sck", "GPIO25"}}));
+    CHECK_FALSE(spiConflict.success);
 
     // Unsupported peripheral kind refused.
     const auto can = engine.execute(
@@ -427,6 +474,23 @@ TEST_CASE("source generation is deterministic and config-specific") {
     const auto filesC =
         trinity::firmware::FirmwareProject::fromJson(generatedC.result["project"]);
 
+    // Config D: ESP32 SPI (+CS) — the generated sources carry the full
+    // SPI wiring, not a comment stub.
+    auto projectD = selectMcu(engine, createProject(engine, "spi-board"), "ESP32");
+    projectD = configurePeripheral(engine, projectD,
+                                   {{"peripheral", "SPI0"},
+                                    {"kind", "spi"},
+                                    {"mosi", "GPIO23"},
+                                    {"miso", "GPIO19"},
+                                    {"sck", "GPIO25"},
+                                    {"cs", "GPIO5"},
+                                    {"freq_hz", 2000000}});
+    const auto generatedD = engine.execute(
+        makeReq("generate_firmware", {{"project", projectD}}));
+    REQUIRE(generatedD.success);
+    const auto filesD =
+        trinity::firmware::FirmwareProject::fromJson(generatedD.result["project"]);
+
     // Determinism: regenerating the same IR yields identical bytes.
     const auto regenA = engine.execute(makeReq("generate_firmware", {{"project", projectA}}));
     REQUIRE(regenA.success);
@@ -464,11 +528,22 @@ TEST_CASE("source generation is deterministic and config-specific") {
     CHECK(configC.find("PIN_PA5") != std::string::npos);
     CHECK(configC.find("TRINITY_MCU \"STM32F401RE\"") != std::string::npos);
 
+    const std::string mainD = sourceContent(filesD, "main.cpp");
+    const std::string configD = sourceContent(filesD, "config.h");
+    CHECK(mainD.find("#include <SPI.h>") != std::string::npos);
+    CHECK(mainD.find("SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0))") !=
+          std::string::npos);
+    CHECK(mainD.find("pinMode") != std::string::npos);  // CS pin wired as OUTPUT
+    CHECK(configD.find("SPI0_FREQ_HZ 2000000") != std::string::npos);
+    CHECK(configD.find("PIN_GPIO23") != std::string::npos);  // MOSI define emitted
+
     CHECK(mainA != mainB);
     CHECK(mainA != mainC);
     CHECK(mainB != mainC);
+    CHECK(mainD != mainA);
     CHECK(configA != configB);
     CHECK(configA != configC);
+    CHECK(configD != configA);
 
     // Two identical valid configs produce byte-identical main.cpp.
     CHECK(mainA == sourceContent(filesA2, "main.cpp"));
@@ -527,14 +602,25 @@ TEST_CASE("validation reports states and never claims VERIFIED") {
     CHECK(trinity::validation::toString(
               trinity::firmware::validateFirmwareProject(badClock).status) == "INVALID");
 
-    // SPI requirement invalidates for V1.
+    // SPI requirement is valid when the MCU has SPI (ESP32 does) — and
+    // invalid on an MCU without it (hand-built IR tool project).
     auto spiProj = trinity::firmware::FirmwareProject::fromJson(
         selectMcu(engine, createProject(engine, "validate-spi"), "ESP32"));
     trinity::firmware::FirmwareRequirement spiReq;
     spiReq.kind = trinity::firmware::RequirementKind::Spi;
+    spiReq.params = trinity::core::Json{{"instance", "SPI0"}};
     spiProj.requirements.push_back(spiReq);
+    // ESP32 has SPI: the project (with this requirement) stays VALIDATED.
     CHECK(trinity::validation::toString(
-              trinity::firmware::validateFirmwareProject(spiProj).status) == "INVALID");
+              trinity::firmware::validateFirmwareProject(spiProj).status) == "VALIDATED");
+
+    auto noSpi = trinity::firmware::FirmwareProject::fromJson(
+        createProject(engine, "validate-spi-impossible"));
+    noSpi.hasMcu = true;
+    noSpi.mcu.model = "HYPOTHETICAL-1";  // IR-level: empty peripheral list
+    noSpi.requirements.push_back(spiReq);
+    CHECK(trinity::validation::toString(
+              trinity::firmware::validateFirmwareProject(noSpi).status) == "INVALID");
 
     // Engine validate_project returns rules and Validated status (never VERIFIED).
     const auto engineOut =
