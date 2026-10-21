@@ -25,6 +25,33 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M1: real LLM transports behind IModelProvider (openai / anthropic / local)**
+  The skeleton providers answered "networking is not implemented" — now real.
+  An injectable `IHttpTransport` seam (synchronous POST, timeout budget,
+  64 MiB body guard) is implemented by WinHTTP on Windows; contract tests
+  inject a fixture transport and stay fully offline. `HttpChatProvider`
+  implements the whole IModelProvider surface once (generate / generatePlan /
+  streamPlan / configure / info) and the wire formats plumb in as thin
+  subclasses: `openai` (chat/completions + `trinity_execute` function
+  tool), `anthropic` (messages API, x-api-key + anthropic-version headers,
+  tool_use blocks), `local` (OpenAI-compatible endpoint — default moved
+  from Ollama's native /api/chat to its /v1 surface so one wire path seeves
+  Ollama/LM Studio/llama.cpp; keyless by design, matching local reality).
+  Secrets come only from TRINITY_MODEL_API_KEY (existing contract) or a
+  programmatic api_key for fixture tests, and are never logged. All wire
+  failures map to structured refusals - providers never throw. streamPlan
+  is honestly single-chunk (full plan round trip); incremental SSE stays
+  unshipped and documented. New doctest file test_llm_transports.cpp: 11
+  cases / ~51 assertions incl. wire-body assertions (Authorization header,
+  anthropic-version, tool_choice, system message position), tool-call
+  mapping for both formats, unknown-tool filtering, HTTP-error mapping,
+  transport-failure refusal, disabled/refusal paths. Native: 365 cases /
+  5,933 assertions, all green locally. A teachable bug found en route:
+  `Json{"literal"}` is an ARRAY in nlohmann braced-init — the system prompt
+  silently wrapped itself into a one-element array; fixed with an explicit
+  std::string constructor. The default-transport off-Windows note and the
+  stale "only NullModelProvider ships" README claims are corrected too.
+
 - [x] **PR #31 — the Actions bump was still applicable, so it is merged**
   Dependabot's checkout 4→7 / setup-python 5→7 / setup-node 4→7 / cache 4→6
   PR had sat open since Sept 24; its failing native leg was the same

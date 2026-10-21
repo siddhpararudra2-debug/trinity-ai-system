@@ -1,25 +1,23 @@
 #pragma once
 
-#include "trinity/intelligence/IModelProvider.hpp"
-#include <string>
+#include "trinity/intelligence/providers/HttpChatProvider.hpp"
 
 namespace trinity::intelligence::providers {
 
-class AnthropicProvider : public IModelProvider {
+// Anthropic messages transport: POST {endpoint} (default
+// https://api.anthropic.com/v1/messages), headers x-api-key +
+// anthropic-version, tool calls via the `trinity_execute` tool_use block.
+// Secrets come only from TRINITY_MODEL_API_KEY (or a programmatic
+// configure({"api_key": ...}), used by fixture tests) and are never stored
+// or logged.
+class AnthropicProvider : public HttpChatProvider {
 public:
     AnthropicProvider();
 
-    ModelProviderInfo info() const override;
-    ModelResponse generate(const ModelRequest& request) override;
-    core::Result<ModelResponse> generatePlan(const ModelRequest& request) override;
-    void streamPlan(const ModelRequest& request, StreamCallback callback) override;
-    core::Status configure(const core::Json& config) override;
-
-private:
-    std::string _apiKey;
-    std::string _modelName = "claude-3-5-sonnet-20240620";
-    std::string _endpoint = "https://api.anthropic.com/v1/messages";
-    bool _enabled = true;
+protected:
+    std::string defaultModel() const override;
+    std::string defaultEndpoint() const override;
+    ModelResponse doGenerate(const ModelRequest& request) override;
 };
 
 } // namespace trinity::intelligence::providers

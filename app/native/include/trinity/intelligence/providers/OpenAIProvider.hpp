@@ -1,25 +1,22 @@
 #pragma once
 
-#include "trinity/intelligence/IModelProvider.hpp"
-#include <string>
+#include "trinity/intelligence/providers/HttpChatProvider.hpp"
 
 namespace trinity::intelligence::providers {
 
-class OpenAIProvider : public IModelProvider {
+// OpenAI chat-completions transport: POST {endpoint} (default
+// https://api.openai.com/v1/chat/completions), Authorization: Bearer, tool
+// calls via the `trinity_execute` function tool. Secrets come only from
+// TRINITY_MODEL_API_KEY (or a programmatic configure({"api_key": ...}), used
+// by fixture tests) and are never stored or logged.
+class OpenAIProvider : public HttpChatProvider {
 public:
     OpenAIProvider();
 
-    ModelProviderInfo info() const override;
-    ModelResponse generate(const ModelRequest& request) override;
-    core::Result<ModelResponse> generatePlan(const ModelRequest& request) override;
-    void streamPlan(const ModelRequest& request, StreamCallback callback) override;
-    core::Status configure(const core::Json& config) override;
-
-private:
-    std::string _apiKey;
-    std::string _modelName = "gpt-4o";
-    std::string _endpoint = "https://api.openai.com/v1/chat/completions";
-    bool _enabled = true;
+protected:
+    std::string defaultModel() const override;
+    std::string defaultEndpoint() const override;
+    ModelResponse doGenerate(const ModelRequest& request) override;
 };
 
 } // namespace trinity::intelligence::providers

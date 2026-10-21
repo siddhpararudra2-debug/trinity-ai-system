@@ -1,12 +1,11 @@
 #pragma once
 
-// IModelProvider: the future proprietary LLM boundary.
+// IModelProvider: the proprietary LLM boundary.
 //
-// Implementations for OpenAI, Anthropic, local models, or a custom
-// Trinity model plug in here. NOTHING in this header implements
-// intelligence: the only shipped implementation is NullModelProvider,
-// which truthfully reports unavailable and refuses to plan, so the
-// whole application runs without any model connected.
+// Three real transports ship behind this seam (HttpChatProvider + wire
+// formats): `openai`, `anthropic`, and `local` (any OpenAI-compatible
+// server). NullModelProvider is the DEFAULT — the application runs without
+// any model connected, and no capability is advertised without a key.
 
 #include <functional>
 #include <memory>

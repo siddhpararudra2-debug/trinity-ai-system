@@ -18,7 +18,9 @@ main.cpp (thin shell)
        -> repositories (storage/Repositories: jobs, workflows, artifacts)
        -> engine registry (engines/EngineRegistry)
        -> jobs/artifacts managers
-       -> model provider (NullModelProvider — no LLM connected)
+       -> model provider (NullModelProvider default; openai / anthropic /
+          local connect when TRINITY_MODEL_PROVIDER + TRINITY_MODEL_API_KEY
+          are set - factory + WinHTTP transport + tool-call parsing are real)
   -> Qt window (ui/MainWindow, reads Logger::recent()) -> clean shutdown
 ```
 
@@ -230,11 +232,14 @@ rest marked `skipped`. Model refusal executes nothing.
   `recent()` for future UI)
 - `ApplicationContext` owning config/logger/db/filesystem/services
   (`main.cpp` is a thin shell)
-- `IModelProvider` plugin seam + `NullModelProvider` (app runs fully
-  without an LLM) + `ModelProviderFactory` (register/create/list,
-  env selection `TRINITY_MODEL_PROVIDER`, null fallback) +
-  `ExampleProvider` skeleton + `Planner` (model → validated tool
-  calls → `JobManager`, stop-on-first-failure, refusal runs nothing)
+- `IModelProvider` plugin seam + `NullModelProvider` default (app runs
+  fully without an LLM; no provider is advertised without a key) +
+  `ModelProviderFactory` (register/create/list, env selection
+  `TRINITY_MODEL_PROVIDER`, null fallback) + `openai`/`anthropic`/`local`
+  transports over `IHttpTransport` (WinHTTP shipped, fixture-injected in
+  tests; fixture contract tests run offline) + `Planner` (model →
+  validated tool calls → `JobManager`, stop-on-first-failure, refusal
+  runs nothing)
 - Engine architecture: `IEngine::{name,capabilities,execute,validate}` +
   `EngineBase` helpers (capability check, structured errors, timing,
   logging, metadata) + `EngineRegistry::{register,unregister,get,has,
@@ -336,8 +341,14 @@ rest marked `skipped`. Model refusal executes nothing.
   Building an engine with no consumer is how pcb/inspect and three vision
   ops ended up advertised while answering 501, so the refusal stays until
   there is hardware and a caller.
-- Real `IModelProvider` transport implementations (OpenAI, Anthropic,
-  local, custom Trinity model — the factory + example + planner are
-  ready; only the transport is missing)
+- Real `IModelProvider` transport implementations: **shipped** — `openai`,
+  `anthropic`, and `local` (any OpenAI-compatible server: Ollama `/v1`,
+  LM Studio, llama.cpp-server), over an injectable `IHttpTransport`
+  (WinHTTP in production, fixtures in tests; contract tests fully offline).
+  Tool calls map to `trinity_execute` → `ToolCall` on both wire formats.
+  Incremental SSE streaming remains unshipped on purpose: `streamPlan`
+  performs one full planning round trip and emits a single final chunk,
+  which the docs say plainly. Live provider round trips are a skipped doctest
+  case (gated on TRINITY_LLM_API_KEY; the settled no-key decision stands).
 - Installer/packaging (CPack/NSIS), code signing, update channel
 - QML workspace, project tree, settings dialogs

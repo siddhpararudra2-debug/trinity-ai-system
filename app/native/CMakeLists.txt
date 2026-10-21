@@ -129,6 +129,9 @@ set(TRINITY_CORE_SOURCES
     src/jobs/Job.cpp
     src/jobs/JobWorker.cpp
     src/intelligence/RequestPipeline.cpp
+    src/intelligence/HttpTransport.cpp
+    src/intelligence/providers/HttpChatProvider.cpp
+    src/intelligence/providers/ChatWire.cpp
 )
 
 add_library(trinity_core STATIC ${TRINITY_CORE_SOURCES})
@@ -154,7 +157,7 @@ else()
 endif()
 target_link_libraries(trinity_core PUBLIC trinity_sqlite)
 if(WIN32)
-    target_link_libraries(trinity_core PUBLIC bcrypt shell32 ole32)
+    target_link_libraries(trinity_core PUBLIC bcrypt shell32 ole32 winhttp)
 endif()
 
 # ------------------------------------------------------------------- app
@@ -211,6 +214,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_validation.cpp
         tests/test_provider_factory.cpp
         tests/test_planner.cpp
+        tests/test_llm_transports.cpp
         tests/test_requirement_parser.cpp
         tests/test_intent_validation.cpp
         tests/test_intent_router.cpp

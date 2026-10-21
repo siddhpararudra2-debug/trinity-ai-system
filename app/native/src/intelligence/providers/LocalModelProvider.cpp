@@ -2,52 +2,24 @@
 
 namespace trinity::intelligence::providers {
 
-LocalModelProvider::LocalModelProvider() = default;
-
-ModelProviderInfo LocalModelProvider::info() const {
-    ModelProviderInfo i;
-    i.providerId = "local";
-    i.displayName = "Local Model";
-    i.available = false; // Not implemented yet
-    i.endpoint = _endpoint;
-    i.modelName = _modelName;
-    i.configured = true; // Local provider doesn't strictly need API key
-    return i;
+LocalModelProvider::LocalModelProvider()
+    : HttpChatProvider("local", "Local Model", /*requiresApiKey=*/false) {
+    _modelName = defaultModel();
+    _endpoint = defaultEndpoint();
 }
 
-ModelResponse LocalModelProvider::generate(const ModelRequest& request) {
-    ModelResponse response;
-    response.success = false;
-    response.requestId = request.requestId;
-    response.model = _modelName;
-    response.error = core::makeError(core::ErrorCode::CapabilityUnavailableError, 
-        "Local model provider networking is not implemented in this build.", 
-        "local").toJson();
-    return response;
+std::string LocalModelProvider::defaultModel() const {
+    return "llama-3-8b";
 }
 
-core::Result<ModelResponse> LocalModelProvider::generatePlan(const ModelRequest& request) {
-    return core::Result<ModelResponse>::fail(
-        core::makeError(core::ErrorCode::CapabilityUnavailableError, "Not implemented", "local"));
+// One wire path for every keyless self-hosted option: Ollama, LM Studio and
+// llama.cpp-server all expose the OpenAI-compatible /v1/chat/completions.
+std::string LocalModelProvider::defaultEndpoint() const {
+    return "http://localhost:11434/v1/chat/completions";
 }
 
-void LocalModelProvider::streamPlan(const ModelRequest& request, StreamCallback callback) {
-    if (callback) {
-        callback("", true);
-    }
+ModelResponse LocalModelProvider::doGenerate(const ModelRequest& request) {
+    return openAiRoundTrip(request, "local");
 }
 
-core::Status LocalModelProvider::configure(const core::Json& config) {
-    if (config.contains("model") && config["model"].is_string()) {
-        _modelName = config["model"].get<std::string>();
-    }
-    if (config.contains("endpoint") && config["endpoint"].is_string()) {
-        _endpoint = config["endpoint"].get<std::string>();
-    }
-    if (config.contains("enabled") && config["enabled"].is_boolean()) {
-        _enabled = config["enabled"].get<bool>();
-    }
-    return core::okStatus();
-}
-
-} // namespace trinity::intelligence::providers
+}  // namespace trinity::intelligence::providers
