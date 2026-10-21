@@ -137,12 +137,18 @@ target_include_directories(trinity_core
         include
         third_party/json
 )
+option(TRINITY_REQUIRE_OPENCV
+    "Fail the build when OpenCV is absent (used by the vcpkg CI leg, which must build WITH OpenCV)"
+    OFF)
 find_package(OpenCV QUIET)
 if(OpenCV_FOUND)
     target_compile_definitions(trinity_core PUBLIC TRINITY_HAS_OPENCV)
     target_include_directories(trinity_core PUBLIC ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(trinity_core PUBLIC ${OpenCV_LIBS})
     message(STATUS "OpenCV found: ${OpenCV_VERSION} — VisionEngine image ops enabled")
+elseif(TRINITY_REQUIRE_OPENCV)
+    message(FATAL_ERROR
+        "OpenCV not found although TRINITY_REQUIRE_OPENCV=ON — the vcpkg leg must build WITH OpenCV")
 else()
     message(WARNING "OpenCV not found — VisionEngine registered but image ops unavailable")
 endif()

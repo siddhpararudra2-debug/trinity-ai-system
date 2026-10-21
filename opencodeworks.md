@@ -25,6 +25,20 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **CI: the vcpkg OpenCV leg hardened after the Verify-OpenCV failure**
+  The leg failed at "Verify OpenCV found" on `0bc105a` — Configure had exited 0
+  because `find_package(OpenCV QUIET)` does not fail on a miss, while the
+  three `cancel-in-progress` kills immediately before it left the binary-cache
+  state unverifiable (observed, not asserted — no cache contents forensics are
+  possible). Three changes make a miss loud and the entry set trustworthy:
+  the cache key gets a `v2` prefix (invalidates every earlier entry), the
+  unconditional fallback restore is removed (a fallback hit is exactly where
+  an incompatible older entry sneaks in), and the leg configures with
+  `-DTRINITY_REQUIRE_OPENCV=ON` — a new CMake option that turns a silent
+  `OpenCV not found` into a Configure `FATAL_ERROR`. The Verify step remains
+  as belt-and-braces (its mojibake error string is fixed too). Verified
+  locally: a reconfigure with the option ON still finds OpenCV 4.14.0.
+
 - [x] **CI: the e2e suite stops being cancelled mid-run**
   The commit that first added the e2e job was cancelled before it ran, as was
   the push before it — the suite could pass once by luck and then never run

@@ -84,12 +84,14 @@ jobs:
       - name: Bootstrap vcpkg
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $vcpkg = $env:VCPKG_INSTALLATION_ROOT
           if (-not $vcpkg) {
             $vcpkg = Join-Path $env:RUNNER_TEMP 'vcpkg'
             git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkg
           }
           & (Join-Path $vcpkg 'bootstrap-vcpkg.bat') -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VCPKG_ROOT=$vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           $binCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           "VCPKG_DEFAULT_BINARY_CACHE=$binCache" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -102,13 +104,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-opencv4-${{ runner.os }}-
+          # v2: the prefix invalidates every earlier cache entry. The three
+          # cancel-in-progress kills right before 0bc105a left the previous
+          # prefix's state unverifiable, and find_package(OpenCV QUIET) made a
+          # silent miss exit 0. Exact-key only — a fallback restore would be
+          # exactly where an incompatible older entry sneaks in again.
+          key: vcpkg-opencv4-v2-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
 
       - name: Configure
         working-directory: app/native
-        run: cmake --preset windows-debug-vcpkg -DCMAKE_PREFIX_PATH="$env:Qt6_Dir"
+        # TRINITY_REQUIRE_OPENCV turns the former quiet miss into a Configure
+        # failure — the separate Verify step stays as belt-and-braces.
+        run: cmake --preset windows-debug-vcpkg -DCMAKE_PREFIX_PATH="$env:Qt6_Dir" -DTRINITY_REQUIRE_OPENCV=ON
 
       - name: Verify OpenCV found
         working-directory: app/native
@@ -117,7 +124,7 @@ jobs:
           $entry = (Get-Content build/debug-vcpkg/CMakeCache.txt) |
             Where-Object { $_ -match '^OpenCV_DIR:PATH=' } | Select-Object -First 1
           if (-not $entry -or $entry -match 'NOTFOUND') {
-            Write-Error "OpenCV was not found by CMake â€” the vcpkg leg must build WITH OpenCV"
+            Write-Error "OpenCV was not found by CMake — the vcpkg leg must build WITH OpenCV"
             exit 1
           }
           Write-Host "OpenCV_DIR: $entry"
