@@ -82,6 +82,24 @@ TEST_CASE("pipeline executes linear and quadratic solvers end to end") {
     checkPersisted(fx, quad.jobId, true);
 }
 
+TEST_CASE("pipeline executes symbolic and system solvers end to end") {
+    Fixture fx;
+    auto derivative =
+        fx.pipeline->executeSync("Differentiate x^2 with respect to x");
+    CHECK(derivative.success);
+    CHECK(derivative.routing.engine == "math");
+    CHECK(derivative.engineEnvelope["result"]["simplified"] == "2*x");
+    checkPersisted(fx, derivative.jobId, true);
+
+    auto system = fx.pipeline->executeSync(
+        "Solve system x^2 + y^2 = 4; y = x with x = 1.4, y = 1");
+    CHECK(system.success);
+    REQUIRE(system.engineEnvelope["result"]["solution"].is_object());
+    CHECK(system.engineEnvelope["result"]["solution"].value("x", 0.0) ==
+          doctest::Approx(1.4142135623730951).epsilon(1e-9));
+    checkPersisted(fx, system.jobId, true);
+}
+
 TEST_CASE("pipeline executes convert and formula end to end") {
     Fixture fx;
     auto conv = fx.pipeline->executeSync("Convert 10 cm to mm");

@@ -251,3 +251,41 @@ TEST_CASE("pcb dimension-less creation reports missing dimensions") {
     CHECK(result.intent.operation == "create_board");
     REQUIRE_FALSE(result.intent.missing.empty());
 }
+
+TEST_CASE("math symbolic and system requests parse") {
+    RequirementParser parser;
+
+    const auto derivative = parser.parse("Differentiate x^2 with respect to t");
+    CHECK(trinity::intelligence::toString(derivative.status) == "VALID");
+    CHECK(derivative.intent.domain == "math");
+    CHECK(derivative.intent.operation == "differentiate");
+    CHECK(derivative.intent.parameters.value("expression", "") == "x^2");
+    CHECK(derivative.intent.parameters.value("variable", "") == "t");
+
+    const auto derivativeOf = parser.parse("Derivative of 2*x");
+    CHECK(trinity::intelligence::toString(derivativeOf.status) == "VALID");
+    CHECK(derivativeOf.intent.operation == "differentiate");
+    CHECK(derivativeOf.intent.parameters.value("expression", "") == "2*x");
+    CHECK_FALSE(derivativeOf.intent.parameters.contains("variable"));
+
+    const auto simplify = parser.parse("Simplify x*1 + 0");
+    CHECK(trinity::intelligence::toString(simplify.status) == "VALID");
+    CHECK(simplify.intent.operation == "simplify");
+    CHECK(simplify.intent.parameters.value("expression", "") == "x*1 + 0");
+
+    const auto system = parser.parse(
+        "Solve system x^2 + y^2 = 4; y = x with x = 1.4, y = 1");
+    CHECK(trinity::intelligence::toString(system.status) == "VALID");
+    CHECK(system.intent.domain == "math");
+    CHECK(system.intent.operation == "solve_system");
+    REQUIRE(system.intent.parameters.contains("equations"));
+    REQUIRE(system.intent.parameters["equations"].size() == 2);
+    CHECK(system.intent.parameters["equations"][0].get<std::string>() ==
+          "x^2 + y^2 = 4");
+    CHECK(system.intent.parameters["equations"][1].get<std::string>() == "y = x");
+    REQUIRE(system.intent.parameters.contains("variables"));
+    CHECK(system.intent.parameters["variables"].value("x", 0.0) ==
+          doctest::Approx(1.4));
+    CHECK(system.intent.parameters["variables"].value("y", 0.0) ==
+          doctest::Approx(1.0));
+}

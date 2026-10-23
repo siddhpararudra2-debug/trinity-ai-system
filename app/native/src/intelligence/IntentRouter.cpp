@@ -309,16 +309,18 @@ RouteResult IntentRouter::route(const Intent& intent,
 
     // Math domain: parameters pass through verbatim; the engine owns
     // evaluation semantics. Expression-style operations
-    // (evaluate/evaluate_expression/solve) require a string 'expression';
-    // structured operations carry their own validated parameters
-    // (solve_linear a/b, solve_quadratic a/b/c, convert value/from/to,
-    // formula name/inputs).
+    // (evaluate/evaluate_expression/solve/differentiate/simplify) require a
+    // string 'expression'; structured operations carry their own validated
+    // parameters (solve_linear a/b or A/b-matrix, solve_quadratic a/b/c,
+    // convert value/from/to, formula name/inputs, solve_system
+    // equations/variables).
     ToolCall call;
     call.toolCallId = core::newUuid();
     call.engine = "math";
     call.operation = operation;
     if (operation == "evaluate" || operation == "evaluate_expression" ||
-        operation == "solve") {
+        operation == "solve" || operation == "differentiate" ||
+        operation == "simplify") {
         if (!intent.parameters.contains("expression") ||
             !intent.parameters["expression"].is_string()) {
             return reject(engine, operation, "REJECTED",

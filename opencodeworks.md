@@ -25,6 +25,51 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M3: the math engine gained an honest symbolic layer (differentiate /
+  simplify / solve_system), a matrix solve, and a Newton system solver**
+  Built exactly as planned (AST beside the verified direct evaluator;
+  hand-rolled symbolic MVP — no CAS dependency; honest refusals over faked
+  results). What shipped in MathEngine (v0.4.0):
+  - A grammar-mirror AST (`AstParser`, `serializeAst` with
+    precedence-aware reparse-identical serialization) beside the untouched
+    numeric hot path; constants/functions resolve at parse exactly like the
+    direct Parser, free symbols are the point and resolve at eval.
+  - `differentiate`: sum/product/quotient/chain/power rules, sin/cos/tan,
+    exp, ln/log, sqrt, asin/acos/atan; `abs()` (piecewise) and
+    constant^variable with base <= 0 are structured RequestValidationError
+    refusals stated up front. Every single-symbol result is verified against
+    a central difference at a deterministic probe (x=1.7, or the requested
+    `at` point) and stamped as `derivative_check` in metadata; skipped —
+    and labeled skipped — when the expression is not finite at the probe.
+  - `simplify`: constant folding + identities (x+0, 0-x, x*0, x*1, x/1,
+    x^0, x^1, x-x) iterated to a serialization fixpoint; 1/0, negative-base
+    fractional powers and 0^0 deliberately stay unfolded (eval refusals,
+    not silently "fixed").
+  - `solve_linear` matrix form (A/b arrays, up to 16 unknowns) via Gaussian
+    elimination with partial pivoting; singular is a defined success outcome
+    (`outcome: "singular"`, honest message), not a crash; solutions are
+    per-row residual-verified into `equation_checks`.
+  - `solve_system` Newton (1..8 equations, 200-step budget) with a numeric
+    centered-difference Jacobian and per-equation residual verification;
+    contradictory (singular Jacobian) and overspecified systems fail with
+    structured errors — never a faked convergence; honest non-convergence
+    carries the final max residual.
+  - Intent art end to end: whitelist + per-op param rules in
+    IntentValidator, router pass-through for the expression ops,
+    RequirementParser phrases ("Differentiate x^2 with respect to t",
+    "Derivative of …", "Simplify …", "Solve system e1; e2 with x = 1.4,
+    y = 1"), two new MainWindow combo ops with per-op hints, and explicit
+    validate() branches per new op (the previous generic branch demanded a
+    numeric `value` and would have invalidated every symbolic result).
+  - Tests: +6 cases / +129 assertions — derivative round-trips vs central
+    differences at three probes, exact simplify strings incl. the honest
+    non-folds, matrix solve/singular/ragged/mismatch, circle+line Newton
+    (converges to sqrt(2) on both axes), contradictory/unbound/
+    overspecified refusals, validator whitelist coverage, parser phrase
+    coverage, and a pipeline e2e for "Differentiate …"/"Solve system …".
+    Native suite: 371 cases / 6,082 assertions, all green; ctest preset
+    green; full build (core + tests + Qt desktop app) clean.
+
 - [x] **M6: the vector store seam ships a working local store (refusal Gone)**
   `src/utils/vector_store.py` used to raise NotImplementedError on add/query;
   the seam now carries a real implementation with zero new dependencies:

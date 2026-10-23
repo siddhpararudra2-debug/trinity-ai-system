@@ -249,9 +249,19 @@ rest marked `skipped`. Model refusal executes nothing.
   variables/functions/constants/power; `solve` single-variable numeric
   roots with residual verification, identity checks, `solve_for`;
   closed-form `solve_linear`/`solve_quadratic` with degenerate outcomes;
-  `convert` over length/mass/angle/force/pressure with dimensional
-  mismatch errors; extensible `formula` registry seeded with ohm/power/
-  force; overflow and non-finite results are structured failures)
+  `solve_linear` matrix form A/b for any linear system up to 16 unknowns
+  via Gaussian elimination with partial pivoting (singular = defined
+  honest outcome, per-row residual checks); hand-rolled symbolic
+  `differentiate`/`simplify` over a grammar-mirror AST — constant
+  folding + identity rules iterated to a fixpoint, truthful refusals of
+  `abs()` and constant^variable bases <= 0, derivative verified against
+  a central difference at a deterministic probe and stamped as
+  `derivative_check` in metadata; `solve_system` Newton with a numeric
+  centered-difference Jacobian, per-equation residual verification and
+  honest non-convergence; `convert` over length/mass/angle/force/
+  pressure with dimensional mismatch errors; extensible `formula`
+  registry seeded with ohm/power/force; overflow and non-finite results
+  are structured failures)
 - `CADEngine::generate` — parametric quadcopter frame over the
   dependency-free mesh backend (`cad/FrameParams,Mesh,Builder,
   StlWriter,Validators`): 108-triangle validated geometry, binary STL +
@@ -330,8 +340,10 @@ rest marked `skipped`. Model refusal executes nothing.
   Ops with no implementation here are not advertised by the Python bridge at
   all, rather than advertised and answering 501 — a capability list that
   overstates itself is worse than a short one.
-- Math beyond single-variable numeric roots (transcendental systems,
-  multi-variable solving, symbolic algebra)
+- Math beyond this engine's scope: symbolic integration (indefinite/
+  definite), eigendecomposition, matrix algebra beyond linear solves,
+  statistics. `differentiate` and `simplify` cover their closed op set
+  only and refuse the rest honestly.
 - Kernel-backed STEP (CadQuery/OpenCascade adapters),
   mesh booleans beyond box composition
 - PCB routing, full ERC/DRC, SPICE simulation, footprint synthesis

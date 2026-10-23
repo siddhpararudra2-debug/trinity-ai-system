@@ -155,6 +155,9 @@ TEST_CASE("new math operations pass validation against registry") {
              "Solve quadratic with a = 1, b = -5, c = 6",
              "Convert 10 cm to mm",
              "Formula force with m = 2, a = 3",
+             "Differentiate x^2 with respect to t",
+             "Simplify x*1 + 0",
+             "Solve system x^2 + y^2 = 4; y = x with x = 1.4, y = 1",
          }) {
         const auto parsed = parser.parse(text);
         REQUIRE(trinity::intelligence::toString(parsed.status) == "VALID");

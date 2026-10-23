@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <functional>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -15,10 +17,11 @@ namespace trinity::engines {
 
 MathEngine::MathEngine() {
     name_ = "math";
-    version_ = "0.3.0";
+    version_ = "0.4.0";
     capabilities_ = {"evaluate_expression", "evaluate",         "solve",
-                     "solve_linear",        "solve_quadratic",  "convert",
-                     "formula"};
+                     "solve_linear",        "solve_quadratic", "convert",
+                     "formula",             "differentiate",   "simplify",
+                     "solve_system"};
 }
 
 namespace {
@@ -300,6 +303,683 @@ std::map<std::string, double> jsonToVariables(const core::Json& json,
         variables[it.key()] = it.value().get<double>();
     }
     return variables;
+}
+
+// ---------------------------------------------------------------------------
+// Expression AST: the symbolic layer. The direct Parser above stays the
+// verified numeric hot path; this AST exists for differentiating,
+// simplifying and the multi-variable Newton system solver. It mirrors the
+// same grammar and error strings, reuses the shared function/constant
+// tables, and is treated as immutable everywhere (subtrees may be shared
+// between nodes after reconstruction).
+// ---------------------------------------------------------------------------
+
+struct ExprNode;
+using ExprPtr = std::shared_ptr<ExprNode>;
+
+struct ExprNode {
+    enum class Kind { Number, Symbol, Binary, UnaryMinus, Call };
+    Kind kind = Kind::Number;
+    double number = 0.0;  // Kind::Number
+    std::string name;     // Kind::Symbol / Kind::Call
+    char op = 0;          // Kind::Binary: + - * / ^
+    ExprPtr left;         // Binary: lhs; UnaryMinus / Call: only operand
+    ExprPtr right;        // Binary: rhs
+};
+
+ExprPtr numberNode(double value) {
+    auto node = std::make_shared<ExprNode>();
+    node->kind = ExprNode::Kind::Number;
+    node->number = value;
+    return node;
+}
+
+ExprPtr symbolNode(std::string name) {
+    auto node = std::make_shared<ExprNode>();
+    node->kind = ExprNode::Kind::Symbol;
+    node->name = std::move(name);
+    return node;
+}
+
+ExprPtr binaryNode(char op, ExprPtr left, ExprPtr right) {
+    auto node = std::make_shared<ExprNode>();
+    node->kind = ExprNode::Kind::Binary;
+    node->op = op;
+    node->left = std::move(left);
+    node->right = std::move(right);
+    return node;
+}
+
+ExprPtr minusNode(ExprPtr operand) {
+    auto node = std::make_shared<ExprNode>();
+    node->kind = ExprNode::Kind::UnaryMinus;
+    node->left = std::move(operand);
+    return node;
+}
+
+ExprPtr callNode(std::string name, ExprPtr arg) {
+    auto node = std::make_shared<ExprNode>();
+    node->kind = ExprNode::Kind::Call;
+    node->name = std::move(name);
+    node->left = std::move(arg);
+    return node;
+}
+
+// Grammar mirror of Parser: expr/term/factor/power/primary. The difference
+// is that identifiers resolve lazily: constants fold here, functions must
+// be known here, but free symbols are ALLOWED (they are the point of the
+// symbolic layer) and resolve at evaluation time.
+class AstParser {
+public:
+    explicit AstParser(std::string text) : text_(std::move(text)) {}
+
+    ExprPtr parse() {
+        skipSpaces();
+        if (pos_ >= text_.size()) {
+            throw std::invalid_argument("empty expression");
+        }
+        ExprPtr value = parseExpr();
+        skipSpaces();
+        if (pos_ != text_.size()) {
+            throw std::invalid_argument("unexpected character at offset " +
+                                        std::to_string(pos_));
+        }
+        return value;
+    }
+
+private:
+    void skipSpaces() {
+        while (pos_ < text_.size() &&
+               std::isspace(static_cast<unsigned char>(text_[pos_]))) {
+            ++pos_;
+        }
+    }
+
+    ExprPtr parseExpr() {
+        ExprPtr value = parseTerm();
+        for (;;) {
+            skipSpaces();
+            if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) {
+                const char op = text_[pos_++];
+                value = binaryNode(op, std::move(value), parseTerm());
+            } else {
+                return value;
+            }
+        }
+    }
+
+    ExprPtr parseTerm() {
+        ExprPtr value = parseFactor();
+        for (;;) {
+            skipSpaces();
+            if (pos_ < text_.size() && (text_[pos_] == '*' || text_[pos_] == '/')) {
+                const char op = text_[pos_++];
+                value = binaryNode(op, std::move(value), parseFactor());
+            } else {
+                return value;
+            }
+        }
+    }
+
+    ExprPtr parseFactor() {
+        skipSpaces();
+        if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) {
+            const char sign = text_[pos_++];
+            ExprPtr value = parseFactor();
+            return (sign == '-') ? minusNode(std::move(value)) : value;
+        }
+        return parsePower();
+    }
+
+    ExprPtr parsePower() {
+        ExprPtr base = parsePrimary();
+        skipSpaces();
+        if (pos_ < text_.size() && text_[pos_] == '^') {
+            ++pos_;
+            return binaryNode('^', std::move(base), parseFactor());
+        }
+        return base;
+    }
+
+    ExprPtr parsePrimary() {
+        skipSpaces();
+        if (pos_ >= text_.size()) {
+            throw std::invalid_argument("unexpected end of expression");
+        }
+        if (text_[pos_] == '(') {
+            ++pos_;
+            ExprPtr value = parseExpr();
+            skipSpaces();
+            if (pos_ >= text_.size() || text_[pos_] != ')') {
+                throw std::invalid_argument("missing closing parenthesis");
+            }
+            ++pos_;
+            return value;
+        }
+        if (std::isalpha(static_cast<unsigned char>(text_[pos_])) ||
+            text_[pos_] == '_') {
+            return parseIdentifier();
+        }
+        return parseNumber();
+    }
+
+    ExprPtr parseIdentifier() {
+        const size_t start = pos_;
+        while (pos_ < text_.size() &&
+               (std::isalnum(static_cast<unsigned char>(text_[pos_])) ||
+                text_[pos_] == '_')) {
+            ++pos_;
+        }
+        const std::string name = text_.substr(start, pos_ - start);
+        if (isConstantName(name)) {
+            return numberNode(constantValue(name));
+        }
+        skipSpaces();
+        if (pos_ < text_.size() && text_[pos_] == '(') {
+            if (!isFunctionName(name)) {
+                throw std::invalid_argument("unknown function '" + name + "'");
+            }
+            ++pos_;
+            ExprPtr arg = parseExpr();
+            skipSpaces();
+            if (pos_ >= text_.size() || text_[pos_] != ')') {
+                throw std::invalid_argument("missing closing parenthesis after '" +
+                                            name + "'");
+            }
+            ++pos_;
+            return callNode(name, std::move(arg));
+        }
+        return symbolNode(name);
+    }
+
+    ExprPtr parseNumber() {
+        skipSpaces();
+        const size_t start = pos_;
+        bool digits = false;
+        while (pos_ < text_.size() &&
+               std::isdigit(static_cast<unsigned char>(text_[pos_]))) {
+            ++pos_;
+            digits = true;
+        }
+        if (pos_ < text_.size() && text_[pos_] == '.') {
+            ++pos_;
+            while (pos_ < text_.size() &&
+                   std::isdigit(static_cast<unsigned char>(text_[pos_]))) {
+                ++pos_;
+                digits = true;
+            }
+        }
+        if (!digits) {
+            throw std::invalid_argument("expected number at offset " +
+                                        std::to_string(start));
+        }
+        return numberNode(std::stod(text_.substr(start, pos_ - start)));
+    }
+
+    const std::string text_;
+    size_t pos_ = 0;
+};
+
+/// Numeric evaluation of an AST under variable bindings. Mirrors the direct
+/// Parser's semantics and error strings; constants shadow variables exactly
+/// like the legacy parse path. Domain errors from applyFunction surface as
+/// RequestValidationError (matching legacy behavior).
+double evalAst(const ExprPtr& node, const std::map<std::string, double>& variables) {
+    using Kind = ExprNode::Kind;
+    switch (node->kind) {
+        case Kind::Number:
+            return node->number;
+        case Kind::Symbol: {
+            if (isConstantName(node->name)) {
+                return constantValue(node->name);
+            }
+            const auto it = variables.find(node->name);
+            if (it == variables.end()) {
+                throw std::invalid_argument("unknown variable '" + node->name + "'");
+            }
+            return it->second;
+        }
+        case Kind::UnaryMinus:
+            return -evalAst(node->left, variables);
+        case Kind::Call:
+            return applyFunction(node->name, evalAst(node->left, variables), node->name + "(...)");
+        case Kind::Binary: {
+            const double a = evalAst(node->left, variables);
+            const double b = evalAst(node->right, variables);
+            switch (node->op) {
+                case '+':
+                    return a + b;
+                case '-':
+                    return a - b;
+                case '*':
+                    return a * b;
+                case '/':
+                    if (b == 0.0) {
+                        throw std::invalid_argument("division by zero");
+                    }
+                    return a / b;
+                case '^':
+                    if (a < 0.0 && std::floor(b) != b) {
+                        throw std::invalid_argument(
+                            "negative base with fractional exponent");
+                    }
+                    return std::pow(a, b);
+                default:
+                    break;
+            }
+            break;
+        }
+    }
+    throw std::invalid_argument("malformed expression tree");
+}
+
+/// Does the subtree contain the symbol (used for power-rule case split)?
+bool referencesVariable(const ExprPtr& node, const std::string& variable) {
+    using Kind = ExprNode::Kind;
+    switch (node->kind) {
+        case Kind::Number:
+            return false;
+        case Kind::Symbol:
+            return node->name == variable;
+        case Kind::UnaryMinus:
+        case Kind::Call:
+            return referencesVariable(node->left, variable);
+        case Kind::Binary:
+            return referencesVariable(node->left, variable) ||
+                   referencesVariable(node->right, variable);
+    }
+    return false;
+}
+
+/// Constant-fold a numeric value into a deterministic, shortest-round-trip
+/// string. Integers print without decimals for readable derivatives.
+std::string formatNumber(double value) {
+    if (value == 0.0) {
+        return "0";  // collapses -0 as well
+    }
+    if (std::isfinite(value) && std::fabs(value) < 1e15) {
+        const double rounded = std::nearbyint(value);
+        if (std::fabs(value - rounded) < 1e-12) {
+            return std::to_string(static_cast<long long>(rounded));
+        }
+    }
+    char buffer[64];
+    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+    if (result.ec != std::errc()) {
+        // Unreachable for finite doubles; fall back to fixed precision.
+        return std::to_string(value);
+    }
+    return std::string(buffer, result.ptr);
+}
+
+int binaryPrecedence(char op) {
+    if (op == '^') {
+        return 3;
+    }
+    if (op == '*' || op == '/') {
+        return 2;
+    }
+    return 1;
+}
+
+/// Precedence-aware serialization of one child inside a binary/unary
+/// operator. Parenthesizes only when required, so serialization is
+/// deterministic and reparse-identical in value.
+std::string serializeChild(const ExprPtr& child, int parentPrec, char parentOp,
+                           bool rightSide);
+
+std::string serializeAst(const ExprPtr& node) {
+    using Kind = ExprNode::Kind;
+    switch (node->kind) {
+        case Kind::Number:
+            return formatNumber(node->number);
+        case Kind::Symbol:
+            return node->name;
+        case Kind::Call:
+            return node->name + "(" + serializeAst(node->left) + ")";
+        case Kind::UnaryMinus:
+            return "-" + serializeChild(node->left, 2, '-', false);
+        case Kind::Binary: {
+            const int prec = binaryPrecedence(node->op);
+            return serializeChild(node->left, prec, node->op, false) + node->op +
+                   serializeChild(node->right, prec, node->op, true);
+        }
+    }
+    return "?";
+}
+
+std::string serializeChild(const ExprPtr& child, int parentPrec, char parentOp,
+                           bool rightSide) {
+    const std::string text = serializeAst(child);
+    if (child->kind != ExprNode::Kind::Binary &&
+        child->kind != ExprNode::Kind::UnaryMinus) {
+        return text;
+    }
+    const int prec = child->kind == ExprNode::Kind::Binary
+                         ? binaryPrecedence(child->op)
+                         : 2;  // UnaryMinus binds like multiplication
+    bool parens = prec < parentPrec ||
+                  (parentOp == '^' && prec == parentPrec &&
+                   child->kind == ExprNode::Kind::Binary);
+    if (!parens && rightSide) {
+        if (parentOp == '/') {
+            parens = prec <= parentPrec;
+        } else if (parentOp == '-') {
+            parens = prec <= 1;
+        } else if (parentOp == '^') {
+            parens = prec <= parentPrec;
+        }
+    }
+    return parens ? "(" + text + ")" : text;
+}
+
+bool isNumberValue(const ExprPtr& node, double value) {
+    return node->kind == ExprNode::Kind::Number && node->number == value;
+}
+
+/// Symbolic derivative w.r.t. `variable`. Honest refusals through abs()
+/// (piecewise) and through constant^variable with a non-positive base
+/// (undefined over the reals) are part of the contract, not oversights.
+ExprPtr diffAst(const ExprPtr& node, const std::string& variable) {
+    using Kind = ExprNode::Kind;
+    switch (node->kind) {
+        case Kind::Number:
+            return numberNode(0.0);
+        case Kind::Symbol:
+            return numberNode(node->name == variable ? 1.0 : 0.0);
+        case Kind::UnaryMinus:
+            return minusNode(diffAst(node->left, variable));
+        case Kind::Call: {
+            const std::string& fn = node->name;
+            const ExprPtr& u = node->left;
+            const ExprPtr du = diffAst(u, variable);
+            if (fn == "abs") {
+                throw core::RequestValidationError(
+                    "abs() is not symbolically differentiable (piecewise function)",
+                    {{"function", fn}}, "engines");
+            }
+            if (fn == "sin") {
+                return binaryNode('*', callNode("cos", u), du);
+            }
+            if (fn == "cos") {
+                return minusNode(binaryNode('*', callNode("sin", u), du));
+            }
+            if (fn == "tan") {
+                return binaryNode('/', du,
+                                  binaryNode('^', callNode("cos", u), numberNode(2.0)));
+            }
+            if (fn == "exp") {
+                return binaryNode('*', callNode("exp", u), du);
+            }
+            if (fn == "log" || fn == "ln") {
+                return binaryNode('/', du, u);
+            }
+            if (fn == "sqrt") {
+                return binaryNode('/', du,
+                                  binaryNode('*', numberNode(2.0), callNode("sqrt", u)));
+            }
+            if (fn == "asin") {
+                return binaryNode('/', du,
+                                  callNode("sqrt",
+                                           binaryNode('-', numberNode(1.0),
+                                                      binaryNode('^', u, numberNode(2.0)))));
+            }
+            if (fn == "acos") {
+                return minusNode(
+                    binaryNode('/', du,
+                               callNode("sqrt",
+                                        binaryNode('-', numberNode(1.0),
+                                                   binaryNode('^', u, numberNode(2.0))))));
+            }
+            if (fn == "atan") {
+                return binaryNode('/', du,
+                                  binaryNode('+', numberNode(1.0),
+                                             binaryNode('^', u, numberNode(2.0))));
+            }
+            // AstParser only produces known functions; unreachable.
+            throw std::invalid_argument("unknown function '" + fn + "'");
+        }
+        case Kind::Binary: {
+            const char op = node->op;
+            const ExprPtr& a = node->left;
+            const ExprPtr& b = node->right;
+            const ExprPtr da = diffAst(a, variable);
+            const ExprPtr db = diffAst(b, variable);
+            if (op == '+' || op == '-') {
+                return binaryNode(op, da, db);
+            }
+            if (op == '*') {
+                return binaryNode('+', binaryNode('*', a, db),
+                                  binaryNode('*', da, b));
+            }
+            if (op == '/') {
+                return binaryNode('/',
+                                  binaryNode('-', binaryNode('*', da, b),
+                                             binaryNode('*', a, db)),
+                                  binaryNode('^', b, numberNode(2.0)));
+            }
+            // Power: case split by which side references the variable.
+            const bool vHasVar = referencesVariable(b, variable);
+            const bool uHasVar = referencesVariable(a, variable);
+            if (!vHasVar) {
+                // d(u^n) = n * u^(n-1) * du   (n is a constant subtree)
+                const double n = evalAst(b, {});
+                return binaryNode('*',
+                                  numberNode(n),
+                                  binaryNode('*', binaryNode('^', a, numberNode(n - 1.0)),
+                                             da));
+            }
+            if (!uHasVar) {
+                // d(c^v) = c^v * ln(c) * dv; c <= 0 has no real derivative.
+                const double c = evalAst(a, {});
+                if (c <= 0.0) {
+                    throw core::RequestValidationError(
+                        "constant^variable with non-positive base has no real "
+                        "derivative",
+                        {{"base", formatNumber(c)}}, "engines");
+                }
+                return binaryNode('*',
+                                  node,
+                                  binaryNode('*', callNode("ln", a), db));
+            }
+            // d(u^v) = u^v * (dv * ln(u) + v * du / u)
+            return binaryNode('*',
+                              node,
+                              binaryNode('+',
+                                         binaryNode('*', db, callNode("ln", a)),
+                                         binaryNode('/', binaryNode('*', b, da), a)));
+        }
+    }
+    throw std::invalid_argument("malformed expression tree");
+}
+
+/// One simplification pass (post-order). Constant folding refuses to fold
+/// divisions by zero, negative-base fractional powers and 0^0, and only
+/// folds results that stay finite: those remain symbolic and honest.
+ExprPtr simplifyStep(const ExprPtr& node) {
+    using Kind = ExprNode::Kind;
+    switch (node->kind) {
+        case Kind::Number:
+        case Kind::Symbol:
+            return node;
+        case Kind::UnaryMinus: {
+            const ExprPtr child = simplifyStep(node->left);
+            if (child->kind == Kind::Number) {
+                return numberNode(-child->number);
+            }
+            if (child->kind == Kind::UnaryMinus) {
+                return child->left;
+            }
+            return minusNode(child);
+        }
+        case Kind::Call:
+            return callNode(node->name, simplifyStep(node->left));
+        case Kind::Binary: {
+            const char op = node->op;
+            const ExprPtr a = simplifyStep(node->left);
+            const ExprPtr b = simplifyStep(node->right);
+            if (a->kind == Kind::Number && b->kind == Kind::Number) {
+                const double x = a->number;
+                const double y = b->number;
+                double folded = 0.0;
+                bool foldable = true;
+                switch (op) {
+                    case '+':
+                        folded = x + y;
+                        break;
+                    case '-':
+                        folded = x - y;
+                        break;
+                    case '*':
+                        folded = x * y;
+                        break;
+                    case '/':
+                        foldable = y != 0.0;
+                        if (foldable) {
+                            folded = x / y;
+                        }
+                        break;
+                    case '^':
+                        foldable = !(x < 0.0 && std::floor(y) != y) &&
+                                   !(x == 0.0 && y == 0.0);
+                        if (foldable) {
+                            folded = std::pow(x, y);
+                        }
+                        break;
+                    default:
+                        foldable = false;
+                        break;
+                }
+                if (foldable && std::isfinite(folded)) {
+                    return numberNode(folded);
+                }
+            }
+            switch (op) {
+                case '+':
+                    if (isNumberValue(b, 0.0)) {
+                        return a;
+                    }
+                    if (isNumberValue(a, 0.0)) {
+                        return b;
+                    }
+                    break;
+                case '-':
+                    if (isNumberValue(b, 0.0)) {
+                        return a;
+                    }
+                    if (isNumberValue(a, 0.0)) {
+                        return minusNode(b);
+                    }
+                    if (serializeAst(a) == serializeAst(b)) {
+                        return numberNode(0.0);
+                    }
+                    break;
+                case '*':
+                    if (isNumberValue(a, 0.0) || isNumberValue(b, 0.0)) {
+                        return numberNode(0.0);
+                    }
+                    if (isNumberValue(a, 1.0)) {
+                        return b;
+                    }
+                    if (isNumberValue(b, 1.0)) {
+                        return a;
+                    }
+                    break;
+                case '/':
+                    if (isNumberValue(b, 1.0)) {
+                        return a;
+                    }
+                    break;
+                case '^':
+                    if (isNumberValue(b, 1.0)) {
+                        return a;
+                    }
+                    if (isNumberValue(b, 0.0) &&
+                        !(a->kind == Kind::Number && a->number == 0.0)) {
+                        return numberNode(1.0);
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return binaryNode(op, a, b);
+        }
+    }
+    return node;
+}
+
+/// Iterate simplifyStep until the serialization stabilizes (bounded passes).
+ExprPtr simplifyAst(const ExprPtr& node) {
+    ExprPtr current = node;
+    for (int pass = 0; pass < 8; ++pass) {
+        ExprPtr next = simplifyStep(current);
+        if (next == current || serializeAst(next) == serializeAst(current)) {
+            return next;
+        }
+        current = std::move(next);
+    }
+    return current;
+}
+
+// --- Gaussian elimination with partial pivoting -------------------------
+// Shared by the matrix form of solve_linear and the Newton system
+// solver. Scale-aware pivot threshold; overflow is refused, not returned.
+std::vector<double> gaussSolve(std::vector<std::vector<double>> a,
+                               std::vector<double> rhs) {
+    const size_t n = rhs.size();
+    double scale = 1.0;
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            if (std::isfinite(a[i][j])) {
+                scale = std::max(scale, std::fabs(a[i][j]));
+            }
+        }
+    }
+    for (size_t col = 0; col < n; ++col) {
+        size_t pivotRow = col;
+        double best = std::fabs(a[col][col]);
+        for (size_t row = col + 1; row < n; ++row) {
+            const double candidate = std::fabs(a[row][col]);
+            if (candidate > best) {
+                best = candidate;
+                pivotRow = row;
+            }
+        }
+        if (!(best > 1e-12 * scale)) {
+            throw core::EngineExecutionError(
+                "Matrix is singular (a pivot vanished)",
+                {{"size", static_cast<double>(n)}, {"singular", true}}, "engines");
+        }
+        if (pivotRow != col) {
+            std::swap(a[pivotRow], a[col]);
+            std::swap(rhs[pivotRow], rhs[col]);
+        }
+        for (size_t row = col + 1; row < n; ++row) {
+            const double factor = a[row][col] / a[col][col];
+            if (factor == 0.0) {
+                continue;
+            }
+            a[row][col] = 0.0;
+            for (size_t k = col + 1; k < n; ++k) {
+                a[row][k] -= factor * a[col][k];
+            }
+            rhs[row] -= factor * rhs[col];
+        }
+    }
+    std::vector<double> x(n, 0.0);
+    for (size_t i = n; i-- > 0;) {
+        double sum = rhs[i];
+        for (size_t j = i + 1; j < n; ++j) {
+            sum -= a[i][j] * x[j];
+        }
+        x[i] = sum / a[i][i];
+        if (!std::isfinite(x[i])) {
+            throw core::EngineExecutionError(
+                "Linear solve produced a non-finite value",
+                {{"index", static_cast<double>(i)}}, "engines");
+        }
+    }
+    return x;
 }
 
 }  // namespace
@@ -801,6 +1481,15 @@ EngineResult MathEngine::execute(const EngineRequest& request) {
         if (request.operation == "solve_quadratic") {
             return executeSolveQuadratic(request);
         }
+        if (request.operation == "differentiate") {
+            return executeDifferentiate(request);
+        }
+        if (request.operation == "simplify") {
+            return executeSimplify(request);
+        }
+        if (request.operation == "solve_system") {
+            return executeSolveSystem(request);
+        }
         if (request.operation == "convert") {
             return executeConvert(request);
         }
@@ -958,6 +1647,9 @@ double finiteParam(const core::Json& params, const std::string& key,
 }  // namespace
 
 EngineResult MathEngine::executeSolveLinear(const EngineRequest& request) {
+    if (request.parameters.contains("A")) {
+        return executeSolveLinearMatrix(request);
+    }
     requireParams(request, {"a", "b"});
     const double a = finiteParam(request.parameters, "a", "solve_linear");
     const double b = finiteParam(request.parameters, "b", "solve_linear");
@@ -1068,6 +1760,554 @@ EngineResult MathEngine::executeSolveQuadratic(const EngineRequest& request) {
         "engines", "math solve_quadratic",
         core::Json{{"a", a}, {"b", b}, {"c", c}, {"outcome", data["outcome"]}});
     return out;
+}
+
+namespace {
+
+//! Parse text into an AST, mapping syntax errors onto the structured
+//! RequestValidationError (same phrasing as `solve`).
+ExprPtr parseAstOrThrow(const std::string& expression) {
+    try {
+        return AstParser(expression).parse();
+    } catch (const std::invalid_argument& exc) {
+        throw core::RequestValidationError(std::string("Invalid expression: ") + exc.what(),
+                                           {{"expression", expression}}, "engines");
+    }
+}
+
+//! The symbolic operations are plain-expressions by contract; equations
+//! route through `solve` / `solve_system` instead.
+void rejectEquation(const std::string& expression, const std::string& operation) {
+    if (expression.find('=') != std::string::npos) {
+        throw core::RequestValidationError(
+            operation + " expects a plain expression, not an equation with '='",
+            {{"expression", expression}}, "engines");
+    }
+}
+
+//! True when an expression parameter is a present, non-empty string.
+void requireExpressionParam(const core::Json& parameters, const std::string& operation) {
+    if (!parameters["expression"].is_string() ||
+        parameters["expression"].get<std::string>().empty()) {
+        throw core::RequestValidationError(
+            "Operation '" + operation + "' requires a non-empty string 'expression'",
+            {{"operation", operation}}, "engines");
+    }
+}
+
+}  // namespace
+
+EngineResult MathEngine::executeSolveLinearMatrix(const EngineRequest& request) {
+    // Matrix form: A (n x n) and b (length n) as JSON arrays. It is an
+    // extension of solve_linear, sharing its name, result keys and
+    // validation; the scalar (a, b) coefficient form above is untouched.
+    const core::Json& aJson = request.parameters["A"];
+    const core::Json& bJson = request.parameters["b"];
+    if (!aJson.is_array() || !bJson.is_array()) {
+        throw core::RequestValidationError(
+            "solve_linear 'A' and 'b' must be arrays (matrix form)",
+            {{"operation", "solve_linear"}}, "engines");
+    }
+    const size_t n = aJson.size();
+    if (n < 1 || n > 16 || bJson.size() != n) {
+        throw core::RequestValidationError(
+            "solve_linear expects a square 'A' (1x1..16x16) and 'b' of matching "
+            "length",
+            {{"rows", n}, {"b_length", bJson.size()}}, "engines");
+    }
+    std::vector<std::vector<double>> matrix(n, std::vector<double>(n, 0.0));
+    std::vector<double> rhs(n, 0.0);
+    for (size_t i = 0; i < n; ++i) {
+        if (!aJson[i].is_array() || aJson[i].size() != n) {
+            throw core::RequestValidationError(
+                "solve_linear 'A' must be a square matrix of finite numbers",
+                {{"row", i}}, "engines");
+        }
+        for (size_t j = 0; j < n; ++j) {
+            if (!aJson[i][j].is_number() ||
+                !std::isfinite(aJson[i][j].get<double>())) {
+                throw core::RequestValidationError(
+                    "solve_linear 'A' must contain only finite numbers",
+                    {{"row", i}, {"column", j}}, "engines");
+            }
+            matrix[i][j] = aJson[i][j].get<double>();
+        }
+        if (!bJson[i].is_number() || !std::isfinite(bJson[i].get<double>())) {
+            throw core::RequestValidationError(
+                "solve_linear 'b' must contain only finite numbers",
+                {{"index", i}}, "engines");
+        }
+        rhs[i] = bJson[i].get<double>();
+    }
+
+    core::Json data = {{"A", aJson}, {"b", bJson}, {"mode", "matrix"}};
+    try {
+        const std::vector<double> x = gaussSolve(matrix, rhs);
+        core::Json solutions = core::Json::array();
+        for (double value : x) {
+            solutions.push_back(value);
+        }
+        data["outcome"] = "solution";
+        data["solutions"] = solutions;
+        EngineResult out = successResult(request, data);
+        // Scale-aware residual verification per row (mirrors solve).
+        core::Json checks = core::Json::object();
+        bool allOk = true;
+        for (size_t i = 0; i < n; ++i) {
+            double residual = -rhs[i];
+            for (size_t j = 0; j < n; ++j) {
+                residual += matrix[i][j] * x[j];
+            }
+            const bool ok =
+                std::fabs(residual) < 1e-9 * (1.0 + std::fabs(rhs[i]));
+            checks["row_" + std::to_string(i) + "_satisfies_system"] = ok;
+            allOk = allOk && ok;
+        }
+        out.metadata["equation_checks"] = checks;
+        if (!allOk) {
+            out.success = false;
+            out.addError(core::makeError(core::ErrorCode::EngineExecutionError,
+                                         "Solution failed residual verification",
+                                         "engines", {{"size", n}}));
+        }
+        out.validation = validate(out);
+        core::Logger::instance().info(
+            "engines", "math solve_linear matrix",
+            core::Json{{"size", n}, {"outcome", "solution"}});
+        return out;
+    } catch (const core::EngineExecutionError& exc) {
+        // Singular is a defined, honest outcome (like no_solution), not a
+        // crash; genuine overflow rethrows with its own message.
+        const bool singular =
+            exc.toJson().value("details", core::Json::object())
+                .value("singular", false);
+        if (!singular) {
+            throw;
+        }
+        data["outcome"] = "singular";
+        data["message"] = "Matrix is singular; the system has no unique solution";
+        EngineResult out = successResult(request, data);
+        out.validation = validate(out);
+        core::Logger::instance().info(
+            "engines", "math solve_linear matrix",
+            core::Json{{"size", n}, {"outcome", "singular"}});
+        return out;
+    }
+}
+
+EngineResult MathEngine::executeDifferentiate(const EngineRequest& request) {
+    requireParams(request, {"expression"});
+    requireExpressionParam(request.parameters, "differentiate");
+    const std::string expr = request.parameters["expression"].get<std::string>();
+    rejectEquation(expr, "differentiate");
+
+    std::string variable = "x";
+    if (request.parameters.contains("variable")) {
+        if (!request.parameters["variable"].is_string()) {
+            throw core::RequestValidationError(
+                "Parameter 'variable' must be a string",
+                {{"operation", "differentiate"}}, "engines");
+        }
+        variable = request.parameters["variable"].get<std::string>();
+        if (variable.empty()) {
+            throw core::RequestValidationError(
+                "Parameter 'variable' must not be empty",
+                {{"operation", "differentiate"}}, "engines");
+        }
+        if (isFunctionName(variable) || isConstantName(variable)) {
+            throw core::RequestValidationError(
+                "'" + variable + "' is a function or constant name, not a variable",
+                {{"operation", "differentiate"}}, "engines");
+        }
+    }
+    const std::vector<std::string> symbols = extractSymbols(expr);
+    if (request.parameters.contains("variable")) {
+        if (std::find(symbols.begin(), symbols.end(), variable) ==
+            symbols.end()) {
+            throw core::RequestValidationError(
+                "Variable '" + variable + "' does not appear in the expression",
+                {{"expression", expr}, {"variable", variable}}, "engines");
+        }
+    } else {
+        if (symbols.size() == 1) {
+            variable = symbols.front();
+        } else if (symbols.size() > 1) {
+            core::Json names = core::Json::array();
+            for (const auto& symbol : symbols) {
+                names.push_back(symbol);
+            }
+            throw core::RequestValidationError(
+                "Multiple free symbols; pass a 'variable' to differentiate "
+                "against",
+                {{"expression", expr}, {"symbols", names}}, "engines");
+        }
+    }
+
+    bool hasAt = false;
+    double at = 0.0;
+    if (request.parameters.contains("at")) {
+        if (!request.parameters["at"].is_number() ||
+            !std::isfinite(request.parameters["at"].get<double>())) {
+            throw core::RequestValidationError(
+                "Parameter 'at' must be a finite number",
+                {{"operation", "differentiate"}}, "engines");
+        }
+        hasAt = true;
+        at = request.parameters["at"].get<double>();
+    }
+
+    const ExprPtr raw = parseAstOrThrow(expr);
+    const ExprPtr rawDerivative = diffAst(raw, variable);
+    const ExprPtr simplifiedDerivative = simplifyAst(rawDerivative);
+    const std::string derivativeText = serializeAst(rawDerivative);
+    const std::string simplifiedText = serializeAst(simplifiedDerivative);
+
+    core::Json data = {{"expression", expr},
+                       {"variable", variable},
+                       {"derivative", derivativeText},
+                       {"simplified", simplifiedText}};
+
+    // Optional numeric value at a point; honest refusal when the derivative
+    // is not finite there.
+    if (hasAt) {
+        try {
+            const double value =
+                evaluateWithVariables(simplifiedText, {{variable, at}});
+            if (!std::isfinite(value)) {
+                throw std::invalid_argument("non-finite");
+            }
+            data["value"] = value;
+        } catch (const core::TrinityError&) {
+            throw;
+        } catch (const std::exception&) {
+            throw core::RequestValidationError(
+                "Derivative has no finite value at the given point",
+                {{"expression", expr}, {"variable", variable}, {"at", at}},
+                "engines");
+        }
+    }
+
+    EngineResult out = successResult(request, data);
+
+    // Independent numeric verification: symbolic derivative vs central
+    // difference at a deterministic probe point (only possible when the
+    // variable is the expression's single symbol). Skipped — and labeled
+    // skipped — when the expression is not finite at the probe.
+    const double probePoint = hasAt ? at : 1.7;
+    bool onlyVariable = true;
+    for (const auto& symbol : symbols) {
+        if (symbol != variable) {
+            onlyVariable = false;
+            break;
+        }
+    }
+    if (onlyVariable) {
+        try {
+            std::map<std::string, double> probe{{variable, probePoint}};
+            const double exact =
+                evaluateWithVariables(simplifiedText, probe);
+            const double h = 1e-6 * (1.0 + probePoint);
+            probe[variable] = probePoint + h;
+            const double fp = evaluateWithVariables(expr, probe);
+            probe[variable] = probePoint - h;
+            const double fm = evaluateWithVariables(expr, probe);
+            const double numeric = (fp - fm) / (2.0 * h);
+            const bool ok =
+                std::fabs(exact - numeric) < 1e-6 * (1.0 + std::fabs(exact));
+            out.metadata["derivative_check"] = ok;
+            if (!ok) {
+                out.success = false;
+                out.addError(core::makeError(
+                    core::ErrorCode::EngineExecutionError,
+                    "Derivative failed numeric verification", "engines",
+                    {{"expression", expr}, {"variable", variable}}));
+            }
+        } catch (...) {
+            out.metadata["derivative_check"] = "skipped";
+        }
+    }
+
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math differentiate",
+        core::Json{{"expression", expr}, {"variable", variable},
+                   {"derivative", simplifiedText}});
+    return out;
+}
+
+EngineResult MathEngine::executeSimplify(const EngineRequest& request) {
+    requireParams(request, {"expression"});
+    requireExpressionParam(request.parameters, "simplify");
+    const std::string expr = request.parameters["expression"].get<std::string>();
+    rejectEquation(expr, "simplify");
+
+    const ExprPtr ast = parseAstOrThrow(expr);
+    const std::string simplified = serializeAst(simplifyAst(ast));
+    core::Json data = {{"expression", expr}, {"simplified", simplified}};
+    if (extractSymbols(simplified).empty()) {
+        try {
+            const double value = evaluateWithVariables(simplified, {});
+            if (std::isfinite(value)) {
+                data["value"] = value;
+            }
+        } catch (...) {
+            // The simplified form survives; honest refusals (1/0 at
+            // evaluation) remain refusals — no faked value is attached.
+        }
+    }
+    EngineResult out = successResult(request, data);
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math simplify",
+        core::Json{{"expression", expr}, {"simplified", simplified}});
+    return out;
+}
+
+EngineResult MathEngine::executeSolveSystem(const EngineRequest& request) {
+    requireParams(request, {"equations", "variables"});
+    const core::Json& equationsJson = request.parameters["equations"];
+    if (!equationsJson.is_array() || equationsJson.empty()) {
+        throw core::RequestValidationError(
+            "Operation 'solve_system' requires an array of equations",
+            {{"operation", "solve_system"}}, "engines");
+    }
+    if (equationsJson.size() > 8) {
+        throw core::RequestValidationError(
+            "solve_system supports at most 8 equations",
+            {{"count", equationsJson.size()}}, "engines");
+    }
+    std::vector<std::string> residuals;
+    residuals.reserve(equationsJson.size());
+    for (size_t i = 0; i < equationsJson.size(); ++i) {
+        if (!equationsJson[i].is_string() ||
+            equationsJson[i].get<std::string>().empty()) {
+            throw core::RequestValidationError(
+                "solve_system equations must be non-empty strings",
+                {{"index", i}}, "engines");
+        }
+        const std::string equation = equationsJson[i].get<std::string>();
+        const size_t eq = equation.find('=');
+        if (eq == std::string::npos) {
+            residuals.push_back(equation);
+        } else {
+            const std::string lhs = equation.substr(0, eq);
+            const std::string rhs = equation.substr(eq + 1);
+            if (lhs.find_first_not_of(" \t") == std::string::npos ||
+                rhs.find_first_not_of(" \t") == std::string::npos) {
+                throw core::RequestValidationError(
+                    "solve_system equation needs both sides of '='",
+                    {{"index", i}}, "engines");
+            }
+            residuals.push_back("(" + lhs + ") - (" + rhs + ")");
+        }
+    }
+    const size_t n = residuals.size();
+
+    // Pre-parse every residual once: syntax errors are request errors and
+    // the parsed ASTs are the exact objects evaluated during iteration.
+    std::vector<ExprPtr> residualAsts;
+    residualAsts.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        try {
+            residualAsts.push_back(AstParser(residuals[i]).parse());
+        } catch (const std::invalid_argument& exc) {
+            throw core::RequestValidationError(
+                std::string("Invalid equation: ") + exc.what(),
+                {{"index", i}, {"equation", equationsJson[i].get<std::string>()}},
+                "engines");
+        }
+    }
+
+    const auto bound = jsonToVariables(request.parameters["variables"],
+                                       equationsJson[0].get<std::string>());
+    // Unknowns in first-appearance order (deterministic output contract).
+    std::vector<std::string> symbols;
+    for (const auto& residual : residuals) {
+        for (const auto& symbol : extractSymbols(residual)) {
+            if (std::find(symbols.begin(), symbols.end(), symbol) ==
+                symbols.end()) {
+                symbols.push_back(symbol);
+            }
+        }
+    }
+    for (const auto& symbol : symbols) {
+        if (bound.find(symbol) == bound.end()) {
+            throw core::RequestValidationError(
+                "Equation uses symbol '" + symbol +
+                    "' that has no initial value in 'variables'",
+                {{"symbol", symbol}}, "engines");
+        }
+    }
+    if (symbols.size() != n) {
+        throw core::RequestValidationError(
+            "solve_system needs exactly one equation per unknown",
+            {{"equations", n},
+             {"unknowns", symbols.size()}}, "engines");
+    }
+
+    std::vector<double> point(n, 0.0);
+    for (size_t i = 0; i < n; ++i) {
+        point[i] = bound.at(symbols[i]);
+    }
+    auto variablesAt = [&](const std::vector<double>& p) {
+        std::map<std::string, double> vars;
+        for (size_t i = 0; i < n; ++i) {
+            vars[symbols[i]] = p[i];
+        }
+        return vars;
+    };
+    auto residualAt = [&](const std::vector<double>& p, std::vector<double>& out) {
+        const auto vars = variablesAt(p);
+        for (size_t i = 0; i < n; ++i) {
+            out[i] = evalAst(residualAsts[i], vars);
+        }
+    };
+
+    std::vector<double> r(n, 0.0);
+    try {
+        residualAt(point, r);
+    } catch (const std::exception& exc) {
+        throw core::EngineExecutionError(
+            "Residual evaluation failed at the initial guess",
+            {{"detail", exc.what()}}, "engines");
+    }
+
+    // Newton with a numeric centered-difference Jacobian; budget 200 steps.
+    int iterations = 0;
+    bool converged = false;
+    for (int iter = 0; iter <= 200; ++iter) {
+        double maxR = 0.0;
+        for (double value : r) {
+            maxR = std::max(maxR, std::fabs(value));
+        }
+        if (maxR < 1e-10) {
+            converged = true;
+            break;
+        }
+        if (iter == 200) {
+            break;  // budget exhausted; honest non-convergence below
+        }
+        std::vector<std::vector<double>> jac(n, std::vector<double>(n, 0.0));
+        for (size_t j = 0; j < n; ++j) {
+            const double h = 1e-6 * (1.0 + std::fabs(point[j]));
+            std::vector<double> pp = point;
+            std::vector<double> pm = point;
+            pp[j] += h;
+            pm[j] -= h;
+            std::vector<double> rp(n, 0.0);
+            std::vector<double> rm(n, 0.0);
+            try {
+                residualAt(pp, rp);
+                residualAt(pm, rm);
+            } catch (const std::exception& exc) {
+                throw core::EngineExecutionError(
+                    "Residual evaluation failed while building the Newton "
+                    "Jacobian",
+                    {{"detail", exc.what()}, {"iteration", iter}}, "engines");
+            }
+            for (size_t i = 0; i < n; ++i) {
+                jac[i][j] = (rp[i] - rm[i]) / (2.0 * h);
+            }
+        }
+        std::vector<double> negR(n, 0.0);
+        for (size_t i = 0; i < n; ++i) {
+            negR[i] = -r[i];
+        }
+        std::vector<double> dx;
+        try {
+            dx = gaussSolve(jac, negR);
+        } catch (const core::EngineExecutionError& exc) {
+            throw core::EngineExecutionError(
+                "Newton Jacobian is singular near the current point; try a "
+                "different initial guess",
+                {{"iteration", iter}, {"detail", exc.what()}}, "engines");
+        }
+        for (double value : dx) {
+            if (!std::isfinite(value)) {
+                throw core::EngineExecutionError(
+                    "Newton produced a non-finite step",
+                    {{"iteration", iter}}, "engines");
+            }
+        }
+        for (size_t i = 0; i < n; ++i) {
+            point[i] += dx[i];  // dx solved J dx = -r: p_new = p + dx
+        }
+        try {
+            residualAt(point, r);
+        } catch (const std::exception& exc) {
+            throw core::EngineExecutionError(
+                "Residual evaluation failed after a Newton step",
+                {{"detail", exc.what()}, {"iteration", iter}}, "engines");
+        }
+        iterations = iter + 1;
+    }
+    if (!converged) {
+        double finalMaxR = 0.0;
+        for (double value : r) {
+            finalMaxR = std::max(finalMaxR, std::fabs(value));
+        }
+        throw core::EngineExecutionError(
+            "Newton solver did not converge in 200 iterations",
+            {{"max_residual", finalMaxR}, {"equations", n}}, "engines");
+    }
+
+    // Independent residual verification per equation (mirrors solve).
+    core::Json checks = core::Json::object();
+    bool allOk = true;
+    for (size_t i = 0; i < n; ++i) {
+        const bool ok = std::fabs(r[i]) < 1e-9;
+        checks["eq_" + std::to_string(i) + "_satisfies_equation"] = ok;
+        allOk = allOk && ok;
+    }
+
+    core::Json solution = core::Json::object();
+    core::Json variablesJson = core::Json::object();
+    core::Json residualsJson = core::Json::object();
+    core::Json equationsEcho = core::Json::array();
+    for (size_t i = 0; i < n; ++i) {
+        solution[symbols[i]] = point[i];
+        variablesJson[symbols[i]] = bound.at(symbols[i]);
+        residualsJson["eq_" + std::to_string(i)] = r[i];
+        equationsEcho.push_back(equationsJson[i]);
+    }
+    core::Json data = {{"equations", equationsEcho},
+                       {"variables", variablesJson},
+                       {"outcome", "solution"},
+                       {"solution", solution},
+                       {"iterations", iterations},
+                       {"residuals", residualsJson}};
+    EngineResult out = successResult(request, data);
+    out.metadata["equation_checks"] = checks;
+    if (!allOk) {
+        out.success = false;
+        out.addError(core::makeError(core::ErrorCode::EngineExecutionError,
+                                     "Solution failed residual verification",
+                                     "engines", {{"equations", equationsEcho}}));
+    }
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "math solve_system",
+        core::Json{{"iterations", iterations}, {"outcome", "solution"}});
+    return out;
+}
+
+std::string MathEngine::differentiateSimplified(const std::string& expression,
+                                                const std::string& variable) {
+    rejectEquation(expression, "differentiate");
+    const std::string target = variable.empty() ? "x" : variable;
+    const auto symbols = extractSymbols(expression);
+    if (std::find(symbols.begin(), symbols.end(), target) == symbols.end()) {
+        throw core::RequestValidationError(
+            "Variable '" + target + "' does not appear in the expression",
+            {{"expression", expression}, {"variable", target}}, "engines");
+    }
+    return serializeAst(
+        simplifyAst(diffAst(parseAstOrThrow(expression), target)));
+}
+
+std::string MathEngine::simplifyExpression(const std::string& expression) {
+    rejectEquation(expression, "simplify");
+    return serializeAst(simplifyAst(parseAstOrThrow(expression)));
 }
 
 EngineResult MathEngine::executeConvert(const EngineRequest& request) {
@@ -1198,6 +2438,66 @@ validation::ValidationResult MathEngine::validate(const EngineResult& result) co
         validation.message = "Formula evaluated with finite outputs";
         validation::ValidationMessage msg;
         msg.rule = "math.formula_outputs_finite";
+        msg.severity = validation::Severity::Info;
+        msg.passed = true;
+        msg.message = validation.message;
+        validation.addMessage(std::move(msg));
+        return validation;
+    }
+    if (result.operation == "solve_system") {
+        if (!result.result.contains("solution") ||
+            !result.result["solution"].is_object() ||
+            result.result["solution"].empty()) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Newton result has no solution object";
+            return validation;
+        }
+        for (auto it = result.result["solution"].begin();
+             it != result.result["solution"].end(); ++it) {
+            if (!it.value().is_number() ||
+                !std::isfinite(it.value().get<double>())) {
+                validation.status = validation::ValidationStatus::Invalid;
+                validation.message = "Newton solution contains a non-finite value";
+                return validation;
+            }
+        }
+        if (!result.result.contains("residuals") ||
+            !result.result["residuals"].is_object() ||
+            result.result["residuals"].empty()) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Newton result lacks residual verification";
+            return validation;
+        }
+        validation.status = validation::ValidationStatus::Validated;
+        validation.message = "System solved with finite solution and residuals";
+        validation::ValidationMessage msg;
+        msg.rule = "math.solver_outcome";
+        msg.severity = validation::Severity::Info;
+        msg.passed = true;
+        msg.message = validation.message;
+        validation.addMessage(std::move(msg));
+        return validation;
+    }
+    if (result.operation == "differentiate" || result.operation == "simplify") {
+        if (!result.result.contains("simplified") ||
+            !result.result["simplified"].is_string() ||
+            result.result["simplified"].get<std::string>().empty()) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Symbolic result is empty";
+            return validation;
+        }
+        if (result.operation == "differentiate" &&
+            (!result.result.contains("derivative") ||
+             !result.result["derivative"].is_string() ||
+             result.result["derivative"].get<std::string>().empty())) {
+            validation.status = validation::ValidationStatus::Invalid;
+            validation.message = "Derivative result is empty";
+            return validation;
+        }
+        validation.status = validation::ValidationStatus::Validated;
+        validation.message = "Symbolic result present and non-empty";
+        validation::ValidationMessage msg;
+        msg.rule = "math.symbolic_result";
         msg.severity = validation::Severity::Info;
         msg.passed = true;
         msg.message = validation.message;

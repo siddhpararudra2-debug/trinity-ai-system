@@ -41,7 +41,8 @@ bool isValidOperation(const std::string& domain, const std::string& operation) {
         return operation == "evaluate" || operation == "evaluate_expression" ||
                 operation == "solve" || operation == "solve_linear" ||
                 operation == "solve_quadratic" || operation == "convert" ||
-                operation == "formula";
+                operation == "formula" || operation == "differentiate" ||
+                operation == "simplify" || operation == "solve_system";
     }
     if (domain == "firmware") {
         return operation == "describe" || operation == "create_project" ||
@@ -342,6 +343,66 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
             } else {
                 addCheck(out, "intent.param_type", validation::Severity::Info, true,
                          "Formula parameters present");
+            }
+        } else if (op == "differentiate" || op == "simplify") {
+            const bool exprOk = intent.parameters.contains("expression") &&
+                                intent.parameters["expression"].is_string() &&
+                                !intent.parameters["expression"]
+                                     .get<std::string>()
+                                     .empty();
+            const bool variableOk =
+                !intent.parameters.contains("variable") ||
+                (intent.parameters["variable"].is_string() &&
+                 !intent.parameters["variable"].get<std::string>().empty());
+            const bool atOk = !intent.parameters.contains("at") ||
+                              isFiniteNumber(intent.parameters["at"]);
+            if (!exprOk || !variableOk || !atOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "'" + op + "' requires a non-empty string 'expression'" +
+                             (op == "differentiate"
+                                  ? ", optionally a string 'variable' and finite numeric 'at'"
+                                  : ""),
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "Symbolic parameters present");
+            }
+        } else if (op == "solve_system") {
+            const bool equationsOk = intent.parameters.contains("equations") &&
+                                     intent.parameters["equations"].is_array() &&
+                                     !intent.parameters["equations"].empty() &&
+                                     intent.parameters["equations"].size() <= 8;
+            bool allStrings = equationsOk;
+            if (equationsOk) {
+                for (const auto& entry : intent.parameters["equations"]) {
+                    if (!entry.is_string() || entry.get<std::string>().empty()) {
+                        allStrings = false;
+                        break;
+                    }
+                }
+            }
+            const bool variablesOk = intent.parameters.contains("variables") &&
+                                     intent.parameters["variables"].is_object();
+            bool variableNumbers = variablesOk;
+            if (variablesOk) {
+                for (auto it = intent.parameters["variables"].begin();
+                     it != intent.parameters["variables"].end(); ++it) {
+                    if (!isFiniteNumber(it.value())) {
+                        variableNumbers = false;
+                        break;
+                    }
+                }
+            }
+            if (!allStrings || !variableNumbers) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error, false,
+                         "solve_system requires 1..8 non-empty equation strings and "
+                         "an object 'variables' of finite numbers",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info, true,
+                         "System solver parameters present");
             }
         } else {
             // Validated operation set already gates unknown ops; structural
@@ -678,9 +739,10 @@ validation::ValidationResult IntentValidator::validate(
     if (!engine.empty() && registry.has(engine)) {
         const std::vector<std::string> caps = registry.listCapabilities(engine);
         // Intent operations map onto engine capabilities: math evaluate*,
-        // solve, solve_linear, solve_quadratic, convert and formula are
-        // direct; pcb create/add/place/validate/export are direct;
-        // cad generate/describe are direct.
+        // solve, solve_linear, solve_quadratic, convert, formula,
+        // differentiate, simplify and solve_system are direct; pcb
+        // create/add/place/validate/export are direct; cad
+        // generate/describe are direct.
         if (std::find(caps.begin(), caps.end(), intent.operation) != caps.end()) {
             // CAD object gate: only quadcopter_frame is implemented.
             if (intent.domain == "cad" && intent.object != "quadcopter_frame" &&

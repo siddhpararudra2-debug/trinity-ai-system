@@ -808,11 +808,15 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
                          contains(lowered, "what's");
     const bool hasConvert = contains(lowered, "convert");
     const bool hasFormula = contains(lowered, "formula");
+    const bool hasDifferentiate =
+        contains(lowered, "differentiate") || contains(lowered, "derivative");
+    const bool hasSimplify = contains(lowered, "simplify");
     // Bare arithmetic like "25 * 8" (no keywords) is also a math request.
     static const std::regex kBareArith(R"(^[\d\s\+\-\*\/\^\(\)\.\%]+$)");
     const bool isBareArith = std::regex_match(trim(text), kBareArith);
 
-    if (!hasSolve && !hasEval && !isBareArith && !hasConvert && !hasFormula) {
+    if (!hasSolve && !hasEval && !isBareArith && !hasConvert && !hasFormula &&
+        !hasDifferentiate && !hasSimplify) {
         ParseResult sentinel;
         sentinel.intent = makeBaseIntent(text);
         sentinel.status = ParseStatus::Invalid;
@@ -887,6 +891,55 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
         }
     }
 
+    // Hand-rolled symbolic operations: "Differentiate x^2 with respect to
+    // y", "Derivative of 2*x", "Simplify x*1 + 0". Variable detection
+    // falls through to the engine's single-symbol auto pick when omitted.
+    if (hasDifferentiate) {
+        static const std::regex kDifferentiateFull(
+            R"((?:differentiate|derivative\s+of)\s+(.+?)\s+with\s+respect\s+to\s+([A-Za-z_]\w*)\s*$)",
+            std::regex_constants::icase);
+        static const std::regex kDifferentiate(
+            R"((?:differentiate|derivative\s+of)\s+(.+?)\s*$)",
+            std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kDifferentiateFull)) {
+            intent.operation = "differentiate";
+            intent.parameters["expression"] = trim(m[1].str());
+            intent.parameters["variable"] = trim(m[2].str());
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+        if (std::regex_search(text, m, kDifferentiate)) {
+            intent.operation = "differentiate";
+            intent.parameters["expression"] = trim(m[1].str());
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+    }
+    if (hasSimplify) {
+        static const std::regex kSimplify(R"(simplify\s+(.+?)\s*$)",
+                                          std::regex_constants::icase);
+        std::smatch m;
+        if (std::regex_search(text, m, kSimplify)) {
+            intent.operation = "simplify";
+            intent.parameters["expression"] = trim(m[1].str());
+            ParseResult result;
+            result.intent = intent;
+            result.status = ParseStatus::Valid;
+            result.intent.status = ParseStatus::Valid;
+            result.intent.confidence = 0.9;
+            return result;
+        }
+    }
+
     // Closed-form coefficient solvers: "Solve linear with a = 2, b = 4",
     // "Solve quadratic with a = 1, b = -5, c = 6".
     if (hasSolve) {
@@ -917,6 +970,59 @@ ParseResult RequirementParser::tryMathRequest(const std::string& text,
                 intent.parameters["a"] = bindings.at("a");
                 intent.parameters["b"] = bindings.at("b");
                 intent.parameters["c"] = bindings.at("c");
+                ParseResult result;
+                result.intent = intent;
+                result.status = ParseStatus::Valid;
+                result.intent.status = ParseStatus::Valid;
+                result.intent.confidence = 0.9;
+                return result;
+            }
+        }
+        // Newton system: "Solve system x^2 + y^2 = 4; y = x with x = 1.4,
+        // y = 1". Equations are separated by ';' (',' as fallback) and ride
+        // with the same `name = value` bindings as the formula parser.
+        static const std::regex kSystem(
+            R"(solve\s+system\s+(.+?)(?:\s+with\s+(.+))?\s*$)",
+            std::regex_constants::icase);
+        std::smatch kSystemMatch;
+        if (std::regex_search(text, kSystemMatch, kSystem)) {
+            const std::string equationText = trim(kSystemMatch[1].str());
+            std::vector<std::string> parts;
+            if (!equationText.empty()) {
+                const char separator =
+                    equationText.find(';') != std::string::npos ? ';' : ',';
+                size_t start = 0;
+                for (;;) {
+                    const size_t sep = equationText.find(separator, start);
+                    const std::string chunk = trim(equationText.substr(
+                        start,
+                        sep == std::string::npos ? std::string::npos : sep - start));
+                    if (!chunk.empty()) {
+                        parts.push_back(chunk);
+                    }
+                    if (sep == std::string::npos) {
+                        break;
+                    }
+                    start = sep + 1;
+                }
+            }
+            if (!parts.empty()) {
+                core::Json equations = core::Json::array();
+                for (const auto& part : parts) {
+                    equations.push_back(part);
+                }
+                intent.operation = "solve_system";
+                intent.parameters["equations"] = equations;
+                if (kSystemMatch.size() >= 3 && kSystemMatch[2].matched) {
+                    const auto bindings = parseBindings(kSystemMatch[2].str());
+                    if (!bindings.empty()) {
+                        core::Json variables = core::Json::object();
+                        for (const auto& [name, value] : bindings) {
+                            variables[name] = value;
+                        }
+                        intent.parameters["variables"] = variables;
+                    }
+                }
                 ParseResult result;
                 result.intent = intent;
                 result.status = ParseStatus::Valid;

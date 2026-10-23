@@ -212,6 +212,8 @@ void MainWindow::buildUi() {
     mathOp_->addItem(QStringLiteral("Solve quadratic (a, b, c)"));
     mathOp_->addItem(QStringLiteral("Convert units"));
     mathOp_->addItem(QStringLiteral("Engineering formula"));
+    mathOp_->addItem(QStringLiteral("Differentiate"));
+    mathOp_->addItem(QStringLiteral("Solve system (Newton)"));
     leftLayout->addWidget(mathOp_);
 
     mathExpr_ = new QLineEdit(leftPane);
@@ -256,6 +258,19 @@ void MainWindow::buildUi() {
                             QStringLiteral("Formula name (ohm, power, force)"));
                         mathParams_->setPlaceholderText(
                             QStringLiteral("Inputs (e.g. V = 12, R = 6)"));
+                        break;
+                    case 6:
+                        mathExpr_->setPlaceholderText(
+                            QStringLiteral("Expression (e.g. x^2 + 2*x, sin(x)/x)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Variable name, optional (e.g. t)"));
+                        break;
+                    case 7:
+                        mathExpr_->setPlaceholderText(QStringLiteral(
+                            "Equations separated by ';' (e.g. x^2 + y^2 = 4; "
+                            "y = x)"));
+                        mathParams_->setPlaceholderText(
+                            QStringLiteral("Initial guesses (e.g. x = 1.4, y = 1)"));
                         break;
                     default:
                         mathExpr_->setPlaceholderText(
@@ -977,6 +992,18 @@ void MainWindow::handleMathSubmit() {
             break;
         case 5:  // formula name + inputs.
             request = "Formula " + expr + " with " + params;
+            break;
+        case 6:  // differentiate: hand-rolled symbolic derivative.
+            request = "Differentiate " + expr;
+            if (!params.empty()) {
+                request += " with respect to " + params;
+            }
+            break;
+        case 7:  // solve_system: Newton with a numeric Jacobian.
+            request = "Solve system " + expr;
+            if (!params.empty()) {
+                request += " with " + params;
+            }
             break;
         default:  // Evaluate expression, optional variables.
             request = "Calculate " + expr;
