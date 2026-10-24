@@ -63,15 +63,19 @@ Mesh box(const Vec3& center, const Vec3& size, double rotationZDeg) {
     }
 
     Mesh out;
-    // Bottom/top/front/right/back/left — same winding as the Python backend.
+    // Bottom/top/front/right/back/left — rewound outward (every triangle
+    // cross-product normal points out of the solid) so BSP CSG plus the
+    // divergence-theorem volume tools get a consistent orientation.
+    // The Python fallback box still has the legacy inward winding; noted in
+    // the work log until its own parity pass.
     std::vector<Triangle> tris;
     tris.reserve(12);
-    addFace(tris, c[0], c[1], c[2], c[3]);  // bottom
-    addFace(tris, c[7], c[6], c[5], c[4]);  // top
-    addFace(tris, c[4], c[5], c[1], c[0]);  // front
-    addFace(tris, c[5], c[6], c[2], c[1]);  // right
-    addFace(tris, c[6], c[7], c[3], c[2]);  // back
-    addFace(tris, c[7], c[4], c[0], c[3]);  // left
+    addFace(tris, c[0], c[3], c[2], c[1]);  // bottom  (-z)
+    addFace(tris, c[4], c[5], c[6], c[7]);  // top     (+z)
+    addFace(tris, c[1], c[5], c[4], c[0]);  // front   (-y)
+    addFace(tris, c[2], c[6], c[5], c[1]);  // right   (+x)
+    addFace(tris, c[3], c[7], c[6], c[2]);  // back    (+y)
+    addFace(tris, c[0], c[4], c[7], c[3]);  // left    (-x)
     for (const auto& tri : tris) {
         out.triangles_.push_back(tri);
     }

@@ -29,7 +29,8 @@ bool isValidDomain(const std::string& domain) {
 
 bool isValidOperation(const std::string& domain, const std::string& operation) {
     if (domain == "cad") {
-        return operation == "generate" || operation == "describe";
+        return operation == "generate" || operation == "describe" ||
+               operation == "boolean";
     }
     if (domain == "pcb") {
         return operation == "describe" || operation == "create_board" ||
@@ -411,20 +412,63 @@ validation::ValidationResult IntentValidator::validate(const Intent& intent) con
                      "Math parameters present");
         }
     } else if (intent.domain == "cad") {
-        bool typesOk = true;
-        for (auto it = intent.parameters.begin(); it != intent.parameters.end(); ++it) {
-            if (!it.value().is_number()) {
-                typesOk = false;
-                addCheck(out, "intent.param_type", validation::Severity::Error, false,
-                         "CAD parameter '" + it.key() + "' must be numeric",
-                         core::Json{{"parameter", it.key()}});
+        if (intent.operation == "boolean") {
+            const std::string mode =
+                intent.parameters.value("mode", "subtract");
+            const bool modeOk = mode == "union" || mode == "intersect" ||
+                                mode == "subtract";
+            bool operandsOk = intent.parameters.contains("a") &&
+                              intent.parameters["a"].is_object() &&
+                              intent.parameters["b"].is_object();
+            if (operandsOk) {
+                const bool aType =
+                    intent.parameters["a"].contains("type") &&
+                    intent.parameters["a"]["type"].is_string() &&
+                    !intent.parameters["a"]["type"]
+                         .get<std::string>()
+                         .empty();
+                const bool bType =
+                    intent.parameters["b"].contains("type") &&
+                    intent.parameters["b"]["type"].is_string() &&
+                    !intent.parameters["b"]["type"]
+                         .get<std::string>()
+                         .empty();
+                operandsOk = aType && bType;
             }
-        }
-        if (typesOk) {
-            addCheck(out, "intent.param_type", validation::Severity::Info, true,
-                     "CAD parameter types are numeric");
+            if (!modeOk || !operandsOk) {
+                ok = false;
+                addCheck(out, "intent.param_type", validation::Severity::Error,
+                         false,
+                         "boolean requires a mode of union/intersect/"
+                         "subtract and objects 'a'/'b' each carrying a "
+                         "non-empty 'type'",
+                         core::Json{{"parameters", intent.parameters}});
+            } else {
+                addCheck(out, "intent.param_type", validation::Severity::Info,
+                         true, "Boolean operands and mode are structured");
+            }
+            // Note: operand parameter dicts may also carry string values
+            // (e.g. mounting_plate text fields); numeric-only gating below
+            // is skipped for the boolean branch.
         } else {
-            ok = false;
+            bool typesOk = true;
+            for (auto it = intent.parameters.begin();
+                 it != intent.parameters.end(); ++it) {
+                if (!it.value().is_number()) {
+                    typesOk = false;
+                    addCheck(out, "intent.param_type",
+                             validation::Severity::Error, false,
+                             "CAD parameter '" + it.key() +
+                                 "' must be numeric",
+                             core::Json{{"parameter", it.key()}});
+                }
+            }
+            if (typesOk) {
+                addCheck(out, "intent.param_type", validation::Severity::Info,
+                         true, "CAD parameter types are numeric");
+            } else {
+                ok = false;
+            }
         }
     } else if (intent.domain == "simulation") {
         const std::string op = intent.operation;

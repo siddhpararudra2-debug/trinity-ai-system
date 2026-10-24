@@ -65,6 +65,8 @@ set(TRINITY_CORE_SOURCES
     src/cad/GlbWriter.cpp
     src/cad/Mesh.cpp
     src/cad/Builder.cpp
+    src/cad/Csg.cpp
+    src/cad/StepWriter.cpp
     src/cad/StlWriter.cpp
     src/cad/StlReader.cpp
     src/cad/Validators.cpp
@@ -211,6 +213,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_cad_parts.cpp
         tests/test_cad_new_parts.cpp
         tests/test_cad_glb.cpp
+        tests/test_cad_csg.cpp
         tests/test_validation.cpp
         tests/test_provider_factory.cpp
         tests/test_planner.cpp

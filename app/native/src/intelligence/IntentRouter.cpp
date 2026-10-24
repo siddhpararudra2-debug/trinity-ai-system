@@ -139,9 +139,10 @@ RouteResult IntentRouter::route(const Intent& intent,
     }
 
     if (intent.domain == "cad") {
-        // CAD object gate: only quadcopter_frame is implemented in the
-        // engine. Other parsed objects (e.g. plate) are syntactically
-        // valid but must be rejected truthfully here, never faked.
+        // CAD object gate: generate stays parser-vocabulary-gated (the
+        // RequirementParser's object vocabulary; structured requests reach
+        // the other registered parts). Boolean operands carry their own
+        // types and are validated at the engine.
         if (intent.operation == "generate" && intent.object != "quadcopter_frame") {
             core::Logger::instance().warning(
                 "intelligence", "intent routing rejected: unsupported CAD object",
@@ -149,7 +150,8 @@ RouteResult IntentRouter::route(const Intent& intent,
             RouteResult out =
                 reject(engine, operation, "CAPABILITY_UNAVAILABLE",
                        "CadEngine does not support object '" + intent.object +
-                           "'; supported: [quadcopter_frame]");
+                           "'; supported: [quadcopter_frame] (other part "
+                           "types are reachable through structured requests)");
             out.capability = operation;
             return out;
         }
@@ -157,7 +159,15 @@ RouteResult IntentRouter::route(const Intent& intent,
         call.toolCallId = core::newUuid();
         call.engine = "cad";
         call.operation = intent.operation;
-        if (intent.operation == "describe") {
+        if (intent.operation == "boolean") {
+            call.parameters = core::Json{
+                {"mode", intent.parameters.value("mode", "subtract")},
+                {"a", intent.parameters.value("a", core::Json(nullptr))},
+                {"b", intent.parameters.value("b", core::Json(nullptr))}};
+            if (intent.outputs.is_array() && !intent.outputs.empty()) {
+                call.parameters["outputs"] = intent.outputs;
+            }
+        } else if (intent.operation == "describe") {
             call.parameters = core::Json::object();
         } else {
             core::Json frameParams = translateCadParams(intent);

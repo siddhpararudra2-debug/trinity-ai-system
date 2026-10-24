@@ -106,7 +106,7 @@ TEST_CASE("cad generate produces stl+json artifacts through jobs") {
     fs::remove_all(dir, ec);
 }
 
-TEST_CASE("cad generate reports step as unavailable, not failure") {
+TEST_CASE("cad generate writes real step artifacts, never unavailable fakes") {
     trinity::engines::CadEngine cad;
     trinity::engines::EngineRequest req;
     req.engine = "cad";
@@ -115,10 +115,24 @@ TEST_CASE("cad generate reports step as unavailable, not failure") {
                       {"parameters", {{"overall_size", 50}}},
                       {"outputs", {"stl", "step"}}};
     const auto result = cad.execute(req);
-    CHECK(result.success);
-    CHECK(result.result.contains("unavailable_formats"));
-    CHECK(result.result["unavailable_formats"].value("step", "").find("CAD_KERNEL_UNAVAILABLE") ==
-          0);
+    REQUIRE(result.success);
+    CHECK_FALSE(result.result.contains("unavailable_formats"));
+    bool hasStep = false;
+    std::string stepPath;
+    for (const auto& artifact : result.pendingArtifacts) {
+        if (artifact.second == "step") {
+            hasStep = true;
+            stepPath = artifact.first;
+        }
+    }
+    REQUIRE(hasStep);
+    std::ifstream stepFile(stepPath, std::ios::binary);
+    REQUIRE(stepFile.is_open());
+    std::stringstream buffer;
+    buffer << stepFile.rdbuf();
+    CHECK(buffer.str().compare(0, 13, "ISO-10303-21;") == 0);
+    CHECK(buffer.str().find("ADVANCED_BREP_SHAPE_REPRESENTATION(") !=
+          std::string::npos);
 }
 
 TEST_CASE("cad stl encoding is deterministic") {
