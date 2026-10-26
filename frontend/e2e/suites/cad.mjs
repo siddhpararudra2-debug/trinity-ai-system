@@ -81,12 +81,20 @@ export async function run({ cdp, check, WEB }) {
   check('viewer displays triangle count', Boolean(viewerInfo?.text) && /TRIANGLES:\s*[\d,]+/i.test(viewerInfo.text));
 
   // Toggle wireframe mode
-  const wireframeToggled = await cdp.eval(`(() => {
+  await cdp.eval(`(() => {
     const btn = [...document.querySelectorAll('.ctrl-btn')].find(b => b.textContent.includes('WIREFRAME'));
     if (!btn) return false;
     btn.click();
-    return btn.classList.contains('is-active') || btn.getAttribute('aria-pressed') === 'true';
+    return true;
   })()`);
+  const wireframeToggled = await waitUntil(
+    async () => cdp.eval(`(() => {
+      const btn = [...document.querySelectorAll('.ctrl-btn')].find(b => b.textContent.includes('WIREFRAME'));
+      return Boolean(btn && (btn.classList.contains('is-active') || btn.getAttribute('aria-pressed') === 'true'));
+    })()`),
+    Boolean,
+    2000,
+  );
   check('wireframe control toggles active', Boolean(wireframeToggled));
 
   // Toggle back to solid
@@ -182,25 +190,21 @@ export async function run({ cdp, check, WEB }) {
     return true;
   })()`);
 
-  // Wait for new bot message
-  let botGrew = false;
-  for (let i = 0; i < 40 && !botGrew; i += 1) {
-    const current = await cdp.eval(`document.querySelectorAll('.chat-message.bot').length`);
-    botGrew = current > botBefore;
-    if (!botGrew) await sleep(400);
-  }
-  check('form submission produces bot response', botGrew);
-
-  const lastBotMessage = await cdp.eval(`(() => {
-    const msgs = document.querySelectorAll('.chat-message.bot');
-    const last = msgs[msgs.length - 1];
-    if (!last) return null;
-    const links = [...last.querySelectorAll('a')].map(a => a.innerText.trim());
-    return {
-      text: last.innerText,
-      links,
-    };
-  })()`);
+  // Wait for the request to finish, not merely for the transient processing
+  // bubble.  The loading bubble is itself a bot message, so counting bot
+  // nodes reports success before the API response has been rendered.
+  const lastBotMessage = await waitUntil(
+    async () => cdp.eval(`(() => {
+      const msgs = [...document.querySelectorAll('.chat-message.bot')];
+      const last = msgs[msgs.length - 1];
+      if (!last || last.innerText.includes('PROCESSING')) return null;
+      const links = [...last.querySelectorAll('a')].map(a => a.innerText.trim());
+      return { text: last.innerText, links, count: msgs.length };
+    })()`),
+    (message) => Boolean(message && message.count > botBefore),
+    30000,
+  );
+  check('form submission produces bot response', Boolean(lastBotMessage));
 
   check(
     'response confirms mounting plate generation',

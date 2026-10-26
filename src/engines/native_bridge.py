@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import queue
+import re
 import shutil
 import subprocess
 import tempfile
@@ -70,6 +71,20 @@ DAEMON_NOISE_LINE_CAP = 200
 DAEMON_TMP_PREFIX = "trinity_native_daemon_"
 # Sentinel the reader thread enqueues when the child's stdout reaches EOF.
 _DAEMON_EOF = object()
+
+
+def _path_separator(path_value: str) -> str:
+    """Return the separator used by a PATH-shaped value.
+
+    The bridge normally runs on Windows, but its environment builder is also
+    exercised on Linux with mocked Windows paths.  In that case ``os.pathsep``
+    is ``:`` even though the value being built is a Windows PATH.  Detect the
+    drive-letter form so the child receives a valid platform-shaped PATH in
+    either environment.
+    """
+    if os.name == "nt" or ";" in path_value or re.search(r"(?:^|[:;])[A-Za-z]:[\\/]", path_value):
+        return ";"
+    return os.pathsep
 
 # Engines the bridge can serve, with the same capabilities the scaffolds
 # advertise so describe() shape is unchanged apart from status.
@@ -220,7 +235,8 @@ def _find_qt_bin_dirs() -> list[str]:
     override = os.getenv("TRINITY_QT_BIN", "")
     if override and (Path(override) / "Qt6Core.dll").is_file():
         return [override]
-    for entry in os.getenv("Path", os.getenv("PATH", "")).split(os.pathsep):
+    current_path = os.getenv("Path", os.getenv("PATH", ""))
+    for entry in current_path.split(_path_separator(current_path)):
         if entry and (Path(entry) / "Qt6Core.dll").is_file():
             return []  # resolvable already; nothing to inject
     root = Path("C:/Qt")
@@ -255,7 +271,8 @@ def bridge_child_env(
             prepend.append(exe_dir)
     if prepend:
         path_key = "PATH" if "PATH" in env else "Path"
-        env[path_key] = os.pathsep.join([*prepend, env.get(path_key, "")])
+        path_value = env.get(path_key, "")
+        env[path_key] = _path_separator(path_value).join([*prepend, path_value])
     return env
 
 

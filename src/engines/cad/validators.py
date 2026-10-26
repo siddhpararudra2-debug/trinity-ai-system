@@ -84,6 +84,7 @@ def validate_quadcopter_frame(
     dims_ok = (
         abs(span_x - expected) <= tolerance and abs(span_y - expected) <= tolerance
     )
+    symmetry_ok = abs(span_x - span_y) <= BBOX_TOLERANCE_MM
     checks["dimensions_within_tolerance"] = dims_ok
     checks["expected_span_mm"] = round(expected, 3)
     checks["actual_span_mm"] = (round(span_x, 3), round(span_y, 3))
@@ -91,9 +92,10 @@ def validate_quadcopter_frame(
 
     # --- topology / finiteness: no NaN/Inf vertices, no degenerate triangles ---
     finite_ok, degenerate, triangle_count = mesh_integrity(mesh)
+    topology_ok = finite_ok and degenerate == 0
     checks["all_vertices_finite"] = finite_ok
     checks["degenerate_triangle_count"] = degenerate
-    ok = ok and finite_ok and degenerate == 0
+    ok = ok and topology_ok and symmetry_ok
 
     # --- clearances: arm must actually span a positive length ---
     start_r = (p["center_plate_size"] / 2) * math.sqrt(2)
@@ -112,6 +114,16 @@ def validate_quadcopter_frame(
     checks["manufacturable_min_feature"] = manufacturable
     ok = ok and manufacturable
 
+    # Keep stable, user-facing checks first. Detailed measurements remain
+    # below them for diagnostics, while the UI can render semantic checks
+    # without depending on backend-specific field names.
+    checks = {
+        "dimensional_accuracy": dims_ok,
+        "topology": topology_ok,
+        "symmetry": symmetry_ok,
+        "manufacturability": manufacturable,
+        **checks,
+    }
     checks["triangle_count"] = triangle_count
     return ok, checks
 
