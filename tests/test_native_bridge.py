@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from src.core.errors import CapabilityUnavailableError, EngineExecutionError
 from src.engines.native_bridge import (
+    DAEMON_ENV_VAR,
     ERROR_CODE_MAP,
     EXEC_ENV_VAR,
     NATIVE_ENGINES,
@@ -83,7 +84,10 @@ def test_describe_reports_bridged_not_scaffolded():
     engine = NativeBridgeEngine("pcb", NATIVE_ENGINES["pcb"])
     described = engine.describe()
     assert described["status"] == "bridged"
-    assert described["capabilities"] == ScaffoldEngine("pcb", NATIVE_ENGINES["pcb"]).describe()["capabilities"]
+    assert (
+        described["capabilities"]
+        == ScaffoldEngine("pcb", NATIVE_ENGINES["pcb"]).describe()["capabilities"]
+    )
 
 
 def test_exe_path_none_without_env(monkeypatch):
@@ -123,9 +127,8 @@ class _Proc:
 
 def _bridge(monkeypatch, tmp_path, payload, binary="C:/fake/Trinity.exe"):
     # Bypass the is_file() gate: transport behavior is what these tests pin.
-    monkeypatch.setattr(
-        "src.engines.native_bridge.native_exe_path", lambda: binary
-    )
+    monkeypatch.setenv(DAEMON_ENV_VAR, "0")  # legacy single-shot transport
+    monkeypatch.setattr("src.engines.native_bridge.native_exe_path", lambda: binary)
     monkeypatch.setattr(
         "src.engines.native_bridge.subprocess.run",
         lambda *a, **k: _Proc(json.dumps(payload)),
@@ -134,9 +137,10 @@ def _bridge(monkeypatch, tmp_path, payload, binary="C:/fake/Trinity.exe"):
 
 
 def _patch_exe(monkeypatch, binary="C:/fake/Trinity.exe"):
-    monkeypatch.setattr(
-        "src.engines.native_bridge.native_exe_path", lambda: binary
-    )
+    # These tests mock the legacy single-shot transport (subprocess.run);
+    # the daemon toggle pins the engine onto that path.
+    monkeypatch.setenv(DAEMON_ENV_VAR, "0")
+    monkeypatch.setattr("src.engines.native_bridge.native_exe_path", lambda: binary)
 
 
 def test_execute_success_maps_envelope(monkeypatch, tmp_path):
@@ -153,7 +157,9 @@ def test_execute_engine_failure_envelope_maps_codes(monkeypatch, tmp_path):
     payload = _envelope(
         success=False,
         validation={"status": "INVALID", "checks": {}},
-        errors=[{"code": "RequestValidationError", "message": "bad query", "details": {}}],
+        errors=[
+            {"code": "RequestValidationError", "message": "bad query", "details": {}}
+        ],
     )
     engine = _bridge(monkeypatch, tmp_path, payload)
     out = engine.execute("search", {})
@@ -229,7 +235,9 @@ def test_execute_tolerates_native_stdout_noise(monkeypatch):
         lambda *a, **k: _Proc(noise + json.dumps(_envelope()) + "\n", returncode=0),
     )
     engine = NativeBridgeEngine("vision", NATIVE_ENGINES["vision"])
-    assert engine.execute("image_edges", {"path": "x.png", "low": 50, "high": 150}).success
+    assert engine.execute(
+        "image_edges", {"path": "x.png", "low": 50, "high": 150}
+    ).success
 
 
 def test_execute_noise_without_an_envelope_is_still_an_error(monkeypatch):
@@ -263,14 +271,16 @@ def test_execute_flows_through_jobs_and_artifacts(monkeypatch, tmp_path):
             "_engines",
             {
                 **registry_mod.registry._engines,
-                "research": NativeBridgeEngine(
-                    "research", NATIVE_ENGINES["research"]
-                ),
+                "research": NativeBridgeEngine("research", NATIVE_ENGINES["research"]),
             },
         )
         body = client.post(
             "/api/execute",
-            json={"engine": "research", "operation": "search", "parameters": {"query": "q"}},
+            json={
+                "engine": "research",
+                "operation": "search",
+                "parameters": {"query": "q"},
+            },
         ).json()
     assert body["success"] is True
     assert len(body["artifacts"]) == 1

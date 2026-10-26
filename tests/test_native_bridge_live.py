@@ -2,16 +2,31 @@
 
 Every mapped op is single-shot with full parameters (no cross-call state
 needed), so these mirror --selftest shapes with deterministic assertions.
+
+M8 additions at the bottom exercise the persistent daemon transport
+itself: PID reuse across calls, recovery after a forced kill, concurrent
+thread multiplexing, and the latency benchmark against the legacy
+single-shot spawn (>50x target).
 """
 
 import json
 import os
+import shutil
 import subprocess
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.engines.native_bridge import NATIVE_ENGINES, OP_MAP, native_exe_path
+from src.engines import native_bridge as nb
+from src.engines.native_bridge import (
+    DAEMON_ENV_VAR,
+    NATIVE_ENGINES,
+    OP_MAP,
+    native_exe_path,
+)
 from src.main import app
 from tests.pnggen import png_bytes
 
@@ -44,13 +59,19 @@ def _describe(engine):
     proc = subprocess.run(
         [native_exe_path(), "--exec"],
         input=json.dumps(
-            {"request_id": "cap", "engine": engine, "operation": "describe", "parameters": {}}
+            {
+                "request_id": "cap",
+                "engine": engine,
+                "operation": "describe",
+                "parameters": {},
+            }
         ),
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         timeout=60,
+        env=nb.bridge_child_env(native_exe_path()),
     )
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     assert lines, f"{engine} describe produced no stdout: {proc.stderr[-400:]}"
@@ -253,7 +274,9 @@ def _auto_net(client, design):
                 )
     current = design
     for name, pins in groups.items():
-        body = _exec(client, "pcb", "add_net", {"design": current, "name": name, "pins": pins})
+        body = _exec(
+            client, "pcb", "add_net", {"design": current, "name": name, "pins": pins}
+        )
         assert body["success"] is True, body.get("errors")
         current = body["result"]["design"]
     return current, groups
@@ -323,13 +346,13 @@ def test_live_vision_resolves_an_uploaded_artifact_id():
     """
     png = png_bytes()
     with TestClient(app) as client:
-        uploaded = client.post("/api/uploads", files={"file": ("live.png", png, "image/png")})
+        uploaded = client.post(
+            "/api/uploads", files={"file": ("live.png", png, "image/png")}
+        )
         assert uploaded.status_code == 200, uploaded.text
         artifact_id = uploaded.json()["artifact_id"]
 
-        body = _exec(
-            client, "vision", "image_inspect", {"artifact_id": artifact_id}
-        )
+        body = _exec(client, "vision", "image_inspect", {"artifact_id": artifact_id})
     assert body["success"] is True, body.get("errors")
     assert body["result"]["input"]["metadata"]["width"] == 8
     assert body["result"]["input"]["metadata"]["format"] == "png"
@@ -390,10 +413,135 @@ def test_live_pcb_generate_then_validate():
 @needs_binary
 def test_live_vision_missing_file_refuses():
     with TestClient(app) as client:
-        body = _exec(
-            client, "vision", "image_inspect", {"path": "no-such-image.png"}
-        )
+        body = _exec(client, "vision", "image_inspect", {"path": "no-such-image.png"})
     # Without OpenCV: capability refusal. With OpenCV: missing file.
     # Either way success:false with an explanatory error.
     assert body["success"] is False
     assert body["errors"], "must explain why, not just fail"
+
+
+# ---------------------------------------------------------------------------
+# M8: the persistent native daemon itself.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _daemon_enabled(monkeypatch):
+    """The live daemon tests pin the default (enabled) transport."""
+    monkeypatch.delenv(DAEMON_ENV_VAR, raising=False)
+
+
+@needs_binary
+def test_daemon_pid_is_stable_across_calls():
+    """The whole point of M8: one hot child serves every call. Its PID
+    must not change while the op responses keep coming."""
+    daemon = nb.get_daemon(native_exe_path())
+    assert daemon is not None, "daemon boot handshake failed"
+    old_pid = daemon.pid()
+    assert old_pid != 0
+
+    with TestClient(app) as client:
+        for i in range(10):
+            body = _exec(client, "research", "search", {"query": f"pid-stability-{i}"})
+            assert body["success"] is True
+    assert daemon.pid() == old_pid, "child was respawned mid-suite: it died"
+
+
+@needs_binary
+def test_daemon_recovers_after_being_killed():
+    daemon = nb.get_daemon(native_exe_path())
+    assert daemon is not None
+    old_pid = daemon.pid()
+    daemon.kill()  # simulate the child crashing between calls
+
+    with TestClient(app) as client:
+        body = _exec(client, "research", "search", {"query": "after-kill"})
+    assert body["success"] is True
+    assert daemon.pid() not in (0, old_pid), "next call must respawn a fresh child"
+
+
+@needs_binary
+def test_daemon_survives_concurrent_threads():
+    """Multiple callers share one child: every thread gets its own answer,
+    with the right values, and no respawn happens mid-burst."""
+    daemon = nb.get_daemon(native_exe_path())
+    assert daemon is not None
+    old_pid = daemon.pid()
+
+    def one(i: int):
+        with TestClient(app) as client:
+            if i % 2 == 0:
+                body = _exec(client, "research", "search", {"query": f"burst-{i}"})
+                assert body["success"] is True
+                assert body["result"]["hit_count"] == 0
+            else:
+                body = _exec(
+                    client, "robotics", "kinematics", {"joint_angles": [0.0, 0.0]}
+                )
+                assert body["success"] is True
+                pos = body["result"]["end_effector"]["position"]
+                assert abs(pos["x"] - 2.0) < 1e-6 and abs(pos["y"]) < 1e-6
+        return True
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(one, range(8)))
+    assert all(results)
+    assert daemon.pid() == old_pid, "a thread's failure must not look like a respawn"
+
+
+@needs_binary
+def test_daemon_transport_beats_single_shot_spawn():
+    """M8 acceptance: >=50x latency reduction on the pure transport path.
+
+    Both transports run the same request (`{"ping": true}` — engine cost
+    is identical on both sides, so this isolates the process-overhead M8
+    removes: every `--exec` call re-bootstraps Windows DLLs and Qt, while
+    the daemon pays that once at boot). Uses the documented benchmark
+    override TRINITY_DAEMON_BENCH_MIN if the host is unusually slow.
+    """
+    exe = native_exe_path()
+    daemon = nb.get_daemon(exe)
+    assert daemon is not None
+    threshold = float(os.getenv("TRINITY_DAEMON_BENCH_MIN", "50"))
+    rounds = 30
+
+    total_oneshot = 0.0
+    request_line = json.dumps({"ping": True})
+    for _ in range(rounds):
+        # Mirror the legacy per-op cost: fresh isolated storage root per call.
+        native_tmp = tempfile.mkdtemp(prefix="trinity_native_")
+        try:
+            started = time.perf_counter()
+            proc = subprocess.run(
+                [exe, "--exec"],
+                input=request_line,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+                env=nb.bridge_child_env(exe, native_tmp),
+            )
+            total_oneshot += time.perf_counter() - started
+            lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+            assert json.loads(lines[-1])["pong"] is True
+        finally:
+            shutil.rmtree(native_tmp, ignore_errors=True)
+
+    total_daemon = 0.0
+    for _ in range(rounds):
+        started = time.perf_counter()
+        out = daemon.execute({"ping": True})
+        total_daemon += time.perf_counter() - started
+        assert out["pong"] is True
+
+    speedup = total_oneshot / max(total_daemon, 1e-9)
+    print(
+        f"\nsingle-shot {total_oneshot:.3f}s vs daemon {total_daemon:.3f}s "
+        f"over {rounds} ops -> {speedup:.1f}x (threshold {threshold})"
+    )
+    assert speedup >= threshold, (
+        f"daemon speedup {speedup:.1f}x below the {threshold}x M8 target "
+        f"(single-shot {total_oneshot / rounds * 1000:.1f} ms/op, "
+        f"daemon {total_daemon / rounds * 1000:.1f} ms/op)"
+    )

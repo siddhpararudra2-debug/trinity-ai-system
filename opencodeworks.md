@@ -25,6 +25,33 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M8: persistent native bridge — one hot daemon process, ~450x faster ops**
+  `Trinity.exe` gains `--daemon` (app/native/src/cli/Exec.cpp `runDaemon` +
+  `executeRequestJsonWithRegistry`, doctested in test_exec.cpp — ping/pong,
+  sequential engine ops through one hot EngineRegistry, and recovery on
+  malformed input; 377 native cases green). Python replaces the single-shot
+  `subprocess.run --exec` per call (every request re-paid the Windows DLL/Qt
+  bootstrap, ~110-440 ms/op) with a `NativeDaemon` client in
+  src/engines/native_bridge.py: binary pipes (raw \n — a text-mode pipe would
+  deliver "exit\r", which std::getline executes as an op instead of shutting
+  the child down), one reader thread + queue so per-request deadlines work on
+  Windows, a single lock serializing write->read so responses pair 1:1 with
+  requests, automatic Qt/vcpkg PATH injection (TRINITY_QT_BIN override, C:/Qt
+  scan, app-local exe dir), OpenCV stdout-noise tolerance with a line cap, a
+  boot ping handshake, lazy respawn after a child crash, deadline kills for
+  hung engines, atexit shutdown, and a daemon-lifetime private storage root
+  whose reported artifacts are copied out and deleted per call. Daemon is the
+  default; TRINITY_NATIVE_DAEMON=0 (or a failed handshake) falls back to the
+  single-shot transport so an older binary still works. The statefulness
+  probe held: bridged ops are fully parameterized (research/search reads an
+  in-memory index only index_document — unbridged — can populate). Tests:
+  tests/test_native_daemon.py (15 mocked: LF-only writes, PID stability,
+  kill/timeout recovery, noise caps, workspace cleanup, singleton caching) +
+  the daemon block in test_native_bridge_live.py (PID stable across 10 HTTP
+  calls, kill→respawn, 8-thread multiplexing, benchmark asserted >=50x —
+  measured 615-820x: single-shot ~113 ms/op vs daemon ~0.2 ms/op on this
+  box). Python suite: 344 with the bridge, 322 without, both green.
+
 - [x] **M4: CAD CSG booleans and faceted STEP export**
   CadEngine gains a BSP mesh boolean kernel (csg.js algorithm ported to C++,
   verified against the reference implementation on Node — identical

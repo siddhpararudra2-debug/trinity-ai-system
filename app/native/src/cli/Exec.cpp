@@ -60,7 +60,8 @@ engines::EngineResult executeRequest(const engines::EngineRequest& request) {
     return registry.execute(request);
 }
 
-core::Json executeRequestJson(const std::string& input) {
+core::Json executeRequestJsonWithRegistry(engines::EngineRegistry& registry,
+                                         const std::string& input) {
     core::Json parsed;
     try {
         parsed = core::Json::parse(input);
@@ -73,9 +74,13 @@ core::Json executeRequestJson(const std::string& input) {
         return parseErrorEnvelope("Exec request must be a JSON object");
     }
 
+    if (parsed.contains("ping") && parsed["ping"] == true) {
+        return core::Json{{"pong", true}, {"success", true}};
+    }
+
     engines::EngineRequest request = engines::EngineRequest::fromJson(parsed);
     try {
-        return envelopeFromResult(executeRequest(request));
+        return envelopeFromResult(registry.execute(request));
     } catch (const core::TrinityError& exc) {
         return errorEnvelope(request.engine, request.operation, exc);
     } catch (const std::exception& exc) {
@@ -83,6 +88,12 @@ core::Json executeRequestJson(const std::string& input) {
                                            "cli");
         return errorEnvelope(request.engine, request.operation, wrapped);
     }
+}
+
+core::Json executeRequestJson(const std::string& input) {
+    engines::EngineRegistry registry;
+    engines::registerAllEngines(registry);
+    return executeRequestJsonWithRegistry(registry, input);
 }
 
 int runExecFromStdin() {
@@ -106,6 +117,37 @@ int runExecFromStdin() {
     std::cout << envelope.dump() << "\n";
     std::cout.flush();
     return 0;
+}
+
+int runDaemon(std::istream& in, std::ostream& out) {
+    engines::EngineRegistry registry;
+    engines::registerAllEngines(registry);
+
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
+            continue;
+        }
+        if (line == "exit" || line == "quit") {
+            break;
+        }
+        const core::Json envelope = executeRequestJsonWithRegistry(registry, line);
+        out << envelope.dump() << "\n";
+        out.flush();
+    }
+    return 0;
+}
+
+int runDaemonFromStdin() {
+#ifdef _WIN32
+    if (_fileno(stdin) >= 0) {
+        _setmode(_fileno(stdin), _O_BINARY);
+    }
+    if (_fileno(stdout) >= 0) {
+        _setmode(_fileno(stdout), _O_BINARY);
+    }
+#endif
+    return runDaemon(std::cin, std::cout);
 }
 
 }  // namespace trinity::cli

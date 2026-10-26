@@ -89,6 +89,24 @@ engine says that capability is missing instead of guessing.
 > find Qt it says so — `Trinity.exe` links `Qt6Core` and ships no Qt DLLs
 > beside itself.
 
+### Persistent bridge (M8)
+
+The Python bridge keeps **one long-lived `Trinity.exe --daemon` child** per
+process instead of spawning a fresh one per operation. The child holds a
+single engine registry hot in memory, so an op costs one pipe round-trip
+(~0.2 ms) instead of a full Windows DLL/Qt bootstrap (~110 ms per spawn on
+this machine — measured 800x+ on the pure transport path). A boot ping
+handshake verifies the child before first use; a Qt runtime directory is
+injected into the child's `PATH` automatically (`TRINITY_QT_BIN` override,
+else `C:/Qt`); a child that dies is lazily respawned on the next call; and
+a per-request deadline force-kills a hung engine. Toggles and verification:
+
+- `TRINITY_NATIVE_DAEMON=0` forces the legacy single-shot `--exec` transport
+  (also used automatically if a binary fails the daemon handshake).
+- Tests: `tests/test_native_daemon.py` (mocked transport) and the daemon
+  block in `tests/test_native_bridge_live.py` (PID reuse, kill-recovery,
+  concurrent threads, and the >50x benchmark, gated on `TRINITY_NATIVE_EXEC`).
+
 ### Running the two servers by hand
 
 Useful when you want one server restarting independently.
@@ -179,12 +197,12 @@ For a deeper dive into the system's design patterns and capabilities, please ref
 Verification is the point of this system, so the tests are the interesting part.
 
 ```bash
-# Python — 312 with the native bridge, 294 without
+# Python — 344 with the native bridge, 322 without
 python -m pytest -q
 
-# With engines: point at the binary and the Qt runtime
+# With engines: point at the binary. The bridge injects the Qt runtime
+# directory into the child's PATH itself (TRINITY_QT_BIN overrides).
 $env:TRINITY_NATIVE_EXEC = "app\native\build\debug-vcpkg\Debug\Trinity.exe"
-$env:Path = "C:\Qt\6.8.3\msvc2022_64\bin;" + $env:Path
 python -m pytest -q
 ```
 

@@ -302,6 +302,9 @@ int runSelftest() {
 
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--daemon") {
+            return trinity::cli::runDaemonFromStdin();
+        }
         if (std::string(argv[i]) == "--exec") {
             return trinity::cli::runExecFromStdin();
         }
