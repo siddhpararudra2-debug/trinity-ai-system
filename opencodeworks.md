@@ -25,6 +25,37 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **Stage 4: intelligence layer — real SSE streaming, multi-step agent loop, DAG execution + visualization**
+  Native: `IHttpTransport::postStream(request, onChunk)` seam (default =
+  post() + one whole-body chunk, so legacy fixture transports stay valid;
+  DefaultHttpTransport streams the WinHTTP read loop incrementally), ChatWire
+  body builders gain a `stream` flag (default false — byte-stable body tests),
+  `SseDeltaParser` line-buffers chunks (safe mid-UTF-8 and mid-JSON splits),
+  parses OpenAI `delta.content`/`tool_calls[].function.arguments` fragments AND
+  Anthropic `text_delta`/`input_json_delta` on its own wire via a
+  `usesAnthropicWire()` virtual, surfaces streamed error objects truthfully,
+  and `HttpChatProvider::streamPlan` now streams incremental `(chunk,false)`
+  deltas with exactly one `(chunk,true)` final payload; a server that ignores
+  `stream:true` gets its whole-body JSON mapped honestly instead of fake
+  deltas (380 native cases green). Python: `src/llm/local_client.py` is the
+  keyless OpenAI-compatible seam to the user's own LLM (TRINITY_MODEL_ENDPOINT /
+  TRINITY_MODEL_NAME; honest capability_unavailable without it);
+  `POST /api/intelligence/stream-plan` forwards real token deltas as SSE with
+  a deterministic-router fallback when no model is attached;
+  `src/agents/loop.py` runs model→tool-call→engine→observation iterations
+  (errors framed for self-correction, step budget reported as
+  step_budget_exhausted), powering real `CoderAgent`/`ResearcherAgent.run()`
+  behind `POST /api/agents/{coder|researcher}/run`;
+  `POST /api/workflows/execute` executes multi-node DAGs with per-node
+  visible status, failed nodes truthfully block dependents as `queued`, and
+  `{node:<id>}.<path>` references thread upstream results into child
+  parameters (live-tested: eval 2+3 → solve x+5=10 → failed pcb validate →
+  blocked orphan). Frontend: `DagRunPanel` renders the pipeline with
+  truthful status styling, mounted in TrinityWorkspace. Tests: 22 new
+  local/loop/API tests scripted with fakes; Python suite 344 passed / 24
+  skipped; native 380 cases. Everything degrades without a connected
+  model — nothing pretends.
+
 - [x] **M8: persistent native bridge — one hot daemon process, ~450x faster ops**
   `Trinity.exe` gains `--daemon` (app/native/src/cli/Exec.cpp `runDaemon` +
   `executeRequestJsonWithRegistry`, doctested in test_exec.cpp — ping/pong,

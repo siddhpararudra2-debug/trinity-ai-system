@@ -149,7 +149,21 @@ The backend provides a comprehensive REST API for interacting with the engines a
 
 - **System**: `GET /api/health`, `GET /api/engines`
 - **Execution**: `POST /api/execute`, `POST /api/math/solve`, `POST /api/cad/generate`, `POST /api/requirements/execute`
+- **Intelligence (Stage 4)**: `POST /api/intelligence/stream-plan` (SSE token
+  streaming), `POST /api/agents/coder/run`, `POST /api/agents/researcher/run`
+  (multi-step loops), `POST /api/workflows/execute` (multi-node DAG with
+  per-node status and `{node:<id>}.<path>` dependency threading)
 - **State**: `GET /api/jobs`, `GET /api/jobs/{job_id}`, `GET /api/artifacts/{artifact_id}`
+
+### Connecting your own LLM
+
+Set `TRINITY_MODEL_ENDPOINT` (a full OpenAI-compatible chat-completions URL —
+Ollama, LM Studio, llama.cpp-server, vLLM or your own server) and optionally
+`TRINITY_MODEL_NAME`; no API key is needed. Availability is competitive:
+until an endpoint is configured, streaming and agent endpoints degrade
+truthfully (deterministic-router fallback for stream-plan, explicit
+`capability_unavailable` refusal for agents) and never pretend a model is
+attached.
 
 ### Example Request (CAD Generation)
 

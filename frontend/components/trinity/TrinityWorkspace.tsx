@@ -8,6 +8,25 @@ import GeometryViewer from './GeometryViewer';
 import ValidationPanel from './ValidationPanel';
 import ArtifactPanel from './ArtifactPanel';
 import BridgedEngines from './BridgedEngines';
+import DagRunPanel from './DagRunPanel';
+import type { WorkflowNodeSpec } from './DagRunPanel';
+
+const DEFAULT_DAG: WorkflowNodeSpec[] = [
+  {
+    id: 'eval',
+    engine: 'math',
+    operation: 'evaluate',
+    parameters: { expression: '2+3' },
+    dependencies: [],
+  },
+  {
+    id: 'solve',
+    engine: 'math',
+    operation: 'solve',
+    parameters: { expression: 'x + {node:eval}.result.result = 10' },
+    dependencies: ['eval'],
+  },
+];
 
 /**
  * The whole workspace: a pinned command bar over one scroll region. The
@@ -19,6 +38,7 @@ export default function TrinityWorkspace() {
   const [result, setResult] = useState<TrinityResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<ExecutionStage>('idle');
+  const [dagNodes, setDagNodes] = useState<WorkflowNodeSpec[]>(DEFAULT_DAG);
 
   const handleResult = (r: TrinityResult | null, e: string | null) => {
     setResult(r);
@@ -60,6 +80,10 @@ export default function TrinityWorkspace() {
         </section>
 
         <ArtifactPanel result={result} error={error} />
+
+        <section className="container" style={{ paddingBottom: 48 }}>
+          <DagRunPanel nodes={dagNodes} onNodesChange={setDagNodes} />
+        </section>
 
         <BridgedEngines />
       </div>
