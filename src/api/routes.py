@@ -1,24 +1,36 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import shutil
 import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
+from src.agents.coder import CoderAgent
+from src.agents.loop import refusal
+from src.agents.researcher import ResearcherAgent
 from src.artifacts.manager import artifact_manager
 from src.core.config import settings
-from src.core.errors import ArtifactNotFoundError, RequestValidationError
+from src.core.errors import (
+    ArtifactNotFoundError,
+    EngineExecutionError,
+    RequestValidationError,
+    TrinityError,
+)
 from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
 from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
 from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
 from src.jobs.manager import job_manager
+from src.llm.local_client import LocalClient
 from src.models.schemas import (
+    AgentRunRequest,
     ArtifactOut,
     CADCatalog,
     CADGenerateRequest,
@@ -27,8 +39,13 @@ from src.models.schemas import (
     JobOut,
     MathSolveRequest,
     RequirementRequest,
+    StreamPlanRequest,
     ToolResponse,
+    WorkflowExecuteRequest,
+    WorkflowExecuteResponse,
+    WorkflowNodeResult,
 )
+from src.workflows.dag import WorkflowNode, ordered as ordered_nodes
 
 router = APIRouter(prefix="/api")
 
@@ -232,3 +249,228 @@ async def execute_requirement(req: RequirementRequest) -> dict:
         parsed["operation"],
         parameters,
     )
+
+
+# ------------------------------------------------- Stage 4: intelligence ---
+
+
+def _local_llm() -> LocalClient:
+    """The keyless seam to the user's own (OpenAI-compatible) LLM."""
+    return LocalClient()
+
+
+async def _execute_tool(
+    engine: str, operation: str, parameters: dict[str, Any]
+) -> dict[str, Any]:
+    return await asyncio.to_thread(job_manager.run_sync, engine, operation, parameters)
+
+
+@router.post("/intelligence/stream-plan")
+async def stream_plan(req: StreamPlanRequest):
+    """Token-streamed plan over SSE (`text/event-stream`).
+
+    With a model endpoint configured, delta tokens stream through as
+    {"type":"delta","text":...} frames and a {"type":"final"} closes the
+    stream. Without one, this degrades truthfully: the deterministic router
+    either lands an executable plan ({"type":"final","tool":...}) or the
+    stream ends with an honest {"type":"error"} event — never a fake token.
+    """
+
+    def sse(event: dict[str, Any]) -> str:
+        return f"data: {json.dumps(event, default=str)}\n\n"
+
+    async def generate():
+        llm = _local_llm()
+        if llm.available():
+            try:
+                for text in llm.stream(req.text):
+                    yield sse({"type": "delta", "text": text})
+                yield sse({"type": "final"})
+                return
+            except EngineExecutionError as exc:
+                yield sse({"type": "error", "message": exc.to_dict()})
+                return
+        # No model attached: deterministic-router fallback, stated as such.
+        try:
+            parsed = parse_requirement(req.text)
+            parameters = (
+                {
+                    "type": parsed["object"],
+                    "parameters": parsed["parameters"],
+                    "outputs": ["stl", "glb", "json"],
+                }
+                if parsed["domain"] == "cad"
+                else parsed["parameters"]
+            )
+            envelope = await _execute_tool(
+                parsed["domain"], parsed["operation"], parameters
+            )
+            yield sse(
+                {
+                    "type": "final",
+                    "fallback": "deterministic_router",
+                    "tool": {
+                        "engine": parsed["domain"],
+                        "operation": parsed["operation"],
+                        "parameters": parameters,
+                    },
+                    "job": envelope,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 — router miss ends as an error event
+            if isinstance(exc, TrinityError):
+                yield sse({"type": "error", "message": exc.to_dict()})
+            else:
+                yield sse(
+                    {
+                        "type": "error",
+                        "message": {"code": "routing_error", "message": str(exc)},
+                    }
+                )
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.post("/agents/{role}/run")
+async def run_agent(role: str, req: AgentRunRequest) -> dict:
+    """Multi-step agent run; degrades truthfully when no model is attached."""
+    if role not in ("coder", "researcher"):
+        raise RequestValidationError(
+            "Unknown agent role",
+            details={"role": role, "supported": ["coder", "researcher"]},
+        )
+    llm = _local_llm()
+    if not llm.available():
+        return refusal(role)
+    prompt = req.prompt
+    if role == "coder":
+        result = await asyncio.to_thread(CoderAgent().run, prompt, llm, req.max_steps)
+    else:
+        result = await asyncio.to_thread(ResearcherAgent().run, prompt, llm, req.max_steps)
+    return {"success": result["status"] == "completed", **result}
+
+
+@router.post("/workflows/execute", response_model=WorkflowExecuteResponse)
+async def execute_workflow(req: WorkflowExecuteRequest) -> dict:
+    """Execute a multi-node DAG with per-node visible status.
+
+    Nodes run in topological order on the job-manager contract; a failed
+    node truthfully short-circuits its dependents (queued, never execute).
+    Dependency parameters thread forward: a string parameter of the form
+    `{node:<id>}.<dotted.path>` resolves against the upstream node's result
+    when it ran successfully.
+    """
+
+    nodes = [
+        WorkflowNode(
+            id=n.id,
+            engine=n.engine,
+            operation=n.operation,
+            parameters=dict(n.parameters),
+            dependencies=list(n.dependencies),
+        )
+        for n in req.nodes
+    ]
+    try:
+        ordered = ordered_nodes(nodes)
+    except ValueError as exc:
+        raise RequestValidationError(str(exc)) from exc
+
+    reference = re.compile(r"\{node:([^}]+)\}\.([A-Za-z0-9_.]+)")
+    results: dict[str, WorkflowNodeResult] = {}
+
+    def lookup(node_id: str, path: str) -> Any:
+        if path.startswith("result."):
+            path = path[len("result.") :]  # walk inside the node result either way
+        upstream = results.get(node_id)
+        if upstream is None or upstream.status != "completed":
+            raise RequestValidationError(
+                f"Parameter references node '{node_id}' which did not complete"
+            )
+        current: Any = upstream.result
+        for part in path.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                raise RequestValidationError(
+                    f"Node '{node_id}' result has no '{path}'"
+                )
+        return current
+
+    def resolve(value: Any) -> Any:
+        """Substitute `{node:<id>}.<path>` references anywhere in a parameter
+        value — exact-match strings become the value itself; strings that
+        embed a reference inside larger text get string substitution."""
+        if not isinstance(value, str):
+            return value
+        matches = list(reference.finditer(value))
+        if not matches:
+            return value
+        if len(matches) == 1 and matches[0].span() == (0, len(value)):
+            return lookup(matches[0].group(1).strip(), matches[0].group(2))
+        result: Any = value
+        for match in matches:
+            found = lookup(match.group(1).strip(), match.group(2))
+            result = result.replace(match.group(0), str(found))
+        return result
+
+    done: set[str] = set()
+    output: list[dict[str, Any]] = []
+    overall_success = True
+    for node in ordered:
+        blocked_deps = [
+            dep for dep in node.dependencies if results[dep].status != "completed"
+        ]
+        if blocked_deps:
+            record = WorkflowNodeResult(
+                id=node.id,
+                status="queued",
+                errors=[
+                    {
+                        "code": "blocked_by_upstream",
+                        "message": f"blocked: {', '.join(blocked_deps)} did not complete",
+                    }
+                ],
+            )
+            results[node.id] = record
+            output.append(record.model_dump())
+            continue
+
+        failure: RequestValidationError | None = None
+        resolved: dict[str, Any] = {}
+        try:
+            for key, value in node.parameters.items():
+                resolved[key] = resolve(value)
+        except RequestValidationError as exc:
+            failure = exc
+
+        if failure is not None:
+            record = WorkflowNodeResult(
+                id=node.id,
+                status="failed",
+                errors=[{"code": "parameter_error", "message": str(failure)}],
+            )
+            results[node.id] = record
+            output.append(record.model_dump())
+            overall_success = False
+            continue
+
+        envelope = await asyncio.to_thread(
+            job_manager.run_sync, node.engine, node.operation, resolved
+        )
+        record = WorkflowNodeResult(
+            id=node.id,
+            status="completed" if envelope.get("success") else "failed",
+            job_id=envelope.get("job_id", ""),
+            result=envelope.get("result", {}),
+            artifacts=list(envelope.get("artifacts", [])),
+            errors=list(envelope.get("errors", [])),
+        )
+        results[node.id] = record
+        output.append(record.model_dump())
+        if envelope.get("success"):
+            done.add(node.id)
+        else:
+            overall_success = False
+
+    return WorkflowExecuteResponse(success=overall_success, nodes=output).model_dump()

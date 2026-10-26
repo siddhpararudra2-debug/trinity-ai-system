@@ -161,3 +161,41 @@ class ExecuteRequest(BaseModel):
 
 class RequirementRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
+
+
+class AgentRunRequest(BaseModel):
+    """Coder/researcher agent run: natural-language request for the loop."""
+
+    prompt: str = Field(..., min_length=1, max_length=4000)
+    max_steps: int = Field(default=8, ge=1, le=32)
+
+
+class StreamPlanRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+
+
+class WorkflowNodeModel(BaseModel):
+    id: str
+    engine: str
+    operation: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class WorkflowExecuteRequest(BaseModel):
+    nodes: list[WorkflowNodeModel] = Field(..., min_length=1)
+
+
+class WorkflowNodeResult(BaseModel):
+    id: str
+    status: str  # queued | running | completed | failed
+    job_id: str = ""
+    result: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[Any] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class WorkflowExecuteResponse(BaseModel):
+    success: bool
+    nodes: list[WorkflowNodeResult] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)
