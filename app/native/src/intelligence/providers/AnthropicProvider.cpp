@@ -20,4 +20,8 @@ ModelResponse AnthropicProvider::doGenerate(const ModelRequest& request) {
     return anthropicRoundTrip(request, "anthropic");
 }
 
+bool AnthropicProvider::usesAnthropicWire() const {
+    return true;
+}
+
 }  // namespace trinity::intelligence::providers

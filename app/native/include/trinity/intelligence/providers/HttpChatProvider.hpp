@@ -46,6 +46,10 @@ protected:
     /// Wire-specific round trip. Called only when ready() holds.
     virtual ModelResponse doGenerate(const ModelRequest& request) = 0;
 
+    /// Which SSE dialect streamPlan parses. OpenAI/local speak OpenAI
+    /// chat-completions deltas; AnthropicProvider overrides to true.
+    virtual bool usesAnthropicWire() const;
+
     virtual std::string defaultModel() const = 0;
     virtual std::string defaultEndpoint() const = 0;
 
@@ -84,12 +88,61 @@ core::Json anthroToolDefinition();
 
 /// Roles: System merges into system text; Tool becomes an honest
 /// "[tool result] " user message; User/Assistant map unchanged.
-core::Json openAiBody(const ModelRequest& request, const std::string& model);
-core::Json anthroBody(const ModelRequest& request, const std::string& model);
+/// stream=true adds the provider's streaming directive — for tests the
+/// flag defaults to false so byte-level body assertions stay stable.
+core::Json openAiBody(const ModelRequest& request, const std::string& model,
+                      bool stream = false);
+core::Json anthroBody(const ModelRequest& request, const std::string& model,
+                      bool stream = false);
 
 /// Parse helpers: fill text/toolCalls/toolCall/usage/responseId/model.
 void mapOpenAiReply(const core::Json& body, ModelResponse& out);
 void mapAnthropicReply(const core::Json& body, ModelResponse& out);
+
+/// Incremental SSE parser for streaming chat completions. Both dialects
+/// line-buffer: chunks may split UTF-8 sequences or event lines mid-byte,
+/// so feed() holds the trailing partial line until its newline arrives.
+/// OpenAI dialect: `data: {json}` lines, `choices[0].delta.content` text,
+/// `delta.tool_calls[].function.arguments` fragments, `data: [DONE]`.
+/// Anthropic dialect: named events, `text_delta` for text,
+/// `input_json_delta` for tool-argument fragments. `data: {"error"...}`
+/// payloads mark failures truthfully (sawError).
+class SseDeltaParser {
+public:
+    explicit SseDeltaParser(bool anthropicWire = false);
+
+    /// Consume one transport chunk (any granularity, including one whole
+    /// non-streamed body — the parser only reacts to well-formed lines).
+    void feed(const std::string& chunk);
+
+    /// Fold accumulated deltas into a ModelResponse. toolCalls text is
+    /// parsed when present; a response with neither text nor tool calls is
+    /// still success=false only through sawError — empty replies are honest.
+    ModelResponse finish(const std::string& source);
+
+    bool sawEvents() const { return _sawEvents; }
+    bool sawError() const { return _sawError; }
+    const std::string& errorMessage() const { return _errorMessage; }
+    /// Accumulated plain text so streamers can push only the new fragment.
+    const std::string& text() const { return _text; }
+
+private:
+    void handleLine(const std::string& line);
+
+    bool _anthropicWire = false;
+    std::string _pendingLine;
+    std::string _text;
+    std::string _arguments;
+    std::string _toolCallId;
+    std::string _toolName;
+    std::string _modelName;
+    std::string _responseId;
+    std::string _errorMessage;
+    core::Json _usage = core::Json::object();
+    bool _sawEvents = false;
+    bool _sawDone = false;
+    bool _sawError = false;
+};
 
 }  // namespace chat_wire
 

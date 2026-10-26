@@ -7,6 +7,7 @@
 // WinHTTP, Windows-only). Tests inject a fixture transport instead, which is
 // what keeps contract tests offline and deterministic.
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,6 +29,9 @@ struct HttpReply {
     std::string errorText; // transport diagnostics when !transportOk
 };
 
+// Receives successive response-body pieces during a streaming POST.
+using BodyChunkCallback = std::function<void(const std::string& chunk)>;
+
 class IHttpTransport {
 public:
     virtual ~IHttpTransport() = default;
@@ -35,6 +39,21 @@ public:
     // Synchronous POST. Providers block on this; the caller controls the
     // budget through HttpRequest::timeoutMs.
     virtual HttpReply post(const HttpRequest& request) = 0;
+
+    // Streaming POST: onChunk receives successive body pieces as they
+    // arrive (SSE deltas, chunked encodings). Default keeps the seam honest
+    // for transports that only implement post(): it runs post() and hands
+    // the whole body back as exactly one chunk, so legacy fixtures never
+    // need to override this and providers must tolerate both shapes. Chunk
+    // boundaries may split UTF-8 sequences — callers must line-buffer (the
+    // SSE parser in ChatWire does).
+    virtual HttpReply postStream(const HttpRequest& request,
+                                 const BodyChunkCallback& onChunk);
+
+    // Convenience overload for callers that stream only for side effects.
+    HttpReply postStream(const HttpRequest& request) {
+        return postStream(request, {});
+    }
 };
 
 // Ships on Windows (WinHTTP). On any other platform it returns a reply with
@@ -43,6 +62,8 @@ public:
 class DefaultHttpTransport : public IHttpTransport {
 public:
     HttpReply post(const HttpRequest& request) override;
+    HttpReply postStream(const HttpRequest& request,
+                         const BodyChunkCallback& onChunk) override;
 };
 
 }  // namespace trinity::intelligence

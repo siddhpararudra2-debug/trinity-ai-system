@@ -76,18 +76,56 @@ ParsedUrl crackUrl(const std::string& url) {
 
 #endif  // _WIN32
 
+// Shared WinHTTP pipeline: post() and postStream() run the identical flow
+// up to the body read; only whether chunks are handed out differs. Passing
+// a null callback reproduces the legacy accumulate-only behavior.
 }  // namespace
 
+#ifdef _WIN32
+HttpReply winHttpPost(const HttpRequest& request, const BodyChunkCallback& onChunk);
+#endif
+
 HttpReply DefaultHttpTransport::post(const HttpRequest& request) {
-#ifndef _WIN32
+#ifdef _WIN32
+    return winHttpPost(request, {});
+#else
     static_cast<void>(request);
     HttpReply reply;
     reply.errorText =
         "DefaultHttpTransport ships only on Windows; inject an IHttpTransport for other targets";
     return reply;
-#else
-    HttpReply reply;
+#endif  // _WIN32
+}
 
+HttpReply DefaultHttpTransport::postStream(const HttpRequest& request,
+                                           const BodyChunkCallback& onChunk) {
+#ifdef _WIN32
+    return winHttpPost(request, onChunk);
+#else
+    static_cast<void>(onChunk);
+    HttpReply reply;
+    reply.errorText =
+        "DefaultHttpTransport ships only on Windows; inject an IHttpTransport for other targets";
+    return reply;
+#endif  // _WIN32
+}
+
+// IHttpTransport default: transports that only implement post() still stream
+// truthfully — the whole body as exactly one chunk. Providers must therefore
+// accept both granular and whole-body chunk shapes.
+HttpReply IHttpTransport::postStream(const HttpRequest& request,
+                                     const BodyChunkCallback& onChunk) {
+    const HttpReply reply = post(request);
+    if (reply.transportOk && onChunk && !reply.body.empty()) {
+        onChunk(reply.body);
+    }
+    return reply;
+}
+
+#ifdef _WIN32
+HttpReply winHttpPost(const HttpRequest& request, const BodyChunkCallback& onChunk) {
+
+    HttpReply reply;
     const ParsedUrl url = crackUrl(request.url);
 
     HINTERNET session = WinHttpOpen(L"Trinity/0.1", WINHTTP_ACCESS_TYPE_NO_PROXY,
@@ -168,6 +206,9 @@ HttpReply DefaultHttpTransport::post(const HttpRequest& request) {
             return reply;
         }
         body.append(chunk.data(), readBytes);
+        if (onChunk) {
+            onChunk(std::string(chunk.data(), readBytes));
+        }
         if (body.size() > (1u << 26)) {  // 64 MiB guard — no model reply is bigger
             reply.errorText = "response body exceeded the 64 MiB guard";
             return reply;

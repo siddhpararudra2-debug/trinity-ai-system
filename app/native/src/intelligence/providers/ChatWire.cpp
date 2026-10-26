@@ -110,7 +110,7 @@ ToolCall parseToolArguments(const std::string& toolCallId, const core::Json& arg
 
 }  // namespace
 
-core::Json openAiBody(const ModelRequest& request, const std::string& model) {
+core::Json openAiBody(const ModelRequest& request, const std::string& model, bool stream) {
     core::Json systemText;
     core::Json messages;
     splitMessages(request, systemText, messages);
@@ -134,10 +134,13 @@ core::Json openAiBody(const ModelRequest& request, const std::string& model) {
     body["messages"] = all;
     body["tools"] = openAiToolDefinition();
     body["tool_choice"] = "auto";
+    if (stream) {
+        body["stream"] = true;
+    }
     return body;
 }
 
-core::Json anthroBody(const ModelRequest& request, const std::string& model) {
+core::Json anthroBody(const ModelRequest& request, const std::string& model, bool stream) {
     core::Json systemText;
     core::Json messages;
     splitMessages(request, systemText, messages);
@@ -155,6 +158,9 @@ core::Json anthroBody(const ModelRequest& request, const std::string& model) {
     body["system"] = system;
     body["messages"] = messages;
     body["tools"] = anthroToolDefinition();
+    if (stream) {
+        body["stream"] = true;
+    }
     return body;
 }
 
@@ -267,5 +273,174 @@ void mapAnthropicReply(const core::Json& body, ModelResponse& out) {
     out.success = true;
 }
 
+// ---------------------------------------------------------------------------
+// SseDeltaParser — incremental SSE parsing for streamPlan
+// ---------------------------------------------------------------------------
+
+SseDeltaParser::SseDeltaParser(bool anthropicWire)
+    : _anthropicWire(anthropicWire) {}
+
+void SseDeltaParser::feed(const std::string& chunk) {
+    std::string buffer = std::move(_pendingLine);
+    buffer += chunk;
+    size_t start = 0;
+    for (;;) {
+        const size_t nl = buffer.find('\n', start);
+        if (nl == std::string::npos) {
+            break;
+        }
+        std::string line = buffer.substr(start, nl - start);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        handleLine(line);
+        start = nl + 1;
+    }
+    _pendingLine = buffer.substr(start);
+}
+
+void SseDeltaParser::handleLine(const std::string& line) {
+    // `event:`/comment lines carry no payload for either wire dialect —
+    // everything lives in the data: line. Empty and partial lines are noise.
+    if (line.rfind("data:", 0) != 0) {
+        return;
+    }
+    std::string payload = line.substr(5);
+    if (!payload.empty() && payload.front() == ' ') {
+        payload.erase(0, 1);
+    }
+    if (payload == "[DONE]") {
+        _sawDone = true;
+        return;
+    }
+    core::Json event;
+    try {
+        event = core::Json::parse(payload);
+    } catch (const std::exception&) {
+        return;  // malformed line: ignore, never invent a delta from garbage
+    }
+    _sawEvents = true;
+
+    // Truthful error surfacing: either dialect can stream a failure object.
+    if (event.is_object() && (event.contains("error") || event.value("type", "") == "error")) {
+        const core::Json& err = event.contains("error") ? event["error"] : event;
+        _errorMessage = err.is_object() ? err.value("message", "model stream error")
+                                        : "model stream error";
+        _sawError = true;
+        return;
+    }
+
+    if (_anthropicWire) {
+        const std::string type = event.value("type", "");
+        if (type == "message_start" && event.contains("message") &&
+            event["message"].is_object()) {
+            const core::Json& message = event["message"];
+            if (message.contains("id") && message["id"].is_string()) {
+                _responseId = message["id"].get<std::string>();
+            }
+            if (message.contains("model") && message["model"].is_string()) {
+                _modelName = message["model"].get<std::string>();
+            }
+            if (message.contains("usage") && message["usage"].is_object()) {
+                _usage = message["usage"];
+            }
+        } else if (type == "content_block_start" && event.contains("content_block") &&
+                   event["content_block"].is_object() &&
+                   event["content_block"].value("type", "") == "tool_use") {
+            // A tool_use block opens; its name/id arrive whole, arguments
+            // stream later as input_json_delta fragments.
+            _toolCallId = event["content_block"].value("id", "");
+            _toolName = event["content_block"].value("name", "");
+        } else if (type == "content_block_delta" && event.contains("delta") &&
+                   event["delta"].is_object()) {
+            const core::Json& delta = event["delta"];
+            const std::string deltaType = delta.value("type", "");
+            if (deltaType == "text_delta" && delta.contains("text") &&
+                delta["text"].is_string()) {
+                _text += delta["text"].get<std::string>();
+            } else if (deltaType == "input_json_delta" && delta.contains("partial_json") &&
+                       delta["partial_json"].is_string()) {
+                _arguments += delta["partial_json"].get<std::string>();
+            }
+        }
+        return;
+    }
+
+    // OpenAI chat-completions shape: one choice, delta either text or
+    // tool-call fragments; id/model/usage ride developmentally on chunks.
+    if (event.contains("id") && event["id"].is_string()) {
+        _responseId = event["id"].get<std::string>();
+    }
+    if (event.contains("model") && event["model"].is_string()) {
+        _modelName = event["model"].get<std::string>();
+    }
+    if (event.contains("usage") && event["usage"].is_object()) {
+        _usage = event["usage"];
+    }
+    if (event.contains("choices") && event["choices"].is_array() &&
+        !event["choices"].empty() && event["choices"].at(0).contains("delta") &&
+        event["choices"].at(0)["delta"].is_object()) {
+        const core::Json& delta = event["choices"].at(0)["delta"];
+        if (delta.contains("content") && delta["content"].is_string()) {
+            _text += delta["content"].get<std::string>();
+        }
+        if (delta.contains("tool_calls") && delta["tool_calls"].is_array() &&
+            !delta["tool_calls"].empty() && delta["tool_calls"].at(0).is_object()) {
+            const core::Json& callDelta = delta["tool_calls"].at(0);
+            if (callDelta.contains("id") && callDelta["id"].is_string()) {
+                _toolCallId = callDelta["id"].get<std::string>();
+            }
+            if (callDelta.contains("function") && callDelta["function"].is_object()) {
+                const core::Json& fn = callDelta["function"];
+                const std::string name = fn.value("name", "");
+                if (!name.empty()) {
+                    _toolName += name;
+                }
+                if (fn.contains("arguments") && fn["arguments"].is_string()) {
+                    _arguments += fn["arguments"].get<std::string>();
+                }
+            }
+        }
+    }
+}
+
+ModelResponse SseDeltaParser::finish(const std::string& source) {
+    ModelResponse response;
+    if (_sawError) {
+        response.success = false;
+        response.error = core::makeError(core::ErrorCode::EngineExecutionError, _errorMessage,
+                                         source)
+                             .toJson();
+        return response;
+    }
+    response.responseId = _responseId;
+    response.model = _modelName;
+    response.usage = _usage;
+    response.text = _text;
+    // Only trinity_execute may execute — mirroring mapOpenAiReply/mapAnthropicReply.
+    if (!_toolName.empty()) {
+        core::Json arguments = core::Json::object();
+        if (!_arguments.empty()) {
+            try {
+                arguments = core::Json::parse(_arguments);
+            } catch (const std::exception&) {
+                response.success = false;
+                response.error =
+                    core::makeError(core::ErrorCode::EngineExecutionError,
+                                    "tool call arguments were not valid JSON", source)
+                        .toJson();
+                return response;
+            }
+        }
+        if (_toolName == kToolName) {
+            response.toolCalls.push_back(parseToolArguments(_toolCallId, arguments));
+            response.hasToolCall = true;
+            response.toolCall = response.toolCalls.front();
+        }
+    }
+    response.success = true;
+    return response;
+}
 }  // namespace chat_wire
+
 }  // namespace trinity::intelligence::providers

@@ -21,6 +21,11 @@ void HttpChatProvider::setTransport(std::shared_ptr<IHttpTransport> transport) {
     }
 }
 
+bool HttpChatProvider::usesAnthropicWire() const {
+    // OpenAI/local dialect by default; AnthropicProvider overrides to true.
+    return false;
+}
+
 bool HttpChatProvider::ready() const {
     // Truthful availability: enabled, key policy satisfied (a key is
     // required for openai/anthropic; local servers run keyless), and a
@@ -104,25 +109,92 @@ core::Result<ModelResponse> HttpChatProvider::generatePlan(const ModelRequest& r
 }
 
 void HttpChatProvider::streamPlan(const ModelRequest& request, StreamCallback callback) {
-    // Honest streaming scope: a full planning round trip emitted as one final
-    // chunk. Incremental SSE is intentionally unshipped — do not pretend.
+    // Real incremental SSE: provider body builders set stream=true, transport
+    // chunks are parsed by SseDeltaParser, and text deltas are forwarded as
+    // (chunk, false) callbacks while the accumulated payload is delivered
+    // as exactly one (chunk, true) final callback — the Planner contract.
     if (!callback) {
         return;
     }
-    const ModelResponse response = generate(request);
-    if (response.hasToolCall && !response.toolCalls.empty()) {
-        core::Json steps = core::Json::array();
-        for (const auto& call : response.toolCalls) {
-            steps.push_back(call.toJson());
+    if (!ready()) {
+        const ModelResponse denied = unavailableResponse(
+            request, _providerId + " is not configured: " +
+                         (_requiresApiKey ? "no API key (TRINITY_MODEL_API_KEY)" : "provider disabled"));
+        callback(denied.error.value("message", "model refused"), true);
+        return;
+    }
+
+    const bool anthropicWire = usesAnthropicWire();
+    HttpRequest requestOut;
+    requestOut.url = _endpoint;
+    requestOut.timeoutMs = _timeoutMs;
+    if (anthropicWire) {
+        requestOut.body = chat_wire::anthroBody(request, _modelName, true).dump();
+        requestOut.header = {{"x-api-key", _apiKey}, {"anthropic-version", "2023-06-01"}};
+    } else {
+        requestOut.body = chat_wire::openAiBody(request, _modelName, true).dump();
+        if (!_apiKey.empty()) {
+            requestOut.header = {{"Authorization", "Bearer " + _apiKey}};
         }
-        callback(steps.dump(), true);
+    }
+
+    chat_wire::SseDeltaParser parser(anthropicWire);
+    auto onChunk = [&parser, &callback](const std::string& chunk) {
+        const size_t before = parser.text().size();
+        parser.feed(chunk);
+        const std::string& accumulated = parser.text();
+        if (accumulated.size() > before) {
+            // Forward only the new text; tool-argument fragments stay inside
+            // the parser until finish() assembles the single tool call.
+            callback(accumulated.substr(before), false);
+        }
+    };
+    const HttpReply reply = _transport->postStream(requestOut, onChunk);
+
+    // Exactly one final callback from here on.
+    const auto emitFinal = [&callback](const ModelResponse& response) {
+        if (response.hasToolCall && !response.toolCalls.empty()) {
+            core::Json steps = core::Json::array();
+            for (const auto& call : response.toolCalls) {
+                steps.push_back(call.toJson());
+            }
+            callback(steps.dump(), true);
+            return;
+        }
+        if (response.success) {
+            callback(response.text.empty() ? response.toolCall.toJson().dump() : response.text,
+                     true);
+            return;
+        }
+        callback(response.error.value("message", "model refused"), true);
+    };
+
+    if (!reply.transportOk || reply.statusCode >= 400) {
+        callback("stream transport failed (status " + std::to_string(reply.statusCode) +
+                     "): " + (reply.errorText.empty() ? reply.body : reply.errorText),
+                 true);
         return;
     }
-    if (response.success) {
-        callback(response.text.empty() ? response.toolCall.toJson().dump() : response.text, true);
-        return;
+
+    ModelResponse response = parser.finish(_providerId);
+    if (!parser.sawEvents()) {
+        // The server ignored stream:true and replied with a whole JSON body.
+        // Honor it: map the non-streamed reply instead of pretending deltas
+        // were seen (a broken server is reported as broken, not faked).
+        try {
+            const core::Json body = core::Json::parse(reply.body);
+            if (anthropicWire) {
+                chat_wire::mapAnthropicReply(body, response);
+            } else {
+                chat_wire::mapOpenAiReply(body, response);
+            }
+        } catch (const std::exception&) {
+            callback("stream returned no SSE events and the body was not a valid reply",
+                     true);
+            return;
+        }
     }
-    callback(response.error.value("message", "model refused"), true);
+    emitFinal(response);
 }
 
 namespace {

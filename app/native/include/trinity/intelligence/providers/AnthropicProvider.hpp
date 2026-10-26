@@ -18,6 +18,7 @@ protected:
     std::string defaultModel() const override;
     std::string defaultEndpoint() const override;
     ModelResponse doGenerate(const ModelRequest& request) override;
+    bool usesAnthropicWire() const override;
 };
 
 } // namespace trinity::intelligence::providers

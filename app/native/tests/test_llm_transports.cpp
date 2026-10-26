@@ -21,6 +21,12 @@ public:
     std::vector<HttpRequest> requests;
     std::vector<HttpReply> replies;
 
+    struct ScriptedStream {
+        std::vector<std::string> chunks;
+        HttpReply reply;
+    };
+    std::vector<ScriptedStream> streams;
+
     HttpReply post(const HttpRequest& request) override {
         requests.push_back(request);
         if (replies.empty()) {
@@ -31,6 +37,24 @@ public:
         HttpReply reply = replies.front();
         replies.erase(replies.begin());
         return reply;
+    }
+
+    HttpReply postStream(const HttpRequest& request,
+                         const BodyChunkCallback& onChunk) override {
+        if (streams.empty()) {
+            // Legacy shape: still works through the base-class default —
+            // post() plus the entire body as a single chunk.
+            return IHttpTransport::postStream(request, onChunk);
+        }
+        requests.push_back(request);
+        ScriptedStream stream = streams.front();
+        streams.erase(streams.begin());
+        if (onChunk) {
+            for (const auto& chunk : stream.chunks) {
+                onChunk(chunk);
+            }
+        }
+        return stream.reply;
     }
 };
 
@@ -235,17 +259,148 @@ TEST_CASE("streamPlan emits exactly one final chunk") {
     provider.setTransport(fixture);
     REQUIRE(provider.configure({{"api_key", "TESTKEY"}}).isOk());
 
-    int calls = 0;
-    bool sawFinal = false;
+    int finals = 0;
     std::string payload;
     provider.streamPlan(sampleRequest(), [&](const std::string& chunk, bool final) {
-        ++calls;
-        payload = chunk;
-        sawFinal = final;
+        if (final) {
+            ++finals;
+            payload = chunk;
+        }
     });
-    CHECK(calls == 1);
-    CHECK(sawFinal);
+    CHECK(finals == 1);
     CHECK(payload.find("cad") != std::string::npos);
+    // The streaming request must actually ask for SSE.
+    const trinity::core::Json body = trinity::core::Json::parse(fixture->requests.front().body);
+    CHECK(body["stream"] == true);
+}
+
+TEST_CASE("openai SSE deltas stream as non-final chunks and finish as one payload") {
+    OpenAIProvider provider;
+    auto fixture = std::make_shared<FixtureTransport>();
+    FixtureTransport::ScriptedStream stream;
+    // Text delta, then tool call split across chunks (arguments arrive as
+    // fragments), then [DONE].
+    stream.chunks = {
+        "data: {\"id\":\"chatcmpl-9\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":"
+        "{\"content\":\"Planning \"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"a frame.\"}}]}\n\n",
+        // Tool call: name chunk, then arguments fragmenting across a chunk
+        // boundary — buffers must line-split safely mid-JSON.
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"id\":\"call_a1\",\"function\":"
+        "{\"name\":\"trinity_execute\"}}]}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"arguments\":"
+        "\"{\\\"engine\\\":\\\"cad\\\",\\\"oper",
+        "ation\\\":\\\"generate\\\",\\\"parameters\\\":{\\\"type\\\":\\\"quadcopter_frame\\\"}}"
+        "\"}}]}}]}\n\n",
+        "data: [DONE]\n\n",
+    };
+    FixtureTransport::ScriptedStream copy = stream;  // reply reused verbatim
+    copy.reply.transportOk = true;
+    copy.reply.statusCode = 200;
+    fixture->streams.push_back(std::move(copy));
+
+    provider.setTransport(fixture);
+    REQUIRE(provider.configure({{"api_key", "TESTKEY"}}).isOk());
+
+    int finals = 0;
+    std::string streamed;
+    std::string payload;
+    provider.streamPlan(sampleRequest(), [&](const std::string& chunk, bool final) {
+        if (final) {
+            ++finals;
+            payload = chunk;
+        } else {
+            streamed += chunk;
+        }
+    });
+    CHECK(finals == 1);
+    CHECK(streamed == "Planning a frame.");
+    // Final payload is the accumulated step list, not the streamed prefix.
+    MESSAGE("DBG openai payload=", payload);
+    const trinity::core::Json steps = trinity::core::Json::parse(payload);
+    REQUIRE(steps.is_array());
+    REQUIRE(steps.size() == 1);
+    CHECK(steps[0]["engine"] == "cad");
+    CHECK(steps[0]["operation"] == "generate");
+    CHECK(steps[0]["tool_call_id"] == "call_a1");
+}
+
+TEST_CASE("anthropic SSE text + tool_use deltas accumulate into one final payload") {
+    AnthropicProvider provider;
+    auto fixture = std::make_shared<FixtureTransport>();
+    FixtureTransport::ScriptedStream stream;
+    stream.chunks = {
+        "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_9\","
+        "\"model\":\"claude-sonnet-4-20250514\",\"usage\":{\"input_tokens\":7,\"output_tokens\":9}}}\n\n",
+        "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,"
+        "\"content_block\":{\"type\":\"text\"}}\n\n",
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,"
+        "\"delta\":{\"type\":\"text_delta\",\"text\":\"Sketching \"}}\n\n",
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,"
+        "\"delta\":{\"type\":\"text_delta\",\"text\":\"the frame.\"}}\n\n",
+        "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,"
+        "\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"trinity_execute\"}}\n\n",
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,"
+        "\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"engine\\\":\\\"cad\\\"\"}}\n\n",
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,"
+        "\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\",\\\"operation\\\":\\\"generate\\\","
+        "\\\"parameters\\\":{\\\"type\\\":\\\"quadcopter_frame\\\"}}\"}}\n\n",
+        "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+    };
+    stream.reply.transportOk = true;
+    stream.reply.statusCode = 200;
+    fixture->streams.push_back(std::move(stream));
+
+    provider.setTransport(fixture);
+    REQUIRE(provider.configure({{"api_key", "TESTKEY"}}).isOk());
+
+    int finals = 0;
+    std::string streamed;
+    std::string payload;
+    provider.streamPlan(sampleRequest(), [&](const std::string& chunk, bool final) {
+        if (final) {
+            ++finals;
+            payload = chunk;
+        } else {
+            streamed += chunk;
+        }
+    });
+    CHECK(finals == 1);
+    CHECK(streamed == "Sketching the frame.");
+    MESSAGE("DBG anthropic streamed=", streamed, " payload=", payload);
+    const trinity::core::Json steps = trinity::core::Json::parse(payload);
+    REQUIRE(steps.is_array());
+    REQUIRE(steps.size() == 1);
+    CHECK(steps[0]["engine"] == "cad");
+    CHECK(steps[0]["tool_call_id"] == "toolu_1");
+}
+
+TEST_CASE("SSE error events surface truthfully as the final chunk") {
+    OpenAIProvider provider;
+    auto fixture = std::make_shared<FixtureTransport>();
+    FixtureTransport::ScriptedStream stream;
+    stream.chunks = {
+        "data: {\"error\":{\"message\":\"operator overloaded\"}}\n\n",
+        "data: [DONE]\n\n",
+    };
+    stream.reply.errorText = "plain failure";  // reply must not mask the SSE error
+    stream.reply.statusCode = 200;
+    stream.reply.transportOk = true;
+    fixture->streams.push_back(std::move(stream));
+
+    provider.setTransport(fixture);
+    REQUIRE(provider.configure({{"api_key", "TESTKEY"}}).isOk());
+
+    int finals = 0;
+    std::string payload;
+    provider.streamPlan(sampleRequest(), [&](const std::string& chunk, bool final) {
+        if (final) {
+            ++finals;
+            payload = chunk;
+        }
+    });
+    CHECK(finals == 1);
+    CHECK(payload.find("operator overloaded") != std::string::npos);
 }
 
 TEST_CASE("disabled provider refuses without network") {
