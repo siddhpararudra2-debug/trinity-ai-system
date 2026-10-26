@@ -25,6 +25,28 @@ _Nothing in progress._
 
 ## Done
 
+- [x] **M4: CAD CSG booleans and faceted STEP export**
+  CadEngine gains a BSP mesh boolean kernel (csg.js algorithm ported to C++,
+  verified against the reference implementation on Node — identical
+  polygon/edge signatures including the 16-tri/12-unpaired offset-cube
+  signature on triangulated operands). `box()` winding corrected outward,
+  `intersect` restored to the ~(~A|~B) double-inversion form, and
+  `booleanMesh` heals T-junction seams BSP clipping leaves on triangle-soup
+  operands (pure subdivision, volume preserved). Faceted STEP export
+  (AP214 with planar faces sewn into shells) ships alongside STL/GLB/JSON.
+  The composite-part boolean bug — where `csgSubtract(standoff, plate)`
+  mixed true facet vertices with drifted interpolated crossings from the
+  subtract flow's clip passes — was fixed by decomposing composite operands
+  into single watertight shells via `unionMeshComponents` before clipping.
+  Intent router and validator wired for the `boolean` operation; UI gains
+  boolean op with part-A/part-B selection. Tests: direct CSG on cubes,
+  cylinders, touching + offset cases with analytic volume checks and
+  watertight closure; composite parts (standoff/mounting_plate) normalize
+  into one shell with correct faceted-prism volumes; engine boolean runs
+  with structured watertight/finite/volume checks; STEP golden and coordinate
+  round-trip green. Native suite: 376 cases / 6,151 assertions, all green.
+  Diagnostic dump file removed from tracking.
+
 - [x] **M3: the math engine gained an honest symbolic layer (differentiate /
   simplify / solve_system), a matrix solve, and a Newton system solver**
   Built exactly as planned (AST beside the verified direct evaluator;

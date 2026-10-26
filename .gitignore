@@ -31,6 +31,7 @@ app/native/vcpkg_installed/
 **/Testing/
 *.obj
 Trinity.exe
+app/native/csg_dedges.txt
 
 # python
 __pycache__/

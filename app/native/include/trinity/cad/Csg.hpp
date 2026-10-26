@@ -27,6 +27,17 @@ Mesh csgUnion(const Mesh& a, const Mesh& b);
 Mesh csgIntersect(const Mesh& a, const Mesh& b);
 Mesh csgSubtract(const Mesh& a, const Mesh& b);
 
+/// Boolean-operand normalization. Part builders glue overlapping closed
+/// shells into one triangle soup with Mesh::extend (a standoff is a cylinder
+/// plus a coaxial foot, a plate is a box plus raised bosses); BSP clipping
+/// assumes each operand behaves like a single solid, and a multi-shell soup
+/// produces result boundaries that pair per-shell instead of per-surface.
+/// This decomposes the soup into its connected closed shells and folds them
+/// pairwise with csgUnion, returning one watertight shell. Single-shell
+/// inputs pass through unchanged. Throws std::runtime_error when a fold
+/// step cannot produce a watertight result - the honest refusal surface.
+Mesh unionMeshComponents(const Mesh& mesh);
+
 /// Signed volume in mm^3 via the divergence theorem. Positive for
 /// consistently outward-oriented closed meshes; works on any triangle soup.
 double signedVolume(const Mesh& mesh);

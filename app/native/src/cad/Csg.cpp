@@ -556,6 +556,110 @@ Mesh csgSubtract(const Mesh& a, const Mesh& b) {
     return booleanMesh(a, b, CsgOperation::Subtract);
 }
 
+Mesh unionMeshComponents(const Mesh& mesh) {
+    const std::vector<Triangle>& triangles = mesh.triangles();
+    if (triangles.empty()) {
+        return mesh;
+    }
+
+    // Connected components over quantized EDGE keys: a shell glued in by
+    // Mesh::extend never shares an oriented triangle edge with the rest, so
+    // any two triangles that both own the same 1e-6-grid edge segment belong
+    // to the same primitive body. Vertex adjacency is NOT the criterion -
+    // e.g. a coaxial foot cylinder and a taller main cylinder both have
+    // bottom-disc fan centers at the exact origin despite being separate
+    // bodies, and vertex-only merging would keep them welded into one soup.
+    // Edge sharing, by contrast, is exactly the property that makes up one
+    // closed shell (every edge of a shell has two triangles of the shell).
+    auto keyOf = [](const Vec3& v) {
+        std::array<long long, 3> key{};
+        for (int axis = 0; axis < 3; ++axis) {
+            key[axis] = std::llround(v[axis] * 1e6);
+        }
+        return key;
+    };
+    auto edgeKey = [&keyOf](const Vec3& p, const Vec3& q) {
+        auto a = keyOf(p);
+        auto b = keyOf(q);
+        if (b < a) {
+            std::swap(a, b);
+        }
+        return std::make_pair(a, b);
+    };
+    std::vector<int> parent(triangles.size());
+    for (size_t i = 0; i < parent.size(); ++i) {
+        parent[i] = static_cast<int>(i);
+    }
+    auto find = [&parent](int x) {
+        while (parent[x] != x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        return x;
+    };
+    std::map<std::pair<std::array<long long, 3>, std::array<long long, 3>>,
+             int>
+        edgeOwner;
+    for (size_t t = 0; t < triangles.size(); ++t) {
+        for (int i = 0; i < 3; ++i) {
+            const auto key = edgeKey(triangles[t][i],
+                                     triangles[t][(i + 1) % 3]);
+            const auto inserted = edgeOwner.emplace(key, static_cast<int>(t));
+            if (!inserted.second) {
+                const int rootA = find(static_cast<int>(t));
+                const int rootB = find(inserted.first->second);
+                if (rootA != rootB) {
+                    parent[rootA] = rootB;
+                }
+            }
+        }
+    }
+
+    // Deterministic fold order: components sorted by (triangle count,
+    // first-vertex quantized coordinates) so identical inputs produce
+    // identical results run to run.
+    std::map<int, std::vector<size_t>> groups;
+    for (size_t t = 0; t < triangles.size(); ++t) {
+        groups[find(static_cast<int>(t))].push_back(t);
+    }
+    std::vector<std::vector<size_t>> components;
+    components.reserve(groups.size());
+    for (auto& entry : groups) {
+        components.push_back(std::move(entry.second));
+    }
+    std::sort(components.begin(), components.end(),
+              [&triangles](const std::vector<size_t>& x,
+                           const std::vector<size_t>& y) {
+                  if (x.size() != y.size()) {
+                      return x.size() < y.size();
+                  }
+                  return triangles[x.front()] < triangles[y.front()];
+              });
+
+    // Fold smallest first: the pairwise union gets cheaper, and the
+    // per-step watertight assert keeps a bad component from silently
+    // poisoning the whole operand.
+    Mesh result;
+    for (const auto& component : components) {
+        Mesh shell;
+        shell.reserveTriangles(component.size());
+        for (size_t index : component) {
+            shell.addTriangle(triangles[index]);
+        }
+        if (result.empty()) {
+            result = shell;
+            continue;
+        }
+        result = csgUnion(result, shell);
+        if (!isWatertight(result)) {
+            throw std::runtime_error(
+                "Composite boolean operand could not be normalized to one "
+                "watertight shell");
+        }
+    }
+    return result;
+}
+
 double signedVolume(const Mesh& mesh) {
     double total = 0.0;
     for (const Triangle& tri : mesh.triangles()) {

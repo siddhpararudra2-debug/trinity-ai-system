@@ -111,7 +111,10 @@ cad::Mesh buildOperandMesh(const core::Json& operand, const std::string& side) {
                 ") failed part validation",
             {{"side", side}, {"checks", validation.checks}}, "engines");
     }
-    return mesh;
+    // Builders glue overlapping closed shells into one soup; boolean
+    // operands must be single solids for BSP clipping, so fold the shells
+    // into one watertight mesh (single-shell parts pass through).
+    return cad::unionMeshComponents(mesh);
 }
 
 }  // namespace

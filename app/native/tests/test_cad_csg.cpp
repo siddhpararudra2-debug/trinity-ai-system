@@ -3,10 +3,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <iostream>
 #include <memory>
-#include <map>
 #include <sstream>
 #include <string>
 
@@ -55,127 +52,53 @@ std::vector<std::array<double, 3>> stepCoordinates(const std::string& text) {
 
 }  // namespace
 
-// TEMPORARY M4 DEBUG: dump unpaired edges of failing CSG results.
-#include <map>
-TEST_CASE("DEBUG unpaired edges") {
-    // Composite operands exactly like the engine test: standoff over the
-    // plate, on the bench zero-plane.
-    const auto* defA = trinity::cad::findPart("standoff");
-    const auto* defB = trinity::cad::findPart("mounting_plate");
-    const auto standoff = defA->builder(defA->fromRequest(trinity::core::Json::object()));
-    const auto plate = defB->builder(defB->fromRequest(trinity::core::Json::object()));
-    std::cout << "standoff tris=" << standoff.triangleCount()
-              << " watertight=" << trinity::cad::isWatertight(standoff) << "\n";
-    std::cout << "plate tris=" << plate.triangleCount()
-              << " watertight=" << trinity::cad::isWatertight(plate) << "\n";
+// Composite part builders glue overlapping closed shells into one triangle
+// soup with Mesh::extend (a standoff is a body cylinder plus a coaxial foot,
+// a plate is a box plus four raised bosses). BSP clipping needs operands
+// that behave like single solids, so boolean operands are decomposed over
+// shared quantized edges and folded pairwise into one watertight shell.
+TEST_CASE("composite parts normalize into one watertight shell") {
+    const auto* standoffDef = trinity::cad::findPart("standoff");
+    const auto* plateDef = trinity::cad::findPart("mounting_plate");
+    const auto standoff =
+        trinity::cad::unionMeshComponents(standoffDef->builder(
+            standoffDef->fromRequest(trinity::core::Json::object())));
+    const auto plate =
+        trinity::cad::unionMeshComponents(plateDef->builder(
+            plateDef->fromRequest(trinity::core::Json::object())));
+
+    CHECK(trinity::cad::isWatertight(standoff));
+    CHECK(trinity::cad::isWatertight(plate));
+
+    // Faceted-prism volumes: the builders use 32-facet cylinders, whose
+    // cross-section area is 0.5 * 32 * r^2 * sin(2pi/32) (an inscribed
+    // polygon, slightly under the analytic circle). The standoff is the
+    // r=3 prism (h=10) united with a coaxial r=5 foot (h=1.5) - the foot's
+    // top disc inside the body is deduplicated by the union, so the union
+    // volume is body + annulus, not body + foot.
+    constexpr double kPi = 3.14159265358979323846;
+    constexpr double kSegments = 32.0;
+    const double facetFactor =
+        0.5 * kSegments * std::sin(2.0 * kPi / kSegments);
+    const double bodyArea = facetFactor * 9.0;   // r = 3
+    const double footArea = facetFactor * 25.0;  // r = 5
+    CHECK(trinity::cad::signedVolume(standoff) ==
+          doctest::Approx(bodyArea * 10.0 + (footArea - bodyArea) * 1.5)
+              .epsilon(0.001));
+
+    // Plate: exact 100 x 60 x 3 box plus four r=4, h=2 bosses standing on
+    // its top face.
+    const double bossArea = facetFactor * 16.0;  // r = 4
+    CHECK(trinity::cad::signedVolume(plate) ==
+          doctest::Approx(100.0 * 60.0 * 3.0 + 4.0 * bossArea * 2.0)
+              .epsilon(0.001));
+
+    // Subtracting the plate removes everything below its top face and
+    // leaves the body prism above it.
     const auto cut = trinity::cad::csgSubtract(standoff, plate);
-    std::cout << "cut tris=" << cut.triangleCount()
-              << " watertight=" << trinity::cad::isWatertight(cut)
-              << " vol=" << trinity::cad::signedVolume(cut) << "\n";
-    {
-        std::map<std::pair<std::array<long long, 3>, std::array<long long, 3>>,
-                 int>
-            edgeCount;
-        for (const auto& tri : cut.triangles()) {
-            std::array<std::array<long long, 3>, 3> q{};
-            for (size_t i = 0; i < 3; ++i) {
-                for (size_t axis = 0; axis < 3; ++axis) {
-                    q[i][axis] = std::llround(tri[i][axis] * 1e6);
-                }
-            }
-            for (size_t i = 0; i < 3; ++i) {
-                auto key = std::make_pair(q[i], q[(i + 1) % 3]);
-                auto rev = std::make_pair(q[(i + 1) % 3], q[i]);
-                if (rev < key) {
-                    std::swap(key, rev);
-                }
-                ++edgeCount[key];
-            }
-        }
-        std::ofstream dump("csg_dedges.txt");
-        int unpaired = 0;
-        for (const auto& entry : edgeCount) {
-            if (entry.second != 2) {
-                ++unpaired;
-                dump << "use=" << entry.second << " ["
-                     << entry.first.first[0] << "," << entry.first.first[1]
-                     << "," << entry.first.first[2] << "] -> ["
-                     << entry.first.second[0] << "," << entry.first.second[1]
-                     << "," << entry.first.second[2] << "]\n";
-            }
-        }
-        dump << "total distinct=" << edgeCount.size()
-             << " use!=2=" << unpaired << "\n";
-    }
-    // Triangles touching the rim p0..q..p1 chain.
-    struct NoProbe {};
-    const std::vector<std::array<long long, 3>> probes = {
-        {-3000000, 0, 3000000},          // p0  (facet vertex at 180 deg)
-        {-2942356, -585271, 3000000},    // p1  (facet vertex at ~186 deg)
-        {-2982707, -175581, 3000000}};   // q   (cap-side split at t=0.3)
-    int triId = 0;
-    for (const auto& tri : cut.triangles()) {
-        int touched = 0;
-        for (const auto& want : probes) {
-            for (int i = 0; i < 3; ++i) {
-                std::array<long long, 3> key{};
-                for (int axis = 0; axis < 3; ++axis) {
-                    key[axis] = std::llround(tri[i][axis] * 1e6);
-                }
-                if (key == want) {
-                    ++touched;
-                }
-            }
-        }
-        if (touched == 0) {
-            continue;
-        }
-        std::ofstream out;
-        out.open("csg_dedges.txt", std::ios::app);
-        out << "tri" << ++triId << " ("
-            << (touched == 1 ? "one probe" : "two probes") << "): "
-            << "(" << tri[0][0] << "," << tri[0][1] << "," << tri[0][2] << ") "
-            << "(" << tri[1][0] << "," << tri[1][1] << "," << tri[1][2] << ") "
-            << "(" << tri[2][0] << "," << tri[2][1] << "," << tri[2][2]
-            << ")\n";
-    }
-    // Edge incidence around the rim probes.
-    {
-        std::map<std::pair<std::array<long long, 3>, std::array<long long, 3>>,
-                 int>
-            edges;
-        for (const auto& tri : cut.triangles()) {
-            std::array<std::array<long long, 3>, 3> q3{};
-            for (size_t i = 0; i < 3; ++i) {
-                for (size_t axis = 0; axis < 3; ++axis) {
-                    q3[i][axis] = std::llround(tri[i][axis] * 1e6);
-                }
-            }
-            for (size_t i = 0; i < 3; ++i) {
-                auto key = std::make_pair(q3[i], q3[(i + 1) % 3]);
-                auto rev = std::make_pair(q3[(i + 1) % 3], q3[i]);
-                if (rev < key) {
-                    std::swap(key, rev);
-                }
-                ++edges[key];
-            }
-        }
-        std::ofstream out;
-        out.open("csg_dedges.txt", std::ios::app);
-        for (const auto& want : probes) {
-            out << "--- incident edges of probe\n";
-            for (const auto& e : edges) {
-                if (e.first.first == want || e.first.second == want) {
-                    out << "  use=" << e.second << " ["
-                        << e.first.first[0] << "," << e.first.first[1] << ","
-                        << e.first.first[2] << "] -> ["
-                        << e.first.second[0] << "," << e.first.second[1] << ","
-                        << e.first.second[2] << "]\n";
-                }
-            }
-        }
-    }
-    CHECK(true);
+    CHECK(trinity::cad::isWatertight(cut));
+    CHECK(trinity::cad::signedVolume(cut) ==
+          doctest::Approx(bodyArea * 7.0).epsilon(0.001));
 }
 
 TEST_CASE("csg primitives are watertight with analytic signed volumes") {
@@ -319,6 +242,11 @@ TEST_CASE("engine boolean runs watertight parts with structured checks") {
     const double volumeA = result.result["volumes"].value("a", 0.0);
     const double volumeR = result.result["volumes"].value("result", 0.0);
     CHECK(volumeR <= volumeA + 1e-6 * (1.0 + std::fabs(volumeA)));
+    // Volume truth: the survivors are the 32-facet r=3 prism above the
+    // plate's top face (height 7), pre-union normalization minus cap.
+    constexpr double kPi = 3.14159265358979323846;
+    const double facetFactor = 16.0 * std::sin(2.0 * kPi / 32.0);
+    CHECK(volumeR == doctest::Approx(facetFactor * 9.0 * 7.0).epsilon(0.001));
     REQUIRE(result.metadata.contains("cad_checks"));
     CHECK(result.metadata["cad_checks"].value("result_watertight", false));
     CHECK(result.metadata["cad_checks"].value("result_finite", false));
