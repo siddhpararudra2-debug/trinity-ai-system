@@ -12,4 +12,9 @@ namespace trinity::pcb {
 
 validation::ValidationResult validatePcbDesign(const PcbDesign& design);
 
+/// Shortest distance in mm between two closed segments (testing seam
+/// for the trace clearance evaluator; same routine the DRC uses).
+double trackSegmentDistanceMm(double ax1, double ay1, double ax2, double ay2,
+                               double bx1, double by1, double bx2, double by2);
+
 }  // namespace trinity::pcb

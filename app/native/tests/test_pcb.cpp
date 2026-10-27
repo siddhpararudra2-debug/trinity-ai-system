@@ -405,7 +405,7 @@ TEST_CASE("pcb artifacts register with SHA-256 through jobs") {
     const auto exported = fx.jobs->runSync(
         "pcb", "export", {{"design", design}, {"project", "job_board"}});
     CHECK(exported["success"] == true);
-    REQUIRE(exported["artifacts"].size() == 2);
+    REQUIRE(exported["artifacts"].size() == 4);  // kicad + json + F_Cu + Edge_Cuts
     CHECK(exported["artifacts"][0]["checksum"].get<std::string>().size() == 64);
     CHECK(exported["artifacts"][0]["size_bytes"].get<long long>() > 100);
     // SQLite holds the artifact record.

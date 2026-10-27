@@ -133,10 +133,26 @@ struct DesignRule {
     static DesignRule fromJson(const core::Json& json);
 };
 
+/// A straight copper trace segment (mm, board coordinates). Geometry
+/// the trace DRC and the Gerber copper layer both consume.
+struct TrackSegment {
+    std::string net;      // must name a known net (empty = unconnected)
+    double widthMm = 0.2; // trace width (checked against DesignRule)
+    std::string layer = "F.Cu";
+    double x1Mm = 0.0;
+    double y1Mm = 0.0;
+    double x2Mm = 0.0;
+    double y2Mm = 0.0;
+
+    core::Json toJson() const;
+    static TrackSegment fromJson(const core::Json& json);
+};
+
 struct PcbDesign {
     BoardOutline board;
     std::vector<Component> components;
     std::vector<Net> nets;
+    std::vector<TrackSegment> tracks;
     std::map<std::string, Footprint> footprints;  // preset copies used
     std::vector<Placement> placements;
     std::vector<DesignRule> rules = {DesignRule{"default"}};
@@ -150,7 +166,7 @@ struct PcbDesign {
     const Net* findNet(const std::string& name) const;
 };
 
-/// "REF.NUM" pin reference split; false when malformed.
+    /// "REF.NUM" pin reference split; false when malformed.
 bool splitPinRef(const std::string& pinRef, std::string& refOut, std::string& numOut);
 
 }  // namespace trinity::pcb

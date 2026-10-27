@@ -1,6 +1,8 @@
 #include "trinity/pcb/Validators.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
 
 namespace trinity::pcb {
@@ -55,6 +57,28 @@ bool placedBox(const PcbDesign& design, const Placement& place, double& x0, doub
 }
 
 }  // namespace
+
+/// Shortest distance between two closed segments (a1→a2, b1→b2), mm.
+/// Public (also in Validators.hpp) so doctests exercise the same
+/// routine the trace clearance evaluator uses.
+double trackSegmentDistanceMm(double ax1, double ay1, double ax2, double ay2,
+                              double bx1, double by1, double bx2, double by2) {
+    auto pointSeg = [](double px, double py, double sx, double sy, double ex,
+                       double ey, double& best2) {
+        const double dx = ex - sx, dy = ey - sy;
+        const double len2 = dx * dx + dy * dy;
+        double t = (len2 <= 0.0) ? 0.0 : ((px - sx) * dx + (py - sy) * dy) / len2;
+        t = std::clamp(t, 0.0, 1.0);
+        const double cx = sx + t * dx, cy = sy + t * dy;
+        best2 = std::min(best2, (px - cx) * (px - cx) + (py - cy) * (py - cy));
+    };
+    double best2 = std::numeric_limits<double>::infinity();
+    pointSeg(bx1, by1, ax1, ay1, ax2, ay2, best2);
+    pointSeg(bx2, by2, ax1, ay1, ax2, ay2, best2);
+    pointSeg(ax1, ay1, bx1, by1, bx2, by2, best2);
+    pointSeg(ax2, ay2, bx1, by1, bx2, by2, best2);
+    return std::sqrt(best2);
+}
 
 validation::ValidationResult validatePcbDesign(const PcbDesign& design) {
     validation::ValidationResult out;
@@ -272,6 +296,134 @@ validation::ValidationResult validatePcbDesign(const PcbDesign& design) {
                 }
             }
         }
+    }
+
+    // --- Traces: geometry, nets, widths, clearance, keepout ---
+    if (!design.tracks.empty()) {
+        const double ruleClearance =
+            design.rules.empty() ? 0.2 : design.rules.front().minClearanceMm;
+        const double minTrack =
+            design.rules.empty() ? 0.2 : design.rules.front().minTrackMm;
+        const double ox = design.board.originMm.x;
+        const double oy = design.board.originMm.y;
+        for (const auto& track : design.tracks) {
+            const std::string label =
+                "'" + track.net + "' (" + std::to_string(track.x1Mm) + "," +
+                std::to_string(track.y1Mm) + ")-(" +
+                std::to_string(track.x2Mm) + "," + std::to_string(track.y2Mm) + ")";
+            if (!track.net.empty() && design.findNet(track.net) == nullptr) {
+                ok = false;
+                addRule(out, "trace.net_known", validation::Severity::Error,
+                        false, "Track references unknown net '" + track.net + "'",
+                        {{"net", track.net}});
+            }
+            if (!std::isfinite(track.widthMm) || track.widthMm <= 0.0 ||
+                !std::isfinite(track.x1Mm) || !std::isfinite(track.y1Mm) ||
+                !std::isfinite(track.x2Mm) || !std::isfinite(track.y2Mm)) {
+                ok = false;
+                addRule(out, "trace.geometry", validation::Severity::Error,
+                        false, "Track " + label + " has non-finite geometry", {});
+                continue;
+            }
+            if (track.widthMm < minTrack - 1e-9) {
+                ok = false;
+                addRule(out, "trace.width", validation::Severity::Error, false,
+                        "Track " + label + " width " +
+                            std::to_string(track.widthMm) +
+                            " mm is below the rule minimum",
+                        {{"width_mm", track.widthMm}, {"min_mm", minTrack}});
+            }
+            const double minX =
+                std::min(track.x1Mm, track.x2Mm) - track.widthMm / 2.0;
+            const double minY =
+                std::min(track.y1Mm, track.y2Mm) - track.widthMm / 2.0;
+            const double maxX =
+                std::max(track.x1Mm, track.x2Mm) + track.widthMm / 2.0;
+            const double maxY =
+                std::max(track.y1Mm, track.y2Mm) + track.widthMm / 2.0;
+            if (minX < ox - 1e-9 || minY < oy - 1e-9 ||
+                maxX > ox + design.board.widthMm + 1e-9 ||
+                maxY > oy + design.board.heightMm + 1e-9) {
+                ok = false;
+                addRule(out, "trace.in_bounds", validation::Severity::Error,
+                        false, "Track " + label + " leaves the board", {});
+            }
+        }
+        for (size_t i = 0; i < design.tracks.size(); ++i) {
+            for (size_t j = i + 1; j < design.tracks.size(); ++j) {
+                const TrackSegment& a = design.tracks[i];
+                const TrackSegment& b = design.tracks[j];
+                if (a.net == b.net) {
+                    continue;  // same net may touch (series segments)
+                }
+                const double gap =
+                    trackSegmentDistanceMm(a.x1Mm, a.y1Mm, a.x2Mm, a.y2Mm,
+                                           b.x1Mm, b.y1Mm, b.x2Mm, b.y2Mm) -
+                    (a.widthMm + b.widthMm) / 2.0;
+                if (gap < ruleClearance) {
+                    ok = false;
+                    addRule(out, "trace.clearance",
+                            validation::Severity::Error, false,
+                            "Clearance between different-net tracks ('" +
+                                a.net + "' and '" + b.net +
+                                "') is below minimum",
+                            {{"a", a.net},
+                             {"b", b.net},
+                             {"gap_mm", std::max(0.0, gap)},
+                             {"min_mm", ruleClearance}});
+                }
+            }
+        }
+        // Tracks must not cut through foreign component bodies
+        // (distance segment↔courtyard box > 0 ⇒ pass; endpoint inside
+        // or the swept width touching the box ⇒ fail).
+        for (const auto& track : design.tracks) {
+            for (const auto& place : design.placements) {
+                const Component* comp = design.findComponent(place.ref);
+                if (comp == nullptr) continue;
+                if (comp->pins.empty()) continue;
+                bool foreign = true;
+                for (const auto& pin : comp->pins) {
+                    if (pin.net == track.net) foreign = false;
+                }
+                if (!foreign) continue;
+                double x0, y0, x1, y1;
+                if (!placedBox(design, place, x0, y0, x1, y1)) continue;
+                const bool endpointInside =
+                    (track.x1Mm >= x0 && track.x1Mm <= x1 &&
+                     track.y1Mm >= y0 && track.y1Mm <= y1) ||
+                    (track.x2Mm >= x0 && track.x2Mm <= x1 &&
+                     track.y2Mm >= y0 && track.y2Mm <= y1);
+                double edge = std::numeric_limits<double>::infinity();
+                if (!endpointInside) {
+                    edge = std::min(
+                        std::min(trackSegmentDistanceMm(
+                                     track.x1Mm, track.y1Mm, track.x2Mm,
+                                     track.y2Mm, x0, y0, x1, y0),
+                                 trackSegmentDistanceMm(
+                                     track.x1Mm, track.y1Mm, track.x2Mm,
+                                     track.y2Mm, x1, y0, x1, y1)),
+                        std::min(trackSegmentDistanceMm(
+                                     track.x1Mm, track.y1Mm, track.x2Mm,
+                                     track.y2Mm, x1, y1, x0, y1),
+                                 trackSegmentDistanceMm(
+                                     track.x1Mm, track.y1Mm, track.x2Mm,
+                                     track.y2Mm, x0, y1, x0, y0)));
+                }
+                const double swept = edge - track.widthMm / 2.0;
+                if (endpointInside || swept <= 0.0) {
+                    ok = false;
+                    addRule(out, "trace.keepout", validation::Severity::Error,
+                            false,
+                            "Track net '" + track.net +
+                                "' crosses component '" + place.ref + "'",
+                            {{"net", track.net}, {"ref", place.ref}});
+                }
+            }
+        }
+        addRule(out, "trace.checked", validation::Severity::Info, true,
+                "Trace DRC executed on " +
+                    std::to_string(design.tracks.size()) + " segments");
     }
 
     out.status = ok ? validation::ValidationStatus::Validated

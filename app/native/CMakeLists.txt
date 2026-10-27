@@ -72,6 +72,7 @@ set(TRINITY_CORE_SOURCES
     src/cad/Validators.cpp
     src/pcb/PcbDesign.cpp
     src/pcb/Validators.cpp
+    src/pcb/GerberExport.cpp
     src/pcb/KiCadExport.cpp
     src/viewer/RenderData.cpp
     src/viewer/ViewerState.cpp
@@ -208,6 +209,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_math_engine.cpp
         tests/test_math_pipeline.cpp
         tests/test_pcb.cpp
+    tests/test_pcb_tracks_gerber.cpp
         tests/test_cad_stubs.cpp
         tests/test_cad_generate.cpp
         tests/test_cad_primitives.cpp

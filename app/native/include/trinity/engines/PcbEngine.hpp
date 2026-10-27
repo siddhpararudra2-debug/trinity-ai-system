@@ -26,6 +26,7 @@ private:
     EngineResult executeAddComponent(const EngineRequest& request);
     EngineResult executeAddNet(const EngineRequest& request);
     EngineResult executePlaceComponent(const EngineRequest& request);
+    EngineResult executeAddTrack(const EngineRequest& request);
     EngineResult executeValidateDesign(const EngineRequest& request);
     EngineResult executeExport(const EngineRequest& request);
 };

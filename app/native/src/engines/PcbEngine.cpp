@@ -5,11 +5,15 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <set>
+#include <utility>
+#include <vector>
 
 #include "trinity/core/Logger.hpp"
 #include "trinity/core/Uuid.hpp"
+#include "trinity/pcb/GerberExport.hpp"
 #include "trinity/pcb/KiCadExport.hpp"
 #include "trinity/pcb/Validators.hpp"
 
@@ -251,7 +255,7 @@ PcbEngine::PcbEngine() {
     name_ = "pcb";
     version_ = "0.1.0";
     capabilities_ = {"describe",      "create_board", "add_component", "add_net",
-                     "place_component", "validate_design", "export"};
+                     "place_component", "add_track", "validate_design", "export"};
 }
 
 EngineResult PcbEngine::execute(const EngineRequest& request) {
@@ -281,6 +285,9 @@ EngineResult PcbEngine::execute(const EngineRequest& request) {
         }
         if (request.operation == "place_component") {
             return executePlaceComponent(request);
+        }
+        if (request.operation == "add_track") {
+            return executeAddTrack(request);
         }
         if (request.operation == "validate_design") {
             return executeValidateDesign(request);
@@ -654,6 +661,65 @@ EngineResult PcbEngine::executeValidateDesign(const EngineRequest& request) {
     return out;
 }
 
+EngineResult PcbEngine::executeAddTrack(const EngineRequest& request) {
+    requireParams(request, {"design", "net", "from", "to", "width_mm"});
+    pcb::PcbDesign design = designParam(request.parameters, "add_track");
+    if (!request.parameters["net"].is_string()) {
+        throw core::RequestValidationError("Track 'net' must be a string", {},
+                                           "engines");
+    }
+    const std::string netName = request.parameters["net"].get<std::string>();
+    if (!netName.empty() && design.findNet(netName) == nullptr) {
+        throw core::RequestValidationError("Track references unknown net '" +
+                                               netName + "'",
+                                           {{"net", netName}}, "engines");
+    }
+    auto readPoint = [&](const char* key, double& x, double& y) {
+        if (!request.parameters[key].is_object()) {
+            throw core::RequestValidationError(
+                std::string("Track '") + key + "' must be {x, y} in mm", {},
+                "engines");
+        }
+        x = request.parameters[key].value("x",
+                                          std::numeric_limits<double>::quiet_NaN());
+        y = request.parameters[key].value("y",
+                                          std::numeric_limits<double>::quiet_NaN());
+        if (!std::isfinite(x) || !std::isfinite(y)) {
+            throw core::RequestValidationError(
+                std::string("Track '") + key + "' coordinates must be finite", {},
+                "engines");
+        }
+    };
+    pcb::TrackSegment track;
+    readPoint("from", track.x1Mm, track.y1Mm);
+    readPoint("to", track.x2Mm, track.y2Mm);
+    const double width = request.parameters.value("width_mm", 0.2);
+    if (!std::isfinite(width) || width <= 0.0) {
+        throw core::RequestValidationError("Track 'width_mm' must be positive", {},
+                                           "engines");
+    }
+    const double minTrack =
+        design.rules.empty() ? 0.2 : design.rules.front().minTrackMm;
+    if (width < minTrack - 1e-9) {
+        throw core::RequestValidationError(
+            "Track width " + std::to_string(width) +
+                " mm is below the design rule minimum",
+            {{"width_mm", width}, {"min_mm", minTrack}}, "engines");
+    }
+    track.net = netName;
+    track.widthMm = width;
+    track.layer = request.parameters.value("layer", std::string("F.Cu"));
+    design.tracks.push_back(track);
+    EngineResult out = successResult(
+        request, {{"design", design.toJson()}, {"track", track.toJson()}});
+    out.validation = validate(out);
+    core::Logger::instance().info(
+        "engines", "pcb add_track",
+        core::Json{{"net", netName}, {"width_mm", width},
+                   {"tracks", design.tracks.size()}});
+    return out;
+}
+
 EngineResult PcbEngine::executeExport(const EngineRequest& request) {
     requireParams(request, {"design"});
     const pcb::PcbDesign design = designParam(request.parameters, "export");
@@ -709,13 +775,45 @@ EngineResult PcbEngine::executeExport(const EngineRequest& request) {
                                              "engines");
         }
     }
+    // Manufacturing output: RS-274X Gerber (copper + board outline).
+    pcb::GerberExport gerber = pcb::exportGerber(design, projectName);
+    if (!gerber.ok) {
+        throw core::EngineExecutionError("Gerber export failed: " + gerber.error, {},
+                                         "engines");
+    }
+    std::vector<std::pair<std::string, std::string>> gerberFiles;
+    for (const auto& layer : gerber.layers) {
+        const fs::path gerberPath = workDir / layer.fileName;
+        std::ofstream file(gerberPath, std::ios::binary | std::ios::trunc);
+        if (!file) {
+            throw core::EngineExecutionError(
+                "Cannot write Gerber artifact " + layer.fileName, {}, "engines");
+        }
+        file << layer.content;
+        file.close();
+        if (!file) {
+            throw core::EngineExecutionError(
+                "Failed while writing Gerber artifact " + layer.fileName, {},
+                "engines");
+        }
+        gerberFiles.emplace_back(gerberPath.string(), layer.name);
+    }
     EngineResult out = successResult(request, core::Json::object());
     out.pendingArtifacts.emplace_back(kicadPath, "kicad_pcb");
     out.pendingArtifacts.emplace_back(jsonPath, "json");
+    for (const auto& [path, layerName] : gerberFiles) {
+        out.pendingArtifacts.emplace_back(path, "gerber_" + layerName);
+    }
+    core::Json layerList = core::Json::array();
+    for (const auto& layer : gerber.layers) {
+        layerList.push_back(layer.toJson());
+    }
     out.result = {{"project", projectName},
                   {"design", design.toJson()},
                   {"component_count", static_cast<int>(design.components.size())},
-                  {"net_count", static_cast<int>(design.nets.size())}};
+                  {"net_count", static_cast<int>(design.nets.size())},
+                  {"track_count", static_cast<int>(design.tracks.size())},
+                  {"gerber_layers", layerList}};
     out.validation = validate(out);
     core::Logger::instance().info(
         "engines", "pcb export",

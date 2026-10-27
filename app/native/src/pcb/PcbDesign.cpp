@@ -255,6 +255,30 @@ DesignRule DesignRule::fromJson(const core::Json& json) {
     return out;
 }
 
+core::Json TrackSegment::toJson() const {
+    return core::Json{{"net", net},
+                      {"width_mm", widthMm},
+                      {"layer", layer},
+                      {"from_mm", core::Json{{"x", x1Mm}, {"y", y1Mm}}},
+                      {"to_mm", core::Json{{"x", x2Mm}, {"y", y2Mm}}}};
+}
+
+TrackSegment TrackSegment::fromJson(const core::Json& json) {
+    TrackSegment out;
+    out.net = json.value("net", "");
+    out.widthMm = json.value("width_mm", 0.2);
+    out.layer = json.value("layer", "F.Cu");
+    if (json.contains("from_mm")) {
+        out.x1Mm = json["from_mm"].value("x", 0.0);
+        out.y1Mm = json["from_mm"].value("y", 0.0);
+    }
+    if (json.contains("to_mm")) {
+        out.x2Mm = json["to_mm"].value("x", 0.0);
+        out.y2Mm = json["to_mm"].value("y", 0.0);
+    }
+    return out;
+}
+
 core::Json PcbDesign::toJson() const {
     core::Json comps = core::Json::array();
     for (const auto& comp : components) {
@@ -276,9 +300,14 @@ core::Json PcbDesign::toJson() const {
     for (const auto& rule : rules) {
         rulesJson.push_back(rule.toJson());
     }
+    core::Json trackJson = core::Json::array();
+    for (const auto& track : tracks) {
+        trackJson.push_back(track.toJson());
+    }
     return core::Json{{"board", board.toJson()},
                       {"components", comps},
                       {"nets", netJson},
+                      {"tracks", trackJson},
                       {"footprints", fpJson},
                       {"placements", placeJson},
                       {"rules", rulesJson},
@@ -298,6 +327,11 @@ PcbDesign PcbDesign::fromJson(const core::Json& json) {
     if (json.contains("nets") && json["nets"].is_array()) {
         for (const auto& item : json["nets"]) {
             out.nets.push_back(Net::fromJson(item));
+        }
+    }
+    if (json.contains("tracks") && json["tracks"].is_array()) {
+        for (const auto& item : json["tracks"]) {
+            out.tracks.push_back(TrackSegment::fromJson(item));
         }
     }
     if (json.contains("footprints") && json["footprints"].is_object()) {
