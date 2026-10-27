@@ -11,6 +11,7 @@
 #include "trinity/core/Uuid.hpp"
 #include "trinity/firmware/Builder.hpp"
 #include "trinity/firmware/CodeGen.hpp"
+#include "trinity/firmware/PlatformIo.hpp"
 #include "trinity/firmware/McuDatabase.hpp"
 #include "trinity/firmware/Validators.hpp"
 
@@ -552,19 +553,95 @@ EngineResult FirmwareEngine::executeBuild(const EngineRequest& request) {
         return refused;
     }
 
-    // Controlled build: resolve toolchain, write sources, compile via
-    // explicit argv (never a shell string). Missing toolchain is a
-    // truthful CAPABILITY_UNAVAILABLE — never a fake success.
+    // Controlled build: PlatformIO first (genuine .hex/.bin targets),
+    // falling back to the named cross-toolchain. Both run as explicit
+    // argv (never a shell string). Missing toolchains are a truthful
+    // CAPABILITY_UNAVAILABLE — never a fake success.
+    std::string pioExecutable = firmware::findToolchain(
+        firmware::kPlatformIoPrimaryName);
+    if (pioExecutable.empty()) {
+        pioExecutable =
+            firmware::findToolchain(firmware::kPlatformIoAliasName);
+    }
+    if (!pioExecutable.empty()) {
+        const std::string workDir =
+            (fs::temp_directory_path() / ("trinity_fw_" + shortId())).string();
+        std::error_code ec;
+        fs::create_directories(workDir, ec);
+        if (ec) {
+            throw core::EngineExecutionError(
+                "Cannot create firmware scratch directory: " + ec.message(),
+                {}, "engines");
+        }
+        fs::path pioPath = fs::path(pioExecutable);
+        if (!fs::is_regular_file(pioPath, ec)) {
+            pioPath = fs::path(".") / pioExecutable;
+        }
+        const firmware::BuildResult built = firmware::runPlatformIoBuild(
+            project, workDir, pioPath.string());
+        if (built.executed) {
+            core::Json artifactList = core::Json::array();
+            for (const auto& path : built.artifacts) {
+                artifactList.push_back(path);
+            }
+            std::vector<std::string> kinds;
+            for (const std::string& path : built.artifacts) {
+                const bool isHex = path.size() >= 4 &&
+                                   path.compare(path.size() - 4, 4, ".hex") == 0;
+                const bool isBin = path.size() >= 4 &&
+                                   path.compare(path.size() - 4, 4, ".bin") == 0;
+                kinds.push_back(
+                    isHex ? "firmware_hex"
+                          : (isBin ? "firmware_binary" : "firmware_image"));
+            }
+            EngineResult out = successResult(
+                request, {{"project", project.toJson()},
+                          {"builder", "platformio"},
+                          {"executed", true},
+                          {"success", built.success},
+                          {"exit_code", built.exitCode},
+                          {"stdout", built.stdoutText},
+                          {"stderr", built.stderrText},
+                          {"artifacts", artifactList}});
+            out.success = built.success;
+            if (!built.success) {
+                out.addError(core::makeError(core::ErrorCode::EngineExecutionError,
+                                             built.error.empty()
+                                                 ? "PlatformIO build failed"
+                                                 : built.error,
+                                             "engines",
+                                             {{"exit_code", built.exitCode}}));
+            }
+            for (size_t i = 0; i < built.artifacts.size(); ++i) {
+                out.pendingArtifacts.emplace_back(
+                    built.artifacts[i],
+                    i < kinds.size() ? kinds[i] : "firmware_image");
+            }
+            out.validation = validate(out);
+            core::Logger::instance().info(
+                "engines", "platformio firmware build",
+                core::Json{{"mcu", project.mcu.model},
+                           {"success", built.success},
+                           {"exit_code", built.exitCode}});
+            return out;
+        }
+        core::Logger::instance().warning(
+            "engines", "platformio invocation failed; falling back to toolchain",
+            core::Json{{"error", built.error}});
+    }
+
     const std::string toolchain =
         firmware::findToolchain(project.mcu.toolchain);
     if (toolchain.empty()) {
         EngineResult out = capabilityUnavailable(
             request,
-            "No toolchain found for " + project.mcu.model +
-                " (looked for '" + project.mcu.toolchain +
+            "No build system available for " + project.mcu.model +
+                " (looked for PlatformIO ('platformio'/'pio'), then '" +
+                project.mcu.toolchain +
                 "'; set TRINITY_TOOLCHAIN_DIR or PATH)");
         out.result = {{"project", project.toJson()},
                       {"toolchain", project.mcu.toolchain},
+                      {"builder", "none"},
                       {"executed", false}};
         out.validation = validate(out);
         core::Logger::instance().warning(

@@ -10,7 +10,7 @@ change it describes — never on its own.
 
 ## In progress
 
-_Nothing in progress._
+- [ ] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification** *(in flight: firmware PlatformIO next to land)*
 
 ---
 

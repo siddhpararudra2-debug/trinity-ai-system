@@ -30,8 +30,6 @@ bool fileExists(const std::string& path) {
 std::string searchPathFor(const std::string& name) {
 #ifdef _WIN32
     const char sep = ';';
-#else
-    const char sep = ':';
 #endif
     const char* pathEnv = std::getenv("PATH");
     if (pathEnv == nullptr) return {};
@@ -114,8 +112,10 @@ std::string findToolchain(const std::string& name) {
     if (dirEnv != nullptr && *dirEnv != '\0') {
         const std::string candidate = pathJoin(dirEnv, name);
         if (fileExists(candidate)) return candidate;
+#ifdef _WIN32
         const std::string exe = candidate + ".exe";
         if (fileExists(exe)) return exe;
+#endif
     }
     return searchPathFor(name);
 }

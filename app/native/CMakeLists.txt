@@ -118,6 +118,7 @@ set(TRINITY_CORE_SOURCES
     src/firmware/CodeGen.cpp
     src/firmware/Validators.cpp
     src/firmware/Builder.cpp
+    src/firmware/PlatformIo.cpp
     src/engines/StubEngines.cpp
     src/vision/VisionProject.cpp
     src/vision/ImageProcessor.cpp
@@ -227,6 +228,7 @@ if(TRINITY_BUILD_TESTS)
         tests/test_viewer_geometry.cpp
         tests/test_artifact_loading.cpp
         tests/test_firmware.cpp
+tests/test_firmware_platformio.cpp
         tests/test_vision_project.cpp
         tests/test_image_processor.cpp
         tests/test_vision_engine.cpp
@@ -255,6 +257,9 @@ if(TRINITY_BUILD_TESTS)
     )
     target_include_directories(trinity_tests PRIVATE third_party/doctest)
     target_link_libraries(trinity_tests PRIVATE trinity_core)
+    # Fake PlatformIO CLI: a real executable standing on the
+    # CreateProcess seam so tests exercise genuine controlled execution.
+    add_executable(fake_platformio tests/fake_platformio.cpp)
     add_test(NAME trinity_tests COMMAND trinity_tests)
 endif()
 
