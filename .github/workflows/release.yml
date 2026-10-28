@@ -65,14 +65,14 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v6
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
           restore-keys: |
             vcpkg-opencv4-${{ runner.os }}-
-          save-always: true
 
       - name: Build native engine (Release + OpenCV)
         working-directory: app/native
@@ -89,6 +89,13 @@ jobs:
           ./build/release-vcpkg/Release/trinity_tests.exe
           $env:TRINITY_STORAGE_ROOT = "$env:RUNNER_TEMP/trinity-data"
           ./build/release-vcpkg/Release/Trinity.exe --selftest
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
 
       - name: Install Python dependencies (incl. PyInstaller)
         run: |
@@ -107,35 +114,38 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Resolve windeployqt (install-qt-action does not put Qt at C:/Qt)
+      - name: "Resolve windeployqt (dir: C:/Qt makes the layout identical to local)"
         shell: pwsh
         run: |
-          $paths = @()
-          $roots = @()
+          $ErrorActionPreference = "Continue"
+          $candidates = @('C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe')
           if ($env:Qt6_DIR) {
-            # Qt6_DIR = <root>/lib/cmake/Qt6
-            $root = (Resolve-Path (Join-Path $env:Qt6_DIR '..\..\..')).Path
-            $roots += $root
-            $paths += (Join-Path $root 'bin/windeployqt.exe')
+            try {
+              $root = (Resolve-Path (Join-Path $env:Qt6_DIR '..\..\..')).Path
+              $candidates += (Join-Path $root 'bin/windeployqt.exe')
+            } catch { $candidates += ("resolve-failed: {0}" -f $_) }
           }
-          $paths += 'C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe'
-          $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $found) {
-            $roots += ,('C:/Qt', "$env:GITHUB_WORKSPACE")
-            $found = (Get-ChildItem $roots -Recurse -Filter 'windeployqt.exe' -ErrorAction SilentlyContinue |
-              Select-Object -First 1)
-            if ($found) { $found = $found.FullName }
-          }
-          if (-not $found) {
-            # Diagnose instead of guessing: what Qt actually looks like on
-            # this runner, surfaced as annotations the repo can read back.
-            $probe = & where.exe windeployqt.exe 2>$null
-            $dirList = ((Get-ChildItem "$env:GITHUB_WORKSPACE" -Directory -ErrorAction SilentlyContinue |
-                Select-Object -ExpandProperty Name) -join ',')
-            $envDump = ("Qt6_DIR={0}; Qt6_Dir={1}; QT_ROOT_DIR={2}; workspace={3}; list={4}; where={5}" -f
-                $env:Qt6_DIR, $env:Qt6_Dir, $env:QT_ROOT_DIR, $env:GITHUB_WORKSPACE, $dirList, ($probe -join ' '))
-            $envDump = $envDump -replace '%','%25' -replace "`r",'' -replace "`n",'  |  '
-            ($envDump -split '.{1,480}' | Where-Object { $_ } | Select-Object -First 8) |
+            # Definitive diagnosis: dump the runner's Qt state into a public
+            # gist (job logs are not readable without a repo token).
+            $dump = @("cwd=$(Get-Location)")
+            Get-ChildItem env: | Where-Object { $_.Name -match '^QT' -or $_.Name -match '^GITHUB_WORK' -or $_.Name -eq 'Qt6_Dir' } |
+              ForEach-Object { $dump += ("{0}={1}" -f $_.Name, $_.Value) }
+            foreach ($base in @('C:/Qt', "$env:GITHUB_WORKSPACE/Qt", "$env:RUNNER_TEMP")) {
+              if (Test-Path $base) {
+                Get-ChildItem $base -Depth 3 -ErrorAction SilentlyContinue |
+                  Select-Object -First 60 -ExpandProperty FullName |
+                  ForEach-Object { $dump += $_ }
+              }
+            }
+            $dump += "where.exe: $(& where.exe windeployqt.exe 2>$null)"
+            $file = Join-Path $env:RUNNER_TEMP "wqt-debug.txt"
+            $dump | Set-Content -Path $file -Encoding utf8
+            $gist = (& gh gist create -p -f -d "wqt-debug-run-${{ github.run_number }}" $file 2>&1 | Out-String).Trim()
+            $msg = ("windeployqt NOT FOUND; debug gist: {0}; Qt6_DIR={1}" -f $gist, $env:Qt6_DIR)
+            $msg = $msg -replace '%','%25' -replace "`r",'' -replace "`n",'  |  '
+            ($msg -split '.{1,480}' | Where-Object { $_ } | Select-Object -First 6) |
               ForEach-Object { Write-Host ("::error ::{0}" -f $_) }
             exit 1
           }
