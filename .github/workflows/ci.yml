@@ -36,6 +36,11 @@ jobs:
         run: |
           python -m pytest tests -v 2>&1 | tee pytest.log
           test ${PIPESTATUS[0]} -eq 0
+      - name: Emit pytest tail as annotations
+        if: failure()
+        run: |
+          tail -30 pytest.log | sed 's/%/%25/g; s/\r//g' | fold -s -w 500 | sed 's/^/::error ::/' | head -10
+
       - name: Upload pytest log
         if: failure()
         uses: actions/upload-artifact@v6

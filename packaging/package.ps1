@@ -5,7 +5,8 @@
 # Usage: powershell -File packaging/package.ps1 [-NativeExe <path>] [-Version <v>]
 param(
     [string]$NativeExe = "app/native/build/release-vcpkg/Release/Trinity.exe",
-    [string]$Version = ""
+    [string]$Version = "",
+    [string]$WinDeployQt = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,8 +25,11 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
 # 1. native engine bundle (also runs the hermetic selftest).
 Write-Host "==> native"
-powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "bundle_native.ps1") `
-    -TrinityExe $NativeExe -OutDir (Join-Path $stage "native") | ForEach-Object { Write-Host ("    {0}" -f $_) }
+$bnArgs = @{ TrinityExe = $NativeExe; OutDir = (Join-Path $stage "native") }
+if (-not $WinDeployQt) { $WinDeployQt = $env:TRINITY_WINDEPLOYQT }
+if ($WinDeployQt) { $bnArgs.WinDeployQt = $WinDeployQt }
+powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "bundle_native.ps1") @bnArgs |
+    ForEach-Object { Write-Host ("    {0}" -f $_) }
 if ($LASTEXITCODE -ne 0) { throw "native bundling failed" }
 
 # 2. backend: frozen uvicorn process.

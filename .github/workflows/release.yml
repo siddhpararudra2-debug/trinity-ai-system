@@ -105,9 +105,43 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Resolve windeployqt (install-qt-action does not put Qt at C:/Qt)
+        shell: pwsh
+        run: |
+          $paths = @()
+          $roots = @()
+          if ($env:Qt6_DIR) {
+            # Qt6_DIR = <root>/lib/cmake/Qt6
+            $root = (Resolve-Path (Join-Path $env:Qt6_DIR '..\..\..')).Path
+            $roots += $root
+            $paths += (Join-Path $root 'bin/windeployqt.exe')
+          }
+          $paths += 'C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe'
+          $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) {
+            $roots += ,('C:/Qt', "$env:GITHUB_WORKSPACE")
+            $found = (Get-ChildItem $roots -Recurse -Filter 'windeployqt.exe' -ErrorAction SilentlyContinue |
+              Select-Object -First 1)
+            if ($found) { $found = $found.FullName }
+          }
+          if (-not $found) {
+            Write-Host ("::error ::windeployqt.exe not found; Qt6_DIR={0}" -f $env:Qt6_DIR)
+            exit 1
+          }
+          Write-Host ("windeployqt at {0}" -f $found)
+          "TRINITY_WINDEPLOYQT=$found" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Assemble portable distribution (bundle + smoke + zip)
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File packaging/package.ps1 -Version ${{ steps.ver.outputs.version }}
+        run: |
+          $out = & powershell -ExecutionPolicy Bypass -File packaging/package.ps1 `
+            -Version ${{ steps.ver.outputs.version }} -WinDeployQt "$env:TRINITY_WINDEPLOYQT" 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (($out | Select-Object -Last 30 | Out-String) -replace '%','%25' -replace "`r",'' -replace "`n",'  |  ')
+            ($tail -split '.{1,500}' | Where-Object { $_ } | Select-Object -First 8) |
+              ForEach-Object { Write-Host ("::error ::{0}" -f $_) }
+            exit 1
+          }
 
       - name: Install Inno Setup (runner has no ISCC)
         shell: pwsh
