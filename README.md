@@ -58,7 +58,28 @@ trinity-ai-system/
 
 ## 🛠️ Getting Started
 
-### The short version
+### Install from a release (Windows, no toolchain)
+
+Grab the newest tagged release from
+[GitHub Releases](https://github.com/siddhpararudra2-debug/trinity-ai-system/releases). Two
+equivalent artifacts ship, both smoke-verified by CI (health, UI, chat page
+and a live engine execution must all answer before anything is uploaded):
+
+| Artifact | Use it when |
+| --- | --- |
+| `TrinityAI-<v>-win64-setup.exe` | Normal install. Per-user, no admin; Start Menu shortcut. |
+| `TrinityAI-<v>-win64.zip` | Portable / no-install. Unzip anywhere, run `Trinity.bat`. |
+
+`SHA256SUMS.txt` covers both files — verify before running. Everything
+(native engine, API backend, web UI) is bundled; user data lands in
+`%LOCALAPPDATA%\TrinityAI\data`. No Python, Node or Qt install is needed.
+
+The release workflow (`.github/workflows/release.yml`) builds these on
+`v*` tags: Release+vcpkg native build with the full doctest suite and
+`--selftest`, Next.js static export, PyInstaller bundle, windeployqt, the
+portable zip plus installer, and the SHA-256 manifest.
+
+### The short version (from source)
 
 ```powershell
 python -m pip install -e .
