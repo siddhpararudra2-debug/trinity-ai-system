@@ -143,10 +143,9 @@ jobs:
             $file = Join-Path $env:RUNNER_TEMP "wqt-debug.txt"
             $dump | Set-Content -Path $file -Encoding utf8
             $gist = (& gh gist create -p -f -d "wqt-debug-run-${{ github.run_number }}" $file 2>&1 | Out-String).Trim()
-            $msg = ("windeployqt NOT FOUND; debug gist: {0}; Qt6_DIR={1}" -f $gist, $env:Qt6_DIR)
-            $msg = $msg -replace '%','%25' -replace "`r",'' -replace "`n",'  |  '
-            ($msg -split '.{1,480}' | Where-Object { $_ } | Select-Object -First 6) |
-              ForEach-Object { Write-Host ("::error ::{0}" -f $_) }
+            Write-Output ("::error ::windeployqt NOT FOUND (Qt6_DIR={0})" -f $env:Qt6_DIR)
+            Write-Output "::error ::debug gist: $gist"
+            [Console]::Out.WriteLine("::error ::gist2: $gist")
             exit 1
           }
           Write-Host ("windeployqt at {0}" -f $found)
@@ -158,9 +157,11 @@ jobs:
           $out = & powershell -ExecutionPolicy Bypass -File packaging/package.ps1 `
             -Version ${{ steps.ver.outputs.version }} -WinDeployQt "$env:TRINITY_WINDEPLOYQT" 2>&1
           if ($LASTEXITCODE -ne 0) {
-            $tail = (($out | Select-Object -Last 30 | Out-String) -replace '%','%25' -replace "`r",'' -replace "`n",'  |  ')
-            ($tail -split '.{1,500}' | Where-Object { $_ } | Select-Object -First 8) |
-              ForEach-Object { Write-Host ("::error ::{0}" -f $_) }
+            $tail = (($out | Select-Object -Last 8) -join ' | ')
+            for ($i = 0; $i -lt $tail.Length; $i += 480) {
+              $len = [Math]::Min(480, $tail.Length - $i)
+              Write-Output ("::error ::" + $tail.Substring($i, $len))
+            }
             exit 1
           }
 
