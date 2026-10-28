@@ -1,6 +1,6 @@
 # work.md — Trinity AI: Remaining Tasks
 
-## Status: Stage 5 (Engine Feature Depth) — IN PROGRESS
+## Status: Stage 6.5 (documentation) done — Stage 7 (Release Hardening + CAD Depth) queued
 
 ### Done earlier (Stage 4, pushed to origin/main)
 - M8 daemon + NativeDaemon bridge, C++ SSE streaming, Python agent loop/workflow execution, DagRunPanel
@@ -25,8 +25,21 @@
 12. [x] Python bridge — `native_bridge.py` NATIVE_ENGINES + OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, `simulate_spring_chain`; bidirectional map test green; pytest 344 passed / 24 skipped; ruff clean
 13. [x] README + `opencodeworks.md` Stage 5 entry ticked with each engine commit
 
-### Stage 6: M9 — Packaging & Standalone Distribution (in progress)
+### Stage 6: M9 — Packaging & Standalone Distribution (done)
 14. [x] Qt standalone bundle: `windeployqt` + OpenCV DLLs (`packaging/bundle_native.ps1`, hermetic PATH-scrubbed `--selftest`) → commit `e122ba0`; native engine also wired into the portable dist
 15. [x] Python backend bundling: PyInstaller onedir FastAPI bundle serving the Next.js static export (`packaging/trinity-api.spec`, `TRINITY_UI_DIR` mount, frozen smoke green) → commits `8edfc04`/`3ac8f21`/`829ef6e`; portable zip assembled + smoke-verified
 16. [x] Windows installer: Inno Setup 6 (`packaging/installer.iss`, per-user `%LOCALAPPDATA%\Programs\TrinityAI`, Start Menu shortcut; `build_installer.ps1` silent-installs into a scratch dir and runs the same bundle smoke against the *installed* copy — `SMOKE OK` before the setup exe counts) → commit `d458477`
 17. [x] CI: `.github/workflows/release.yml` on `v*` tags — release-vcpkg build with doctests + `--selftest`, frontend static export, PyInstaller, windeployqt, portable zip, installer, SHA-256 manifest, GitHub Release upload → commit `48ff1cf`
+
+### Stage 6.5: Project documentation (done)
+18. [x] `docs/MILESTONES.md` — full history baseline→M9, hashes verified against git log → commit `fb35272`
+19. [x] `docs/PROCESS.md` — working rules, settled decisions, build lessons, verification chain → commit `26edaa4`
+20. [x] `docs/ROADMAP.md` — Stage 7: M10–M14 → commit `4f940c1`
+21. [x] README documentation cross-links section
+
+### Stage 7: Release Hardening + Engine/CAD Depth (queued — see docs/ROADMAP.md)
+22. [ ] M10 — tag `v1.0.0`, watch the release workflow's first real run, download-published-artifacts smoke; fix what it trips over
+23. [ ] M11 — OpenCascade `[cad]` extra carried into the PyInstaller bundle; bundle smoke executes a real STEP export
+24. [ ] M12 — code signing for `Trinity.exe` + `setup.exe` (cert type + renewal policy decided up front); manifest generated after signing
+25. [ ] M13 — auto-update: `latest.yml` manifest per release, version/availability endpoint, user-initiated verified download + restart, data preserved
+26. [ ] M14 — CAD depth, one commit per op: nesting/plate packing, drawings/assembly export, parameter families (catalog honesty rule applies)

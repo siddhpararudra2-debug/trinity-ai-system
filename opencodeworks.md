@@ -10,7 +10,8 @@ change it describes — never on its own.
 
 ## In progress
 
-_Nothing in progress._
+_Nothing in progress. Next up: **Stage 7 — release hardening + engine/CAD depth**
+(docs/ROADMAP.md, M10–M14; M10 = tag `v1.0.0` and prove the release pipeline on a real run)._
 
 ---
 

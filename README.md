@@ -56,6 +56,12 @@ trinity-ai-system/
 └── tests/                   # Python test suites
 ```
 
+## 📚 Documentation
+
+- [`docs/MILESTONES.md`](docs/MILESTONES.md) — the full project history, baseline through M9, verified against git
+- [`docs/PROCESS.md`](docs/PROCESS.md) — how we build: working rules, settled decisions, hard-won lessons, the verification chain
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Stage 7: release hardening (real v1.0.0 tag, STEP kernel in the bundle, signing, auto-update) plus CAD depth
+
 ## 🛠️ Getting Started
 
 ### Install from a release (Windows, no toolchain)
