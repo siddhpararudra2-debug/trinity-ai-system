@@ -82,5 +82,6 @@ next-env.d.ts
 # pyinstaller outputs
 packaging/dist/
 packaging/build/
-packaging/smoke*
+packaging/smoke-data/
+packaging/smoke.log
 packaging/smoke/
