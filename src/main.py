@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError as FastAPIValidationError
@@ -79,3 +81,31 @@ def http_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
 
 
 app.include_router(router)
+
+# Packaged mode: TRINITY_UI_DIR points at the Next.js static export
+# (frontend `out/`), which this process then serves at "/". That makes
+# the shipped application a single Python process -- no Node runtime,
+# no second port, and the UI's same-origin /api base just works. The
+# mount is registered after the router so every API route keeps
+# priority, and it is skipped when unset or the directory is missing
+# (development never serves a half-present UI dir).
+_ui_dir = os.getenv("TRINITY_UI_DIR", "")
+if _ui_dir and Path(_ui_dir).is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    class _StaticHtml(StaticFiles):
+        """StaticFiles(html=True) serves directory/index.html and
+        404.html, but NOT /chat from chat.html — and Next.js exports
+        every page as a standalone .html file. Retry with the .html
+        suffix before giving a 404 so exported routes resolve."""
+
+        async def get_response(self, path, scope):
+            try:
+                return await super().get_response(path, scope)
+            except StarletteHTTPException as exc:
+                if exc.status_code != 404 or not path or path.endswith(".html"):
+                    raise
+                return await super().get_response(path + ".html", scope)
+
+    app.mount("/", _StaticHtml(directory=_ui_dir, html=True), name="ui")
+    log.info("static ui served", extra={"ctx": {"dir": _ui_dir}})
