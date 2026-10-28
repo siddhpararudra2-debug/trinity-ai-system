@@ -109,6 +109,20 @@ jobs:
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File packaging/package.ps1 -Version ${{ steps.ver.outputs.version }}
 
+      - name: Install Inno Setup (runner has no ISCC)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { Write-Error "choco innosetup install failed"; exit 1 }
+          }
+          $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { Write-Error "ISCC.exe not found after install"; exit 1 }
+          Write-Host "ISCC at $iscc"
+          "TRINITY_ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build installer (silent-install verified)
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -Version ${{ steps.ver.outputs.version }}

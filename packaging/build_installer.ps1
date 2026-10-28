@@ -15,12 +15,18 @@ if (-not $Version) {
     if (-not $Version) { $Version = "1.0.0" }
 }
 
-$iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
-if (-not (Test-Path $iscc)) {
-    $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+$iscc = $env:TRINITY_ISCC
+if ($iscc -and -not (Test-Path $iscc)) {
+    throw ("TRINITY_ISCC points at {0}, which does not exist" -f $iscc)
+}
+if (-not $iscc) {
+    $iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+    if (-not (Test-Path $iscc)) {
+        $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    }
 }
 if (-not (Test-Path $iscc)) {
-    throw ("Inno Setup compiler not found; install Inno Setup 6 ({0})" -f $iscc)
+    throw ("Inno Setup compiler not found; install Inno Setup 6 or set TRINITY_ISCC ({0})" -f $iscc)
 }
 
 $dist = Join-Path $root ("packaging\dist\TrinityAI-" + $Version + "-win64")
