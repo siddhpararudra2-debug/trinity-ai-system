@@ -235,6 +235,7 @@ tests/test_firmware_platformio.cpp
         tests/test_image_processor.cpp
         tests/test_vision_engine.cpp
         tests/test_vision_pipeline.cpp
+    tests/test_vision_contours_features.cpp
         tests/test_research_engine.cpp
         tests/test_research_pipeline.cpp
     tests/test_robotics_engine.cpp

@@ -29,6 +29,8 @@ private:
     EngineResult executeGrayscale(const EngineRequest& request);
     EngineResult executeEdgeDetect(const EngineRequest& request);
     EngineResult executeImageStatistics(const EngineRequest& request);
+    EngineResult executeExtractContours(const EngineRequest& request);
+    EngineResult executeMatchFeatures(const EngineRequest& request);
 
     // Resolve `path` or `artifact_id` parameter into a concrete local
     // file path. Throws RequestValidationError when neither is present

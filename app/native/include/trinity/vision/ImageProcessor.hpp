@@ -29,6 +29,35 @@ struct ProcessedStats {
     core::Json toJson() const;
 };
 
+/// One extracted contour: pixel area, centroid, and bounding box.
+struct ContourMeasurement {
+    double areaPx = 0.0;
+    double centroidXPx = 0.0;
+    double centroidYPx = 0.0;
+    double bboxXPx = 0.0;
+    double bboxYPx = 0.0;
+    double bboxWPx = 0.0;
+    double bboxHPx = 0.0;
+
+    core::Json toJson() const;
+};
+
+struct ContourResult {
+    int contourCount = 0;
+    std::vector<ContourMeasurement> contours;
+
+    core::Json toJson() const;
+};
+
+struct FeatureMatchResult {
+    int keypointsA = 0;
+    int keypointsB = 0;
+    int matchCount = 0;  // ratio-test survivors
+    std::vector<double> matchDistances;
+
+    core::Json toJson() const;
+};
+
 class ImageProcessor {
 public:
     // Validate path exists, extension supported, and OpenCV can decode
@@ -55,6 +84,21 @@ public:
 
     // Per-channel and overall statistics of the loaded image.
     static ProcessedStats imageStatistics(const std::string& srcPath);
+
+    // Contour extraction on an edges map (Canny thresholded input →
+    // cv::findContours). Returns per-contour area (px²) and centroid
+    // (px). minArea drops specks (default 100 px²).
+    static ContourResult extractContours(const std::string& srcPath,
+                                         double cannyLow = 50.0,
+                                         double cannyHigh = 150.0,
+                                         double minArea = 100.0);
+
+    // ORB keypoint detection + descriptor matching between two images
+    // using the Lowe ratio test. Match counts are honest: no match
+    // synthesis, and too-few-keypoint images simply report zero.
+    static FeatureMatchResult matchFeatures(const std::string& pathA,
+                                            const std::string& pathB,
+                                            double distanceRatio = 0.75);
 };
 
 }  // namespace trinity::vision
