@@ -8,6 +8,7 @@ test_native_bridge_live.py, gated on TRINITY_NATIVE_EXEC.
 
 import io
 import json
+import os
 import tempfile
 import threading
 from pathlib import Path
@@ -254,7 +255,7 @@ def test_spawn_env_isolates_storage_and_injects_qt_path(monkeypatch, tmp_path, p
     daemon._ensure_live()
     env = pop.envs[0]
     assert Path(env["TRINITY_STORAGE_ROOT"]).name.startswith("trinity_native_daemon_")
-    parts = env["PATH"].replace("\\", "/").split(";")
+    parts = env["PATH"].replace("\\", "/").split(os.pathsep)
     assert parts[0].replace("\\", "/") == str(qt).replace("\\", "/") or parts[0] == str(
         qt
     )
