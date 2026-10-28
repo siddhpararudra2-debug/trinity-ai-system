@@ -20,9 +20,14 @@ if (-not (Test-Path $WinDeployQt)) {
     throw ("windeployqt not found at {0}; pass -WinDeployQt for your Qt install" -f $WinDeployQt)
 }
 
-# Resolve OutDir against the repo root ONCE, absolutely -- windeployqt
-# gets pushed-location CWDs that would otherwise eat relative paths.
-$OutDir = [System.IO.Path]::GetFullPath((Join-Path $root $OutDir))
+# Resolve OutDir ONCE, absolutely (a relative path resolves against the
+# repo root; an absolute path passes through) -- windeployqt gets pushed
+# locations which would otherwise eat relative paths.
+if ([System.IO.Path]::IsPathRooted($OutDir)) {
+    $OutDir = [System.IO.Path]::GetFullPath($OutDir)
+} else {
+    $OutDir = [System.IO.Path]::GetFullPath((Join-Path $root $OutDir))
+}
 
 Write-Host "==> bundling native engine"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
