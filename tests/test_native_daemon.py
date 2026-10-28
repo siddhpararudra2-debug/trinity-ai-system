@@ -207,7 +207,11 @@ def popener(monkeypatch):
     ) -> tuple[NativeDaemon, Popener]:
         pop = Popener(scripts)
         monkeypatch.setattr(nb.subprocess, "Popen", pop)
-        daemon = NativeDaemon("C:/fake/Trinity.exe", **daemon_kwargs)
+        # The default exe path is Windows-shaped ("C:/fake/Trinity.exe"),
+        # which is a RELATIVE path on POSIX — bridge_child_env would resolve
+        # it against the CWD and corrupt the joined PATH. Anything asserting
+        # the injected PATH must pass an absolute-on-every-OS exe instead.
+        daemon = NativeDaemon(daemon_kwargs.pop("exe", "C:/fake/Trinity.exe"), **daemon_kwargs)
         return daemon, pop
 
     return make
@@ -249,9 +253,14 @@ def test_spawn_env_isolates_storage_and_injects_qt_path(monkeypatch, tmp_path, p
     qt = tmp_path / "qtbin"
     qt.mkdir()
     (qt / "Qt6Core.dll").write_bytes(b"")
+    # The fake engine exe must sit under tmp_path: on POSIX a "C:/..."
+    # path is relative and would resolve against the CWD.
+    exe = tmp_path / "fake_bin"
+    exe.mkdir()
+    (exe / "Trinity.exe").write_bytes(b"")
     monkeypatch.setenv("TRINITY_QT_BIN", str(qt))
-    monkeypatch.setenv("PATH", "C:/somewhere/else")
-    daemon, pop = popener([ONE_SHOT])
+    monkeypatch.setenv("PATH", str(tmp_path / "elsewhere"))
+    daemon, pop = popener([ONE_SHOT], exe=str(exe / "Trinity.exe"))
     daemon._ensure_live()
     env = pop.envs[0]
     assert Path(env["TRINITY_STORAGE_ROOT"]).name.startswith("trinity_native_daemon_")
@@ -260,8 +269,8 @@ def test_spawn_env_isolates_storage_and_injects_qt_path(monkeypatch, tmp_path, p
         qt
     )
     # The exe directory carries the app-local vcpkg DLLs; original PATH is kept.
-    assert "C:/fake" in parts[1].replace("\\", "/"), env["PATH"]
-    assert env["PATH"].endswith("C:/somewhere/else")
+    assert parts[1].replace("\\", "/") == str(exe).replace("\\", "/"), env["PATH"]
+    assert env["PATH"].endswith(str(tmp_path / "elsewhere"))
 
 
 def test_pid_is_stable_across_sequential_calls(popener):
