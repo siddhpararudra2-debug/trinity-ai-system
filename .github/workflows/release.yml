@@ -45,6 +45,7 @@ jobs:
         with:
           version: '6.8.3'
           arch: 'win64_msvc2022_64'
+          dir: 'C:/Qt'
           cache: true
 
       - name: Bootstrap vcpkg
@@ -71,6 +72,7 @@ jobs:
           key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
           restore-keys: |
             vcpkg-opencv4-${{ runner.os }}-
+          save-always: true
 
       - name: Build native engine (Release + OpenCV)
         working-directory: app/native
@@ -125,7 +127,16 @@ jobs:
             if ($found) { $found = $found.FullName }
           }
           if (-not $found) {
-            Write-Host ("::error ::windeployqt.exe not found; Qt6_DIR={0}" -f $env:Qt6_DIR)
+            # Diagnose instead of guessing: what Qt actually looks like on
+            # this runner, surfaced as annotations the repo can read back.
+            $probe = & where.exe windeployqt.exe 2>$null
+            $dirList = ((Get-ChildItem "$env:GITHUB_WORKSPACE" -Directory -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty Name) -join ',')
+            $envDump = ("Qt6_DIR={0}; Qt6_Dir={1}; QT_ROOT_DIR={2}; workspace={3}; list={4}; where={5}" -f
+                $env:Qt6_DIR, $env:Qt6_Dir, $env:QT_ROOT_DIR, $env:GITHUB_WORKSPACE, $dirList, ($probe -join ' '))
+            $envDump = $envDump -replace '%','%25' -replace "`r",'' -replace "`n",'  |  '
+            ($envDump -split '.{1,480}' | Where-Object { $_ } | Select-Object -First 8) |
+              ForEach-Object { Write-Host ("::error ::{0}" -f $_) }
             exit 1
           }
           Write-Host ("windeployqt at {0}" -f $found)
