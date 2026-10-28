@@ -30,12 +30,22 @@
                 "TRINITY_BUILD_TESTS": "ON",
                 "CMAKE_PREFIX_PATH": "C:/Qt/6.8.3/msvc2022_64"
             }
+        },
+        {
+            "name": "windows-release-vcpkg",
+            "inherits": "windows-release",
+            "binaryDir": "${sourceDir}/build/release-vcpkg",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "TRINITY_REQUIRE_OPENCV": "ON"
+            }
         }
     ],
     "buildPresets": [
         { "name": "windows-debug", "configurePreset": "windows-debug", "configuration": "Debug" },
         { "name": "windows-debug-vcpkg", "configurePreset": "windows-debug-vcpkg", "configuration": "Debug" },
-        { "name": "windows-release", "configurePreset": "windows-release", "configuration": "Release" }
+        { "name": "windows-release", "configurePreset": "windows-release", "configuration": "Release" },
+        { "name": "windows-release-vcpkg", "configurePreset": "windows-release-vcpkg", "configuration": "Release" }
     ],
     "testPresets": [
         {
@@ -48,6 +58,12 @@
             "name": "windows-debug-vcpkg",
             "configurePreset": "windows-debug-vcpkg",
             "configuration": "Debug",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "windows-release-vcpkg",
+            "configurePreset": "windows-release-vcpkg",
+            "configuration": "Release",
             "output": { "outputOnFailure": true }
         }
     ]
