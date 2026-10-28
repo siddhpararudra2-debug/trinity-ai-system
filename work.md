@@ -23,10 +23,10 @@
 10. [x] Vision — `extract_contours` (Canny → `cv::findContours`, per-contour area/centroid/bbox, min-area filter) + `match_features` (ORB detectAndCompute + Hamming knn + Lowe ratio test, honest zero when no keypoints, no OpenCV build refuses truthfully); doctests generate shapes/textured PNGs in-test → commit `f4d1e5f`, 404/404 native green
 11. [x] Robotics — verification only: DLS IK + joint-limit clamping/`withinLimits` already implemented (`Kinematics.cpp:225+`); `test_robotics_ik` already covers "iterates stay clamped to joint limits" — no changes needed
 12. [x] Python bridge — `native_bridge.py` NATIVE_ENGINES + OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, `simulate_spring_chain`; bidirectional map test green; pytest 344 passed / 24 skipped; ruff clean
-13. [ ] README + `opencodeworks.md` Stage 5 entry ticked with each engine commit
+13. [x] README + `opencodeworks.md` Stage 5 entry ticked with each engine commit
 
-### Stage 6: M9 — Packaging & Standalone Distribution (queued)
-14. [ ] Qt standalone bundle: `windeployqt` + static Next.js assets
-15. [ ] Python backend bundling: standalone FastAPI executable bundle
-16. [ ] Windows installer: MSI or NSIS package
-17. [ ] CI: GitHub Actions workflow building + publishing releases
+### Stage 6: M9 — Packaging & Standalone Distribution (in progress)
+14. [x] Qt standalone bundle: `windeployqt` + OpenCV DLLs (`packaging/bundle_native.ps1`, hermetic PATH-scrubbed `--selftest`) → commit `e122ba0`; native engine also wired into the portable dist
+15. [x] Python backend bundling: PyInstaller onedir FastAPI bundle serving the Next.js static export (`packaging/trinity-api.spec`, `TRINITY_UI_DIR` mount, frozen smoke green) → commits `8edfc04`/`3ac8f21`/`829ef6e`; portable zip assembled + smoke-verified
+16. [ ] Windows installer: Inno Setup package (installs to %LOCALAPPDATA%\Programs, Start Menu shortcut, post-install smoke)
+17. [ ] CI: GitHub Actions release workflow (native release-vcpkg build → static export → PyInstaller → windeployqt → zip + installer → SHA-256 manifest → GitHub Release)

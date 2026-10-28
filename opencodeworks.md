@@ -23,6 +23,21 @@ _Nothing in progress._
 
 ---
 
+## In Progress
+
+- [ ] **Stage 6: M9 — packaging & standalone distribution**
+  - [x] Native release preset: `windows-release-vcpkg` (Release + vcpkg manifest + `TRINITY_REQUIRE_OPENCV=ON`), built green, all 404 doctests pass in Release → commit `e87598e`
+  - [x] Frontend opt-in static export (`TRINITY_STATIC_EXPORT=1` → `output: 'export'`; 12 routes prerendered) → commit `8edfc04`
+  - [x] Backend serves the static export from the API process (`TRINITY_UI_DIR` mount after the router; `_StaticHtml` maps `/chat` → `chat.html` through a response-status retry since `StaticFiles(html=True)` returns a 404 FileResponse, never raises, when Next's `404.html` is present; 4 new tests) → commit `e4973ab`
+  - [x] PyInstaller onedir bundle (`packaging/trinity-api.spec` + `packaging/trinity_api.py`; config/*.yaml land in `_internal/config/` so frozen `model_config` resolution works; packaged-mode smoke: health/UI/chat/404 all answered) → commit `3ac8f21`
+  - [x] Qt standalone bundle: `packaging/bundle_native.ps1` (14 vcpkg/OpenCV DLLs + windeployqt Qt6 runtime; hermetic selftest with system PATH fully scrubbed — `bundle --selftest passed` with zero Qt on PATH) → commit `e122ba0`
+  - [x] Portable distribution: `packaging/package.ps1` assembles `dist/TrinityAI-1.0.0-win64/` (native/ + api/ + web/ + `Trinity.bat` launcher) and smoke-tests it end to end (`SMOKE OK: health ok; ui served; chat route ok; engine probe ok`), zips `TrinityAI-1.0.0-win64.zip` → commit `829ef6e`
+  - [x] `packaging/smoke_bundle.py` committed; smoke gitignore narrowed (`packaging/smoke-data/`, `packaging/smoke.log`) → commit `5f666d2`
+  - [ ] Windows installer (Inno Setup)
+  - [ ] CI release workflow
+
+---
+
 ## Done
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
