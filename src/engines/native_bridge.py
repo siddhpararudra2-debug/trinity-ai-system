@@ -77,7 +77,7 @@ NATIVE_ENGINES: dict[str, list[str]] = {
     # No "inspect": PcbEngine has no such operation. It used to be listed
     # here anyway, which made the capability list promise a call that could
     # only ever answer 501. Same trap as firmware's test/compile below.
-    "pcb": ["validate", "generate", "export", "add_net"],
+    "pcb": ["validate", "generate", "export", "add_net", "add_track"],
     # The firmware chain the native engine actually implements. `create` is
     # the entry point; the rest are the steps build needs before it can run.
     # The old ["create", "build", "test", "compile"] list advertised build
@@ -101,9 +101,11 @@ NATIVE_ENGINES: dict[str, list[str]] = {
         "image_grayscale",
         "image_edges",
         "image_stats",
+        "image_contours",
+        "image_match_features",
     ],
     "research": ["search"],
-    "simulation": ["simulate"],
+    "simulation": ["simulate", "simulate_spring_chain"],
     "robotics": ["kinematics", "trajectory_plan"],
 }
 
@@ -121,7 +123,12 @@ OP_MAP: dict[str, dict[str, str]] = {
         "kinematics": "forward_kinematics",
         "trajectory_plan": "plan_trajectory",
     },
-    "simulation": {"simulate": "simulate_linear_motion"},
+    "simulation": {
+        "simulate": "simulate_linear_motion",
+        # Two-body Hooke chain: explicit objects[] with mass_kg and
+        # position_m; RK4 via method="rk4".
+        "simulate_spring_chain": "simulate_spring_chain",
+    },
     # Single-shot by design: each step takes the project returned by the
     # previous one and returns it upgraded, so no cross-call state is kept.
     "firmware": {
@@ -141,6 +148,9 @@ OP_MAP: dict[str, dict[str, str]] = {
         # without this mapping no board with components could ever pass
         # validation -- so export was unreachable for every real design.
         "add_net": "add_net",
+        # add_track routing lets a bridged board get copper before export;
+        # without it every exported bridge board shipped unrouted.
+        "add_track": "add_track",
     },
     # The native vision engine implements four more image operations than were
     # reachable. They were written, tested C++ sitting behind a 501.
@@ -150,6 +160,8 @@ OP_MAP: dict[str, dict[str, str]] = {
         "image_grayscale": "grayscale",
         "image_edges": "edge_detect",
         "image_stats": "image_statistics",
+        "image_contours": "extract_contours",
+        "image_match_features": "match_features",
     },
 }
 

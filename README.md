@@ -25,7 +25,7 @@ API Request
 ## 🚀 Key Features
 
 - **🧠 LLM-Independent Architecture**: Agnostic to the underlying model (OpenAI, Anthropic, Local). Models act solely as planners/reasoners.
-- **⚙️ Deterministic Execution Engines**: Ships with robust built-in engines for diverse domains including Math, CAD Generation, PCB Design, Firmware, Vision, Simulation, Research, and Robotics.
+- **⚙️ Deterministic Execution Engines**: Ships with robust built-in engines for diverse domains including Math, CAD Generation, PCB Design, Firmware, Vision, Simulation, Research, and Robotics. Beyond MVP stubs: PCB delivers geometric trace DRC plus RS-274X Gerber manufacturing export; Firmware performs genuine PlatformIO builds into real `.hex`/`.bin` artifacts; Vision runs real OpenCV contour extraction and ORB feature matching; Simulation integrates multi-body spring chains with RK4 and energy-conservation checks; Robotics solves IK with joint-limit enforcement.
 - **🛡️ Strict Validation**: Output generation is strictly separated from validation and verification states (`GENERATED` | `VALIDATED` | `VERIFIED` | `FAILED`).
 - **💻 Cross-Platform Foundations**:
   - **Python Backend**: High-performance FastAPI server handling jobs, storage, and AI interactions.
