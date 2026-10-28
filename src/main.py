@@ -94,18 +94,20 @@ if _ui_dir and Path(_ui_dir).is_dir():
     from fastapi.staticfiles import StaticFiles
 
     class _StaticHtml(StaticFiles):
-        """StaticFiles(html=True) serves directory/index.html and
-        404.html, but NOT /chat from chat.html — and Next.js exports
-        every page as a standalone .html file. Retry with the .html
-        suffix before giving a 404 so exported routes resolve."""
+        """StaticFiles(html=True) serves directory/index.html and, when
+        404.html exists (Next.js exports one), returns a 404 FileResponse
+        for unknown paths — it never maps /chat to chat.html, and Next.js
+        exports every page as a standalone .html file. So inspect the
+        produced response: on a 404 for an extensionless path, retry with
+        the .html suffix and take it only when it succeeds."""
 
         async def get_response(self, path, scope):
-            try:
-                return await super().get_response(path, scope)
-            except StarletteHTTPException as exc:
-                if exc.status_code != 404 or not path or path.endswith(".html"):
-                    raise
-                return await super().get_response(path + ".html", scope)
+            response = await super().get_response(path, scope)
+            if response.status_code == 404 and path and not path.endswith(".html"):
+                retry = await super().get_response(path + ".html", scope)
+                if retry.status_code == 200:
+                    return retry
+            return response
 
     app.mount("/", _StaticHtml(directory=_ui_dir, html=True), name="ui")
     log.info("static ui served", extra={"ctx": {"dir": _ui_dir}})
