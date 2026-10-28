@@ -248,6 +248,7 @@ tests/test_firmware_platformio.cpp
     tests/test_robotics_workflow.cpp
         tests/test_sim_kinematics.cpp
         tests/test_sim_dynamics.cpp
+    tests/test_sim_rk4_multibody.cpp
         tests/test_sim_validation.cpp
         tests/test_sim_ir.cpp
         tests/test_sim_determinism.cpp

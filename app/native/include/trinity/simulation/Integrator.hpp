@@ -1,8 +1,10 @@
 #pragma once
 
 // Deterministic integrators. Kinematics models use closed-form
-// solutions; basic_dynamics (constant F, m) uses semi-implicit Euler.
-// Cancel probes are polled every kCancelCheckInterval steps.
+// solutions; basic_dynamics (constant F, m) uses semi-implicit Euler or
+// RK4 (method selects); multi_body spring chains integrate the coupled
+// Hooke system with the selected method. Cancel probes are polled
+// every kCancelCheckInterval steps.
 
 #include "Types.hpp"
 

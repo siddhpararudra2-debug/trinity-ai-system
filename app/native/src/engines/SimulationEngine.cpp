@@ -140,7 +140,8 @@ SimulationEngine::SimulationEngine() {
                      "simulate_linear_motion",
                      "simulate_projectile",
                      "simulate_constant_acceleration",
-                     "simulate_dynamics"};
+                     "simulate_dynamics",
+                     "simulate_spring_chain"};
 }
 
 simulation::SimulationProject SimulationEngine::projectFromParams(
@@ -159,6 +160,11 @@ simulation::SimulationProject SimulationEngine::projectFromParams(
         project.dt = optionalNumber(params, "dt_s", simulation::kDefaultDt);
     }
     project.durationS = optionalNumber(params, "duration_s", simulation::kDefaultDurationS);
+    project.method = params.value("method", std::string("semi_implicit_euler"));
+    if (model == "spring_chain") {
+        project.springKNm = optionalNumber(params, "spring_k_n_m", 10.0);
+        project.restLengthM = optionalNumber(params, "rest_length_m", 1.0);
+    }
     project.originalUnits = params.value("original_units", core::Json::object());
     project.boundaryConditions = params.value("boundary_conditions", core::Json::object());
     project.metadata = params.value("metadata", core::Json::object());
@@ -190,6 +196,42 @@ simulation::SimulationProject SimulationEngine::projectFromParams(
         }
     } else if (initial.contains("velocity") && initial["velocity"].is_object()) {
         project.initial.velocity = simulation::Vec3::fromJson(initial["velocity"]);
+    }
+
+    if (model == "spring_chain") {
+        // Multi-body: bodies come from an explicit "objects" array
+        // (mass_kg + position_m {x,y,z} meters + optional velocity_m_s).
+        if (!params.contains("objects") || !params["objects"].is_array() ||
+            params["objects"].size() < 2) {
+            throw core::RequestValidationError(
+                "spring_chain requires an 'objects' array with at least two "
+                "bodies ({mass_kg, position_m:{x,y,z}, velocity_m_s?})",
+                {},
+                "engines");
+        }
+        int index = 0;
+        for (const auto& entry : params["objects"]) {
+            if (!entry.is_object()) {
+                throw core::RequestValidationError(
+                    "spring_chain objects entries must be objects", {}, "engines");
+            }
+            simulation::SimulationObject object;
+            object.objectId = "object-" + std::to_string(index);
+            object.name = entry.value("name", "body-" + std::to_string(index));
+            object.massKg = entry.value("mass_kg", 1.0);
+            const core::Json pos = entry.value("position_m", core::Json::object());
+            const core::Json vel = entry.value("velocity_m_s", core::Json::object());
+            object.initial.t = 0.0;
+            object.initial.position = {pos.value("x", 0.0), pos.value("y", 0.0),
+                                       pos.value("z", 0.0)};
+            object.initial.velocity = {vel.value("x", 0.0), vel.value("y", 0.0),
+                                       vel.value("z", 0.0)};
+            project.objects.push_back(object);
+            ++index;
+        }
+        // Mirror body 0 into the shorthand so validators and the
+        // single-body result path see consistent initial data.
+        project.initial = project.objects.front().initial;
     }
 
     if (model == "constant_acceleration" || model == "linear_motion") {
@@ -316,11 +358,13 @@ EngineResult SimulationEngine::executeCreate(const EngineRequest& request) {
     std::string type = "kinematics";
     if (model == "force_mass") {
         type = "basic_dynamics";
+    } else if (model == "spring_chain") {
+        type = "multi_body";
     } else if (model != "linear_motion" && model != "projectile" &&
-               model != "constant_acceleration") {
+               model != "constant_acceleration" && model != "spring_chain") {
         throw core::RequestValidationError(
             "Unsupported model '" + model +
-                "'; supported: linear_motion, projectile, constant_acceleration, force_mass",
+                "'; supported: linear_motion, projectile, constant_acceleration, force_mass, spring_chain",
             {{"model", model}}, "engines");
     }
     simulation::SimulationProject project = projectFromParams(request.parameters, model);
@@ -429,6 +473,8 @@ EngineResult SimulationEngine::executeOneShot(const EngineRequest& request,
     std::string type = "kinematics";
     if (model == "force_mass") {
         type = "basic_dynamics";
+    } else if (model == "spring_chain") {
+        type = "multi_body";
     }
     simulation::SimulationProject project = projectFromParams(request.parameters, model);
     project.type = type;
@@ -441,9 +487,10 @@ EngineResult SimulationEngine::execute(const EngineRequest& request) {
                                          {{"engine", name_},
                                           {"version", version_},
                                           {"capabilities", capabilities_},
-                                          {"supported_types", {"kinematics", "basic_dynamics"}},
+                                          {"supported_types",
+                                           {"kinematics", "basic_dynamics", "multi_body"}},
                                           {"integration_methods",
-                                           {"closed_form", "semi_implicit_euler"}},
+                                           {"closed_form", "semi_implicit_euler", "rk4"}},
                                           {"defaults",
                                            {{"dt", simulation::kDefaultDt},
                                             {"duration_s", simulation::kDefaultDurationS}}}});
@@ -474,6 +521,9 @@ EngineResult SimulationEngine::execute(const EngineRequest& request) {
         }
         if (request.operation == "simulate_dynamics") {
             return executeOneShot(request, "force_mass");
+        }
+        if (request.operation == "simulate_spring_chain") {
+            return executeOneShot(request, "spring_chain");
         }
         return capabilityUnavailable(
             request, "Simulation operation '" + request.operation + "' is not implemented yet");

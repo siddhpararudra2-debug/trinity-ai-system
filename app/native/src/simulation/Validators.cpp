@@ -21,6 +21,30 @@ double expectedLinearX(const SimulationProject& project, double t) {
     return x0 + vx0 * t + 0.5 * ax * t * t;
 }
 
+double kineticEnergyJ(const std::vector<double>& masses,
+                      const std::vector<SimulationState>& states) {
+    double ke = 0.0;
+    for (size_t i = 0; i < masses.size(); ++i) {
+        const Vec3& v = states[i].velocity;
+        ke += 0.5 * masses[i] * (v.x * v.x + v.y * v.y + v.z * v.z);
+    }
+    return ke;
+}
+
+double springPotentialEnergyJ(const SimulationProject& project,
+                              const std::vector<SimulationState>& states) {
+    double pe = 0.0;
+    for (size_t i = 1; i < states.size(); ++i) {
+        const double dx = states[i].position.x - states[i - 1].position.x;
+        const double dy = states[i].position.y - states[i - 1].position.y;
+        const double dz = states[i].position.z - states[i - 1].position.z;
+        const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        pe += 0.5 * project.springKNm * (dist - project.restLengthM) *
+              (dist - project.restLengthM);
+    }
+    return pe;
+}
+
 }  // namespace
 
 long long validateStepCount(double dt, double durationS) {
@@ -67,7 +91,36 @@ ProjectValidation validateProject(const SimulationProject& project) {
     rule("project.mass_finite", std::isfinite(project.massKg), "mass_kg must be finite");
     rule("project.gravity_finite", std::isfinite(project.gravity), "gravity must be finite");
 
-    if (project.type == "basic_dynamics") {
+    rule("project.method_supported",
+         project.method == "semi_implicit_euler" || project.method == "rk4",
+         "method must be 'semi_implicit_euler' or 'rk4'");
+
+    if (project.type == "multi_body") {
+        rule("project.multi_body_model", project.model == "spring_chain",
+             "multi_body only supports model 'spring_chain'");
+        rule("project.multi_body_count", project.objects.size() >= 2,
+             "multi_body needs at least two simulation objects");
+        bool massesOk = true;
+        bool initialsOk = true;
+        for (const auto& object : project.objects) {
+            if (object.massKg <= 0.0 || !std::isfinite(object.massKg)) {
+                massesOk = false;
+            }
+            if (!finiteState(object.initial)) {
+                initialsOk = false;
+            }
+        }
+        rule("project.multi_body_masses_positive", massesOk,
+             "Every object needs a positive finite mass_kg");
+        rule("project.multi_body_initials_finite", initialsOk,
+             "Every object initial state must be finite");
+        rule("project.spring_stiffness_positive",
+             std::isfinite(project.springKNm) && project.springKNm > 0.0,
+             "spring_k_n_m must be positive finite");
+        rule("project.rest_length_positive",
+             std::isfinite(project.restLengthM) && project.restLengthM > 0.0,
+             "rest_length_m must be positive finite");
+    } else if (project.type == "basic_dynamics") {
         rule("project.mass_positive", project.massKg > 0.0,
              "mass_kg must be positive for basic_dynamics");
         rule("project.force_mass_model", project.model == "force_mass",
@@ -80,11 +133,12 @@ ProjectValidation validateProject(const SimulationProject& project) {
     } else {
         rule("project.supported_type", false,
              "Unsupported simulation type '" + project.type +
-                 "'; supported: kinematics, basic_dynamics");
+                 "'; supported: kinematics, basic_dynamics, multi_body");
     }
-    if (project.objects.size() > 1) {
+
+    if (project.objects.size() > 1 && project.type != "multi_body") {
         rule("project.single_object", false,
-             "V1 supports exactly one simulation object per project");
+             "Single-body models mirror exactly objects[0]");
     }
 
     rule("project.step_count", validateStepCount(project.dt, project.durationS) >= 0,
@@ -140,6 +194,48 @@ ResultChecks validateResult(const SimulationProject& project, const SimulationRe
         out.details["max_position_error_m"] = maxErr;
         if (!out.closedFormAgreement) {
             out.message = "Closed-form position agreement failed";
+            return out;
+        }
+    } else if (project.type == "multi_body" && !result.downsampled &&
+               result.samples.size() >= 2) {
+        // Energy conservation for the undamped spring chain: RK4 must
+        // close E_final ≈ E_initial (1% relative tolerance).
+        std::vector<double> masses;
+        std::vector<SimulationState> initialStates;
+        for (const auto& object : project.objects) {
+            masses.push_back(object.massKg);
+            initialStates.push_back(object.initial);
+        }
+        if (masses.empty()) {
+            masses.push_back(project.massKg);
+            initialStates.push_back(project.initial);
+        }
+        std::vector<SimulationState> finalStates;
+        bool parsedFinal = result.summary.contains("final_states") &&
+                           result.summary["final_states"].is_array();
+        if (parsedFinal) {
+            for (const auto& item : result.summary["final_states"]) {
+                finalStates.push_back(SimulationState::fromJson(item));
+            }
+        }
+        const double e0 =
+            kineticEnergyJ(masses, initialStates) +
+            springPotentialEnergyJ(project, initialStates);
+        double e1 = e0;
+        if (parsedFinal && finalStates.size() == masses.size()) {
+            e1 = kineticEnergyJ(masses, finalStates) +
+                 springPotentialEnergyJ(project, finalStates);
+        } else {
+            out.closedFormAgreement = false;
+            out.message = "Result summary lacks spring-chain final states";
+            return out;
+        }
+        out.details["initial_energy_J"] = e0;
+        out.details["final_energy_J"] = e1;
+        const double scale = std::max(std::fabs(e0), 1.0);
+        out.closedFormAgreement = std::fabs(e1 - e0) <= 0.01 * scale;
+        if (!out.closedFormAgreement) {
+            out.message = "Spring-chain energy conservation failed";
             return out;
         }
     } else if (project.type == "basic_dynamics" && !result.downsampled &&

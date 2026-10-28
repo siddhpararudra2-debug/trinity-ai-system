@@ -194,6 +194,9 @@ core::Json SimulationProject::toJson() const {
                       {"model", model},
                       {"dt", dt},
                       {"duration_s", durationS},
+                      {"method", method},
+                      {"spring_k_n_m", springKNm},
+                      {"rest_length_m", restLengthM},
                       {"initial", initial.toJson()},
                       {"mass_kg", massKg},
                       {"force_N", forceN.toJson()},
@@ -215,6 +218,9 @@ SimulationProject SimulationProject::fromJson(const core::Json& json) {
     out.model = json.value("model", "");
     out.dt = json.value("dt", kDefaultDt);
     out.durationS = json.value("duration_s", kDefaultDurationS);
+    out.method = json.value("method", "semi_implicit_euler");
+    out.springKNm = json.value("spring_k_n_m", 10.0);
+    out.restLengthM = json.value("rest_length_m", 1.0);
     out.initial = SimulationState::fromJson(json.value("initial", core::Json::object()));
     out.massKg = json.value("mass_kg", 1.0);
     out.forceN = Vec3::fromJson(json.value("force_N", core::Json::object()));

@@ -56,9 +56,9 @@ struct SimulationState {
     static SimulationState fromJson(const core::Json& json);
 };
 
-/// One simulated body. V1 supports exactly one object per project;
-/// the container exists so multi-body models can be added later
-/// without changing the IR shape.
+/// One simulated body. Multi-body models (e.g. the spring chain)
+/// define several objects; single-body models mirror body 0 into the
+/// project shorthand fields.
 struct SimulationObject {
     std::string objectId;
     std::string name;
@@ -98,14 +98,21 @@ struct SimulationOutput {
 struct SimulationProject {
     std::string projectId;
     std::string name;
-    std::string type;   // "kinematics" | "basic_dynamics"
-    std::string model;  // "linear_motion" | "projectile" | "constant_acceleration" | "force_mass"
+    std::string type;   // "kinematics" | "basic_dynamics" | "multi_body"
+    std::string model;  // "linear_motion" | "projectile" | "constant_acceleration" | "force_mass" | "spring_chain"
     SimulationTime dt = 0.01;
     SimulationTime durationS = 1.0;
     SimulationState initial;
     double massKg = 1.0;
     Vec3 forceN;
     double gravity = 9.80665;
+    /// Numerical integrator for the stepwise models
+    /// ("semi_implicit_euler" | "rk4"). Closed-form kinematics ignore it.
+    std::string method = "semi_implicit_euler";
+    /// Spring chain couplings (multi_body / spring_chain): every pair of
+    /// adjacent objects shares the same Hooke constant and rest length.
+    double springKNm = 10.0;
+    double restLengthM = 1.0;
     core::Json originalUnits = core::Json::object();
 
     // IR containers: the single simulated body is mirrored into
@@ -135,7 +142,7 @@ struct SimulationResult {
     std::string projectId;
     std::string type;
     std::string model;
-    std::string method;  // "closed_form" | "semi_implicit_euler"
+    std::string method;  // "closed_form" | "semi_implicit_euler" | "rk4"
     double dt = 0.0;
     double durationS = 0.0;
     long long stepCount = 0;
