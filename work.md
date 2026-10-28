@@ -28,5 +28,5 @@
 ### Stage 6: M9 — Packaging & Standalone Distribution (in progress)
 14. [x] Qt standalone bundle: `windeployqt` + OpenCV DLLs (`packaging/bundle_native.ps1`, hermetic PATH-scrubbed `--selftest`) → commit `e122ba0`; native engine also wired into the portable dist
 15. [x] Python backend bundling: PyInstaller onedir FastAPI bundle serving the Next.js static export (`packaging/trinity-api.spec`, `TRINITY_UI_DIR` mount, frozen smoke green) → commits `8edfc04`/`3ac8f21`/`829ef6e`; portable zip assembled + smoke-verified
-16. [ ] Windows installer: Inno Setup package (installs to %LOCALAPPDATA%\Programs, Start Menu shortcut, post-install smoke)
-17. [ ] CI: GitHub Actions release workflow (native release-vcpkg build → static export → PyInstaller → windeployqt → zip + installer → SHA-256 manifest → GitHub Release)
+16. [x] Windows installer: Inno Setup 6 (`packaging/installer.iss`, per-user `%LOCALAPPDATA%\Programs\TrinityAI`, Start Menu shortcut; `build_installer.ps1` silent-installs into a scratch dir and runs the same bundle smoke against the *installed* copy — `SMOKE OK` before the setup exe counts) → commit `d458477`
+17. [x] CI: `.github/workflows/release.yml` on `v*` tags — release-vcpkg build with doctests + `--selftest`, frontend static export, PyInstaller, windeployqt, portable zip, installer, SHA-256 manifest, GitHub Release upload → commit `48ff1cf`

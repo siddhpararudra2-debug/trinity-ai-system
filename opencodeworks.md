@@ -33,8 +33,8 @@ _Nothing in progress._
   - [x] Qt standalone bundle: `packaging/bundle_native.ps1` (14 vcpkg/OpenCV DLLs + windeployqt Qt6 runtime; hermetic selftest with system PATH fully scrubbed — `bundle --selftest passed` with zero Qt on PATH) → commit `e122ba0`
   - [x] Portable distribution: `packaging/package.ps1` assembles `dist/TrinityAI-1.0.0-win64/` (native/ + api/ + web/ + `Trinity.bat` launcher) and smoke-tests it end to end (`SMOKE OK: health ok; ui served; chat route ok; engine probe ok`), zips `TrinityAI-1.0.0-win64.zip` → commit `829ef6e`
   - [x] `packaging/smoke_bundle.py` committed; smoke gitignore narrowed (`packaging/smoke-data/`, `packaging/smoke.log`) → commit `5f666d2`
-  - [ ] Windows installer (Inno Setup)
-  - [ ] CI release workflow
+  - [x] Windows installer: Inno Setup 6 (`packaging/installer.iss` + `build_installer.ps1`; per-user `%LOCALAPPDATA%\Programs\TrinityAI`, Start Menu shortcut, silent-install + installed-build smoke verified) → commit `d458477`
+  - [x] CI release workflow: `.github/workflows/release.yml` on `v*` tags (portable zip + installer + SHA256SUMS attached to the GitHub Release only after every smoke gate passes) → commit `48ff1cf`; README install-from-release section → commit `9048b58`; Stage 6 closed, 348 passed / 24 skipped, ruff clean
 
 ---
 
