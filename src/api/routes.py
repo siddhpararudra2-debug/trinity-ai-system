@@ -41,10 +41,12 @@ from src.models.schemas import (
     RequirementRequest,
     StreamPlanRequest,
     ToolResponse,
+    UpdateApplyRequest,
     WorkflowExecuteRequest,
     WorkflowExecuteResponse,
     WorkflowNodeResult,
 )
+from src.core.updater import UpdateInfo, apply_update, check_updates
 from src.workflows.dag import WorkflowNode, ordered as ordered_nodes
 
 router = APIRouter(prefix="/api")
@@ -474,3 +476,55 @@ async def execute_workflow(req: WorkflowExecuteRequest) -> dict:
             overall_success = False
 
     return WorkflowExecuteResponse(success=overall_success, nodes=output).model_dump()
+
+
+# ------------------------------------------------- M13: self-update ---
+
+
+@router.get("/update/check")
+async def update_check() -> dict:
+    """Honest availability answer; never downloads, never auto-applies."""
+    info = await asyncio.to_thread(check_updates)
+    if isinstance(info, UpdateInfo):
+        return {
+            "available": True,
+            "version": info.version,
+            "published_at": info.published_at,
+            "size_bytes": info.size_bytes,
+            "sha256": info.sha256,
+        }
+    # dict path: it already carries 'available': False plus a reason.
+    return info
+
+
+@router.post("/update/apply")
+async def update_apply(req: UpdateApplyRequest) -> dict:
+    """User-initiated only: prepare a hash-verified staged update.
+
+    The swap itself happens at the next launcher boot (the running
+    process cannot replace its own files on Windows).
+    """
+    if not req.confirm:
+        return {
+            "success": False,
+            "errors": [{
+                "code": "confirmation_required",
+                "message": "POST /api/update/apply requires {\"confirm\": true}",
+            }],
+        }
+    info = await asyncio.to_thread(check_updates)
+    if not isinstance(info, UpdateInfo):
+        return {
+            "success": False,
+            "errors": [{
+                "code": "no_update_ready",
+                "message": str(info.get("reason", "no update available")),
+            }],
+        }
+    try:
+        result = await asyncio.to_thread(apply_update, info)
+    except ValueError as exc:
+        return {"success": False, "errors": [{"code": "update_rejected", "message": str(exc)}]}
+    except Exception as exc:  # noqa: BLE001 - network/download failures surface honestly
+        return {"success": False, "errors": [{"code": "update_failed", "message": str(exc)}]}
+    return {"success": True, **result}

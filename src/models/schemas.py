@@ -199,3 +199,8 @@ class WorkflowExecuteResponse(BaseModel):
     success: bool
     nodes: list[WorkflowNodeResult] = Field(default_factory=list)
     errors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class UpdateApplyRequest(BaseModel):
+    # Explicit opt-in: the updater never applies without this flag.
+    confirm: bool = False

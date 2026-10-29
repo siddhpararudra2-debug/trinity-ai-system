@@ -10,6 +10,8 @@ asserts, in order:
   5. the OpenCascade kernel works IN THE BUNDLE: the catalog reports
      step as available and a real STEP export produces OCCT stats
      (M11 - the bundle without a working kernel fails the smoke)
+  6. the updater route answers with the availability shape (M13 -
+     offline is fine: available:false with a reason)
 
 Exit code 0 only when every step really answered -- the same rule the
 desktop startup probe follows.
@@ -143,6 +145,16 @@ def main() -> int:
         findings.append(
             "step export ok (volume_mm3={:.1f}, kernel={})".format(
                 step_stats["volume_mm3"], step_stats.get("kernel", "?")))
+
+        # --- M13: the updater route must answer, and honestly -----------
+        # Offline runner: 'available': False with a reason is fine - the
+        # route must EXIST and respond with the availability shape.
+        code, body = _get(f"{base}/api/update/check", timeout=30)
+        if code != 200 or '"available"' not in body:
+            print(f"FAIL: /api/update/check answered {code}: "
+                  f"{body[:120]}", file=sys.stderr)
+            return 1
+        findings.append("update route ok")
     finally:
         proc.terminate()
         proc.wait(timeout=10)

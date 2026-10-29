@@ -109,6 +109,9 @@ if ($tkDlls.Count -eq 0) {
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "api") | Out-Null
 Copy-Item (Join-Path $PSScriptRoot "dist/trinity-api/*") (Join-Path $stage "api") -Recurse -Force
+# M13: stamp the version the running installation reports. The updater
+# compares this against the release manifest.
+Set-Content -Path (Join-Path $stage "api/_internal/config/app_version.txt") -Value $Version -Encoding Ascii
 
 # 3. UI: the Next.js static export (build it when missing/asked fresh).
 Write-Host "==> web"
@@ -133,6 +136,27 @@ Copy-Item (Join-Path $root "frontend/out/*") (Join-Path $stage "web") -Recurse -
 # 4. Launcher: set the bundle environment, then start the single API
 # process that serves the UI and the native bridge.
 Write-Host "==> launcher"
+$bat = ("@echo off
+setlocal
+set HERE=%~dp0
+if `"%TRINITY_API_PORT%`"==`"`" set TRINITY_API_PORT=8000
+set TRINITY_UI_DIR=%HERE%web
+set TRINITY_NATIVE_EXEC=%HERE%native\Trinity.exe
+set TRINITY_QT_BIN=%HERE%native
+set TRINITY_APP_VERSION=" + $Version + @"
+if "%TRINITY_STORAGE_ROOT%"=="" set TRINITY_STORAGE_ROOT=%LOCALAPPDATA%\TrinityAI\data
+rem M13: consume a prepared update before booting (marker under TRINITY_STORAGE_ROOT).
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%swap_pending.ps1"
+echo Starting Trinity AI (api port %TRINITY_API_PORT%)...
+start "Trinity AI" /D "%HERE%api" trinity-api.exe
+timeout /t 4 /nobreak >nul
+start "" http://127.0.0.1:%TRINITY_API_PORT%/
+endlocal
+"@) -replace ([char]14 + ""), "`""
+
+Wait — no, cleaner: use a literal placeholder and replace. Writing it as single-quoted here-string with a %VERSION% placeholder then -replace "%VERSION%", $Version.</think><tool_call>edit<arg_key>newString</arg_key><arg_value># 4. Launcher: set the bundle environment, then start the single API
+# process that serves the UI and the native bridge.
+Write-Host "==> launcher"
 $bat = @'
 @echo off
 setlocal
@@ -141,14 +165,20 @@ if "%TRINITY_API_PORT%"=="" set TRINITY_API_PORT=8000
 set TRINITY_UI_DIR=%HERE%web
 set TRINITY_NATIVE_EXEC=%HERE%native\Trinity.exe
 set TRINITY_QT_BIN=%HERE%native
+set TRINITY_APP_VERSION=%%VERSION%%
 if "%TRINITY_STORAGE_ROOT%"=="" set TRINITY_STORAGE_ROOT=%LOCALAPPDATA%\TrinityAI\data
+rem M13: consume a prepared update before booting (marker under TRINITY_STORAGE_ROOT).
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%swap_pending.ps1"
 echo Starting Trinity AI (api port %TRINITY_API_PORT%)...
 start "Trinity AI" /D "%HERE%api" trinity-api.exe
 timeout /t 4 /nobreak >nul
 start "" http://127.0.0.1:%TRINITY_API_PORT%/
 endlocal
 '@
+$bat = $bat.Replace("%%VERSION%%", $Version)
 Set-Content -Path (Join-Path $stage "Trinity.bat") -Value $bat -Encoding Ascii
+# The swap script rides at the install root so the launcher can find it.
+Copy-Item (Join-Path $PSScriptRoot "swap_pending.ps1") $stage -Force
 
 # 5. End-to-end smoke of the assembled layout.
 Write-Host "==> smoke"
