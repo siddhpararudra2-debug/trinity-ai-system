@@ -9,16 +9,33 @@
 #     API routes all reach the frozen importer.
 #
 # Exclusions honest-bundle rule: test/dev tooling (pytest, ruff) and the
-# desktop-window dependency (pywebview/webview) never ship; the CAD
-# OpenCascade kernel is an optional extra and stays out — the catalog
-# reports step as unavailable with a reason, as designed.
-
+# desktop-window dependency (pywebview/webview) never ship.
+#
+# M11: the OpenCascade kernel IS carried in (the `cad` extra must be
+# installed in the build env). The OCP submodules step.py imports lazily
+# are declared explicitly so the frozen importer finds them regardless
+# of hook coverage, and the OCP wheels' TK*.dll dependencies reach
+# _internal/ through PyInstaller's binary dependency scan.
 a = Analysis(
     ["trinity_api.py"],
     pathex=["."],
     binaries=[],
     datas=[("..\\config", "config")],
-    hiddenimports=["uvicorn.logging", "uvicorn.loops.auto"],
+    hiddenimports=[
+        "uvicorn.logging",
+        "uvicorn.loops.auto",
+        "OCP",
+        "OCP.BRep",
+        "OCP.BRepBuilderAPI",
+        "OCP.BRepGProp",
+        "OCP.GProp",
+        "OCP.gp",
+        "OCP.Interface",
+        "OCP.STEPControl",
+        "OCP.TopAbs",
+        "OCP.TopExp",
+        "OCP.TopoDS",
+    ],
     excludes=[
         "pytest",
         "ruff",
@@ -28,6 +45,7 @@ a = Analysis(
         "cv2",
         "matplotlib",
         "IPython",
+        "cadquery",  # the app imports only OCP; keep cadquery's extras out
     ],
     noarchive=False,
 )

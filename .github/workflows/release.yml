@@ -99,10 +99,13 @@ jobs:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-opencv4-${{ runner.os }}-${{ hashFiles('app/native/vcpkg.json') }}
 
-      - name: Install Python dependencies (incl. PyInstaller)
+      - name: Install Python dependencies (incl. PyInstaller + OpenCascade)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # M11: the STEP kernel rides in the bundle; OCP must be importable
+          # at build time so PyInstaller's analysis collects it + TK DLLs.
+          pip install ".[cad]"
           python -m pip install pyinstaller
 
       - name: Setup Node (frontend static export)

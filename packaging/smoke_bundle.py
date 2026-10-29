@@ -7,6 +7,9 @@ asserts, in order:
   2. / serves the static UI
   3. /chat resolves through the .html retry
   4. an engine execution answers through the bundled native bridge
+  5. the OpenCascade kernel works IN THE BUNDLE: the catalog reports
+     step as available and a real STEP export produces OCCT stats
+     (M11 - the bundle without a working kernel fails the smoke)
 
 Exit code 0 only when every step really answered -- the same rule the
 desktop startup probe follows.
@@ -110,6 +113,36 @@ def main() -> int:
             print(f"FAIL: engine probe refused: {out.get('errors')}", file=sys.stderr)
             return 1
         findings.append("engine probe ok")
+
+        # --- M11: the bundled OpenCascade kernel must genuinely work ------
+        # The catalog is pure registry read; `step` flips to available only
+        # when OCP imports inside the frozen bundle.
+        with urllib.request.urlopen(f"{base}/api/cad/catalog", timeout=30) as resp:
+            catalog = json.loads(resp.read())
+        step_avail = (catalog.get("outputs") or {}).get("step", {})
+        if not step_avail.get("available"):
+            print(f"FAIL: catalog does not report step available "
+                  f"(kernel missing in bundle): {step_avail}", file=sys.stderr)
+            return 1
+        findings.append("kernel catalog ok")
+
+        body = json.dumps({
+            "engine": "cad", "operation": "generate",
+            "parameters": {"outputs": ["step"]},
+        }).encode()
+        req = urllib.request.Request(
+            f"{base}/api/execute", data=body,
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            out = json.loads(resp.read())
+        step_stats = (out.get("result") or {}).get("step") or {}
+        if resp.status != 200 or not out.get("success") or not step_stats.get("volume_mm3"):
+            print(f"FAIL: bundled STEP export refused or empty: "
+                  f"{out.get('errors') or step_stats}", file=sys.stderr)
+            return 1
+        findings.append(
+            "step export ok (volume_mm3={:.1f}, kernel={})".format(
+                step_stats["volume_mm3"], step_stats.get("kernel", "?")))
     finally:
         proc.terminate()
         proc.wait(timeout=10)
