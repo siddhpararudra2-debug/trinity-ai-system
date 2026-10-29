@@ -215,6 +215,9 @@ jobs:
             "packaging/dist/TrinityAI-$env:VERSION-win64.zip" `
             "packaging/dist/TrinityAI-$env:VERSION-win64-setup.exe" `
             "packaging/dist/SHA256SUMS.txt"
+          # Re-pointing the tag (delete + push) flips the release to draft,
+          # which makes its assets 404 for public downloaders. Re-publish.
+          gh release edit "v$env:VERSION" --draft=false --latest=true
 
       # M10 gate: the artifacts must be verified AS PUBLISHED. Download the
       # release assets back from the public Release page (exactly what a user
