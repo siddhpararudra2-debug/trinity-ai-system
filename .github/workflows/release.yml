@@ -46,7 +46,9 @@ jobs:
           version: '6.8.3'
           arch: 'win64_msvc2022_64'
           dir: 'C:/Qt'
-          cache: true
+          # The action's own cache can restore a pre-'dir:' install at the
+          # old default path; a fresh 2-min install beats a wrong layout.
+          cache: false
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -114,38 +116,38 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: "Resolve windeployqt (dir: C:/Qt makes the layout identical to local)"
+      - name: "Resolve windeployqt"
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Continue"
-          $candidates = @('C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe')
-          if ($env:Qt6_DIR) {
-            try {
-              $root = (Resolve-Path (Join-Path $env:Qt6_DIR '..\..\..')).Path
-              $candidates += (Join-Path $root 'bin/windeployqt.exe')
-            } catch { $candidates += ("resolve-failed: {0}" -f $_) }
+          $found = $null
+          # 1) install-qt-action prepends Qt's bin dir to PATH.
+          $w = (& where.exe windeployqt.exe 2>$null) | Select-Object -First 1
+          if ($w) { $found = $w.Trim() }
+          # 2) QT_ROOT_DIR is set by install-qt-action; bin sits under it.
+          if (-not $found -and $env:QT_ROOT_DIR) {
+            $cand = Join-Path $env:QT_ROOT_DIR 'bin/windeployqt.exe'
+            if (Test-Path $cand) { $found = $cand }
           }
-          $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          # 3) Brute force the pinned install root, whatever the layout is.
+          if (-not $found -and (Test-Path 'C:/Qt')) {
+            $hit = Get-ChildItem 'C:/Qt' -Recurse -Depth 4 -Filter 'windeployqt.exe' -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($hit) { $found = $hit.FullName }
+          }
           if (-not $found) {
             # Definitive diagnosis: dump the runner's Qt state into a public
             # gist (job logs are not readable without a repo token).
             $dump = @("cwd=$(Get-Location)")
-            Get-ChildItem env: | Where-Object { $_.Name -match '^QT' -or $_.Name -match '^GITHUB_WORK' -or $_.Name -eq 'Qt6_Dir' } |
+            Get-ChildItem env: | Where-Object { $_.Name -match '^QT' -or $_.Name -match '^GITHUB_WORK' } |
               ForEach-Object { $dump += ("{0}={1}" -f $_.Name, $_.Value) }
-            foreach ($base in @('C:/Qt', "$env:GITHUB_WORKSPACE/Qt", "$env:RUNNER_TEMP")) {
-              if (Test-Path $base) {
-                Get-ChildItem $base -Depth 3 -ErrorAction SilentlyContinue |
-                  Select-Object -First 60 -ExpandProperty FullName |
-                  ForEach-Object { $dump += $_ }
-              }
-            }
-            $dump += "where.exe: $(& where.exe windeployqt.exe 2>$null)"
             $file = Join-Path $env:RUNNER_TEMP "wqt-debug.txt"
             $dump | Set-Content -Path $file -Encoding utf8
             $gist = (& gh gist create -p -f -d "wqt-debug-run-${{ github.run_number }}" $file 2>&1 | Out-String).Trim()
-            Write-Output ("::error ::windeployqt NOT FOUND (Qt6_DIR={0})" -f $env:Qt6_DIR)
+            Write-Output ("::error ::windeployqt NOT FOUND (QT_ROOT_DIR={0})" -f $env:QT_ROOT_DIR)
             Write-Output "::error ::debug gist: $gist"
-            [Console]::Out.WriteLine("::error ::gist2: $gist")
             exit 1
           }
           Write-Host ("windeployqt at {0}" -f $found)
