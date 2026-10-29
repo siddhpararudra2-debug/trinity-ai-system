@@ -10,8 +10,29 @@ change it describes — never on its own.
 
 ## In progress
 
-_Nothing in progress. Next up: **Stage 7 — release hardening + engine/CAD depth**
-(docs/ROADMAP.md, M10–M14; M10 = tag `v1.0.0` and prove the release pipeline on a real run)._
+**Stage 7 — M10 closed `v0.9.0` (release pipeline proven as published, run 9 green, `a1479fe`).**
+Next up: **M11 — OpenCascade `[cad]` extra carried into the PyInstaller bundle;
+bundle smoke executes a real STEP export** (docs/ROADMAP.md).
+
+Highlights of the M10 loop (9 release runs, 10 CI runs, all fixed forward):
+
+- CI: Linux-portability of the daemon spawn test (`os.pathsep`, absolute fake
+  exe) got Backend tests green on Ubuntu — run 161 all-jobs-pass.
+- Release: Inno Setup installed on the runner with `TRINITY_ISCC` discovery;
+  windeployqt resolved via `where.exe` / `QT_ROOT_DIR` / `C:\Qt` glob with the
+  Qt action cache disabled (`dir: C:/Qt` pin takes real effect); vcpkg binary
+  cache save/restore split now persists across failed runs (12-13 min runs).
+- Diagnostics: pytest tail + packaging failures surface as job annotations
+  (short stdout lines; pwsh `-split` chunks were being dropped), plus a
+  github-gist dump path with `GH_TOKEN` for state probing.
+- Gate: the workflow downloads its own published assets back from the public
+  Release page, re-verifies SHA256SUMS, unzips, and runs the full bundle smoke
+  — `M10 GATE PASS` is now an enforced step, not a manual promise. Lesson:
+  deleting/re-pushing a tag flips the release to draft (assets 404); the
+  pipeline re-publishes it (`gh release edit --draft=false --latest=true`).
+- Local: `packaging/verify_release.ps1` re-runs the same gate from any machine
+  (this machine's ISP currently blackholes `release-assets.githubusercontent.com`
+  — TCP connects, body never flows; the runner-side gate covers it).
 
 ---
 

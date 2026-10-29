@@ -38,8 +38,8 @@
 21. [x] README documentation cross-links section
 
 ### Stage 7: Release Hardening + Engine/CAD Depth (queued — see docs/ROADMAP.md)
-22. [ ] M10 — tag `v1.0.0`, watch the release workflow's first real run, download-published-artifacts smoke; fix what it trips over
-23. [ ] M11 — OpenCascade `[cad]` extra carried into the PyInstaller bundle; bundle smoke executes a real STEP export
+22. [x] M10 - tag `v0.9.0` (pipeline-test tag per agreed policy, not `v1.0.0`); release workflow green end-to-end (run 9, `a1479fe`): native build, doctests, bundle smoke, Inno Setup installer, SHA-256 manifest, publish, then **prove-as-published gate** — assets downloaded back from the public Release page, SHA256SUMS re-verified, full smoke run against the unzipped published bundle. Fixed along the way: Linux-portability of the daemon spawn test (runs 152-160), Inno Setup runner install (`76ef109`), windeployqt resolution (runs 1-5), pwsh annotation reporting, tag-delete-leaves-draft-release 404s
+23. [ ] M11 - OpenCascade `[cad]` extra carried into the PyInstaller bundle; bundle smoke executes a real STEP export
 24. [ ] M12 — code signing for `Trinity.exe` + `setup.exe` (cert type + renewal policy decided up front); manifest generated after signing
 25. [ ] M13 — auto-update: `latest.yml` manifest per release, version/availability endpoint, user-initiated verified download + restart, data preserved
 26. [ ] M14 — CAD depth, one commit per op: nesting/plate packing, drawings/assembly export, parameter families (catalog honesty rule applies)
