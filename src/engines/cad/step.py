@@ -51,6 +51,12 @@ _KERNEL_MISSING = (
 )
 
 
+# Last OCP import failure, as text ("ImportError: No module named OCP" /
+# "ImportError: DLL load failed while importing BRep: ..."). _occt()
+# clears it when a later import succeeds and records it when one fails.
+_import_cause: list[str] = []
+
+
 @functools.lru_cache(maxsize=1)
 def _occt() -> tuple[Any, ...]:
     """Import the OpenCascade bindings once, or refuse with the reason.
@@ -74,10 +80,20 @@ def _occt() -> tuple[Any, ...]:
         from OCP.TopoDS import TopoDS, TopoDS_Compound  # noqa: PLC0415
         from OCP.TopAbs import TopAbs_SHELL, TopAbs_SOLID  # noqa: PLC0415
         from OCP.TopExp import TopExp_Explorer  # noqa: PLC0415
+        _import_cause.clear()
     except ImportError as exc:
+        # The exact underlying cause (module absent vs DLL load failure)
+        # is what the catalog reason reports - it is the difference
+        # between a packaging omission and a runtime link problem, so
+        # never blur it back into the generic canned message.
+        _import_cause[:] = [f"{type(exc).__name__}: {exc}"]
         raise CapabilityUnavailableError(
             _KERNEL_MISSING,
-            details={"code": "CAD_KERNEL_UNAVAILABLE", "format": "step"},
+            details={
+                "code": "CAD_KERNEL_UNAVAILABLE",
+                "format": "step",
+                "cause": _import_cause[0],
+            },
         ) from exc
     return (
         BRepBuilderAPI_MakeFace,
@@ -97,6 +113,14 @@ def _occt() -> tuple[Any, ...]:
         TopAbs_SOLID,
         TopExp_Explorer,
     )
+
+
+def _occt_reason() -> str:
+    """Why the kernel is unavailable - the generic text plus the cause."""
+    text = _KERNEL_MISSING
+    if _import_cause:
+        text = f"{text} (cause: {_import_cause[0]})"
+    return text
 
 
 def kernel_available() -> bool:
@@ -134,7 +158,7 @@ def kernel_info() -> dict[str, Any]:
     if available:
         info["kernel"] = f"opencascade {kernel_version()}"
     else:
-        info["reason"] = _KERNEL_MISSING
+        info["reason"] = _occt_reason()
     return info
 
 

@@ -49,6 +49,22 @@ try {
 if (-not (Test-Path (Join-Path $PSScriptRoot "dist/trinity-api/trinity-api.exe"))) {
     throw "PyInstaller produced no trinity-api.exe"
 }
+# M11 proof point: the kernel must have been collected, and separately
+# its TK DLL payload must have followed it. Distinguish these two so a
+# runner failure says exactly which half is broken.
+$internal = Join-Path $PSScriptRoot "dist/trinity-api/_internal"
+$ocpPyds = @(Get-ChildItem $internal -Recurse -Filter "*.pyd" |
+    Where-Object { $_.Directory.Name -eq "OCP" -or $_.Name -like "OCP*" })
+$tkDlls = @(Get-ChildItem $internal -Recurse -Filter "TK*.dll")
+Write-Host ("OCP collected: {0} pyd, {1} TK dll" -f $ocpPyds.Count, $tkDlls.Count)
+if ($ocpPyds.Count -eq 0) {
+    Write-Output ("::error ::OCP was NOT collected: the build env lacks OpenCascade (pip install '.[cad]') or analysis failed")
+    exit 1
+}
+if ($tkDlls.Count -eq 0) {
+    Write-Output "::error ::OCP pyds collected but no TK*.dll - binary dependency scan failed"
+    exit 1
+}
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "api") | Out-Null
 Copy-Item (Join-Path $PSScriptRoot "dist/trinity-api/*") (Join-Path $stage "api") -Recurse -Force
 

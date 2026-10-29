@@ -106,6 +106,7 @@ jobs:
           # M11: the STEP kernel rides in the bundle; OCP must be importable
           # at build time so PyInstaller's analysis collects it + TK DLLs.
           pip install ".[cad]"
+          python -c "import OCP; print('build-env OCP ok:', OCP.__file__)"
           python -m pip install pyinstaller
 
       - name: Setup Node (frontend static export)
