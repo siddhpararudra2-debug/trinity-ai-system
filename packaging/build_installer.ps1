@@ -76,3 +76,28 @@ try {
 }
 
 Write-Host ("==> installer ready: {0}" -f (Join-Path $PSScriptRoot ("dist\TrinityAI-" + $Version + "-win64-setup.exe")))
+
+# M12: sign the installer AFTER its silent-verify but BEFORE the release
+# hash manifest hashes it - manifest bytes = published bytes.
+if (-not $env:TRINITY_SIGN_PFX_TARGET) { $env:TRINITY_SIGN_PFX_TARGET = "" }
+$signPfx = $env:TRINITY_SIGN_PFX
+$signPw = $env:TRINITY_SIGN_PFX_PASSWORD
+$signArgs = @{
+    Files = (Join-Path $PSScriptRoot ("dist\TrinityAI-" + $Version + "-win64-setup.exe"))
+}
+if ($signPfx -and $env:TRINITY_SIGN_PFX_TARGET -eq "base64") {
+    $sArg = Join-Path ([System.IO.Path]::GetTempPath()) "trinity-sign.pfx"
+    [IO.File]::WriteAllBytes($sArg, [Convert]::FromBase64String($signPfx))
+    $signArgs.PfxPath = $sArg
+    $signArgs.PfxPassword = $signPw
+} elseif ($signPfx) {
+    $signArgs.PfxPath = $signPfx
+    $signArgs.PfxPassword = $signPw
+}
+if ($signArgs.PfxPath) {
+    powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "sign_files.ps1") @signArgs |
+        ForEach-Object { Write-Host ("    {0}" -f $_) }
+    if ($LASTEXITCODE -ne 0) { throw "signing the installer failed" }
+} else {
+    Write-Host "    installer left unsigned: no TRINITY_SIGN_PFX configured"
+}

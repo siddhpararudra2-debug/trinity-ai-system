@@ -159,6 +159,11 @@ jobs:
 
       - name: Assemble portable distribution (bundle + smoke + zip)
         shell: pwsh
+        # M12: signing secret, if configured; else an honest unsigned build.
+        env:
+          TRINITY_SIGN_PFX: ${{ secrets.TRINITY_SIGN_PFX }}
+          TRINITY_SIGN_PFX_PASSWORD: ${{ secrets.TRINITY_SIGN_PFX_PASSWORD }}
+          TRINITY_SIGN_PFX_TARGET: ${{ secrets.TRINITY_SIGN_PFX_TARGET }}
         run: |
           $out = & powershell -ExecutionPolicy Bypass -File packaging/package.ps1 `
             -Version ${{ steps.ver.outputs.version }} -WinDeployQt "$env:TRINITY_WINDEPLOYQT" 2>&1
@@ -187,6 +192,10 @@ jobs:
 
       - name: Build installer (silent-install verified)
         shell: pwsh
+        env:
+          TRINITY_SIGN_PFX: ${{ secrets.TRINITY_SIGN_PFX }}
+          TRINITY_SIGN_PFX_PASSWORD: ${{ secrets.TRINITY_SIGN_PFX_PASSWORD }}
+          TRINITY_SIGN_PFX_TARGET: ${{ secrets.TRINITY_SIGN_PFX_TARGET }}
         run: powershell -ExecutionPolicy Bypass -File packaging/build_installer.ps1 -Version ${{ steps.ver.outputs.version }}
 
       - name: Create SHA-256 manifest

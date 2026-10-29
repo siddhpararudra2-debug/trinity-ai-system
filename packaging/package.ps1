@@ -6,7 +6,12 @@
 param(
     [string]$NativeExe = "app/native/build/release-vcpkg/Release/Trinity.exe",
     [string]$Version = "",
-    [string]$WinDeployQt = ""
+    [string]$WinDeployQt = "",
+    # M12: signing. PFX from a secret (base64) or plain path; empty = an
+    # honest unsigned build. Signing happens BEFORE the smoke and the zip
+    # so hashes and the manifest describe the signed bytes.
+    [string]$SignPfx = "",
+    [string]$SignPfxPassword = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +36,29 @@ if ($WinDeployQt) { $bnArgs.WinDeployQt = $WinDeployQt }
 powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "bundle_native.ps1") @bnArgs |
     ForEach-Object { Write-Host ("    {0}" -f $_) }
 if ($LASTEXITCODE -ne 0) { throw "native bundling failed" }
+
+# 1b. sign the shipped engine exe BEFORE any hashing/compression (M12).
+# TRINITY_SIGN_PFX_TARGET=pfx marks the secret as a base64-encoded PFX;
+# any other non-empty value is used as a plain certificate file path.
+if (-not $SignPfx) { $SignPfx = $env:TRINITY_SIGN_PFX }
+if (-not $SignPfxPassword) { $SignPfxPassword = $env:TRINITY_SIGN_PFX_PASSWORD }
+$signArgs = @{ Files = (Join-Path $stage "native\Trinity.exe") }
+if ($SignPfx -and $env:TRINITY_SIGN_PFX_TARGET -eq "base64") {
+    $sArg = Join-Path $env:TEMP "trinity-sign.pfx"
+    [IO.File]::WriteAllBytes($sArg, [Convert]::FromBase64String($SignPfx))
+    $signArgs.PfxPath = $sArg
+    $signArgs.PfxPassword = $SignPfxPassword
+} elseif ($SignPfx) {
+    $signArgs.PfxPath = $SignPfx
+    $signArgs.PfxPassword = $SignPfxPassword
+}
+if ($signArgs.PfxPath) {
+    powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "sign_files.ps1") @signArgs |
+        ForEach-Object { Write-Host ("    {0}" -f $_) }
+    if ($LASTEXITCODE -ne 0) { throw "signing failed" }
+} else {
+    Write-Host "    unsigned build: no TRINITY_SIGN_PFX configured (waiting on the M12 certificate)"
+}
 
 # 2. backend: frozen uvicorn process.
 Write-Host "==> api"
