@@ -65,13 +65,20 @@ Write-Host "==> api"
 Write-Host "    pyinstaller"
 # Build-env identity check AT BUILD TIME (the deps step's environment is
 # not necessarily what this step resolves): which python runs the build,
-# which pyinstaller, where OCP sits.
-& python -c "import sys; import PyInstaller; import OCP; print('build exe:', sys.executable); print('build ver:', sys.version.split()[0]); print('PyInstaller:', PyInstaller.__file__); print('OCP:', OCP.__file__)" |
-    ForEach-Object { Write-Host ("    build-env: {0}" -f $_) }
-# PS 5.1 turns native stderr records into terminating errors under
-# Stop + 2>&1; success is verified by the artifact check, not the log.
+# which pyinstaller, where OCP sits. A missing OCP must stop the build
+# HERE - a PyInstaller run on a kernel-less env still "succeeds" and
+# produces a bundle that silently lacks the STEP engine.
+$identityOut = & python -c "import sys, PyInstaller, OCP; print('exe:', sys.executable); print('ver:', sys.version.split()[0]); print('PyInstaller:', PyInstaller.__file__); print('OCP:', OCP.__file__)" 2>&1
+$identityExit = $LASTEXITCODE
+$identityOut | ForEach-Object { Write-Host ("    build-env: {0}" -f $_) }
+if ($identityExit -ne 0) {
+    Write-Host ("::error ::build-env identity check FAILED (exit {0}): OCP/PyInstaller not importable by the PyInstaller python - aborting BEFORE the build" -f $identityExit)
+    throw "build-env identity check failed: the STEP kernel python is not the one PyInstaller will use"
+}
 # Full PyInstaller log captured to a file: diagnose collection failures
-# without re-running a 10-minute build.
+# without re-running a 10-minute build. PS 5.1 turns native stderr
+# records into terminating errors under Stop + 2>&1, so EAP drops to
+# Continue for the duration of the PyInstaller call.
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 $log = Join-Path (Join-Path $PSScriptRoot "dist") "pyi-build.log"
@@ -136,7 +143,7 @@ Copy-Item (Join-Path $root "frontend/out/*") (Join-Path $stage "web") -Recurse -
 # 4. Launcher: set the bundle environment, then start the single API
 # process that serves the UI and the native bridge.
 Write-Host "==> launcher"
- = @'
+$bat = @'
 @echo off
 setlocal
 set HERE=%~dp0
