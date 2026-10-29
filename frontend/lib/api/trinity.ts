@@ -289,3 +289,67 @@ export const STAGE_LABELS: Record<ExecutionStage, string> = {
   validating: 'VALIDATING...',
   complete: 'COMPLETE',
 };
+
+/** Parsed /api/update/check answer. available:false always carries a reason. */
+export type UpdateCheck = {
+  available: boolean;
+  version?: string;
+  published_at?: string;
+  size_bytes?: number | null;
+  reason?: string;
+};
+
+/** Result of POST /api/update/apply. staged implies restart_required. */
+export type UpdateApply = {
+  staged: boolean;
+  version?: string;
+  restart_required?: boolean;
+};
+
+function coerceUpdateCheck(payload: unknown): UpdateCheck {
+  const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const available = body.available === true;
+  const out: UpdateCheck = { available };
+  if (typeof body.version === 'string') out.version = body.version;
+  if (typeof body.published_at === 'string') out.published_at = body.published_at;
+  if (typeof body.size_bytes === 'number') out.size_bytes = body.size_bytes;
+  if (typeof body.reason === 'string') out.reason = body.reason;
+  return out;
+}
+
+/** Honest availability answer; never downloads, never applies. */
+export async function checkUpdate(): Promise<UpdateCheck> {
+  const response = await fetch(`${TRINITY_API_URL}/update/check`, { cache: 'no-store' });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { available: false, reason: `Update check unavailable (${response.status})` };
+  }
+  return coerceUpdateCheck(payload);
+}
+
+/**
+ * Explicit user action: stage a hash-verified update. Never call this
+ * without a real user decision; the backend requires confirm anyway.
+ */
+export async function applyUpdate(confirm: boolean): Promise<UpdateApply> {
+  const response = await fetch(`${TRINITY_API_URL}/update/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm }),
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw apiError(payload, response.status);
+  }
+  const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const out: UpdateApply = { staged: body.success === true };
+  if (typeof body.version === 'string') out.version = body.version;
+  if (body.restart_required !== undefined) out.restart_required = body.restart_required === true;
+  if (out.staged && out.restart_required === undefined) out.restart_required = true;
+  if (!out.staged) {
+    const errors = Array.isArray(body.errors) ? body.errors : [];
+    const first = errors[0] && typeof errors[0] === 'object' ? errors[0] as Record<string, unknown> : {};
+    throw new Error(typeof first.message === 'string' ? first.message : 'Update could not be staged.');
+  }
+  return out;
+}

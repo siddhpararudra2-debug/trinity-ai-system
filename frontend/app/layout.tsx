@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Navbar from '@/components/layout/Navbar';
+import UpdateBanner from '@/components/layout/UpdateBanner';
 import Footer from '@/components/layout/Footer';
 import { ThemeProvider } from '@/components/trinity/ThemeProvider';
 import './globals.css';
@@ -69,6 +70,7 @@ export default function RootLayout({
         />
         <ThemeProvider>
           <Navbar />
+          <UpdateBanner />
           {children}
           <Footer />
         </ThemeProvider>

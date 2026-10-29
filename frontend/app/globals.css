@@ -948,3 +948,45 @@ select.ws-input { appearance: none; cursor: pointer; }
   .flow-diagram * { transition: none !important; }
   .nav-progress span { transition: none !important; }
 }
+
+/* M13 update banner: quiet, fixed, dismissible; follows the panel language. */
+.update-banner {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 520px);
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--trinity-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.update-banner-warn { border-color: var(--trinity-gray); }
+.update-banner-text { flex: 1; min-width: 0; }
+.update-banner-apply {
+  flex: none;
+  border: 1px solid var(--trinity-black);
+  background: var(--trinity-black);
+  color: var(--trinity-white);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.update-banner-apply:disabled { opacity: 0.6; cursor: default; }
+.update-banner-close {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--trinity-gray);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+}
+.update-banner-close:hover { color: inherit; }
