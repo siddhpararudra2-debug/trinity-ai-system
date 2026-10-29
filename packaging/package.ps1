@@ -136,28 +136,7 @@ Copy-Item (Join-Path $root "frontend/out/*") (Join-Path $stage "web") -Recurse -
 # 4. Launcher: set the bundle environment, then start the single API
 # process that serves the UI and the native bridge.
 Write-Host "==> launcher"
-$bat = ("@echo off
-setlocal
-set HERE=%~dp0
-if `"%TRINITY_API_PORT%`"==`"`" set TRINITY_API_PORT=8000
-set TRINITY_UI_DIR=%HERE%web
-set TRINITY_NATIVE_EXEC=%HERE%native\Trinity.exe
-set TRINITY_QT_BIN=%HERE%native
-set TRINITY_APP_VERSION=" + $Version + @"
-if "%TRINITY_STORAGE_ROOT%"=="" set TRINITY_STORAGE_ROOT=%LOCALAPPDATA%\TrinityAI\data
-rem M13: consume a prepared update before booting (marker under TRINITY_STORAGE_ROOT).
-powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%swap_pending.ps1"
-echo Starting Trinity AI (api port %TRINITY_API_PORT%)...
-start "Trinity AI" /D "%HERE%api" trinity-api.exe
-timeout /t 4 /nobreak >nul
-start "" http://127.0.0.1:%TRINITY_API_PORT%/
-endlocal
-"@) -replace ([char]14 + ""), "`""
-
-Wait — no, cleaner: use a literal placeholder and replace. Writing it as single-quoted here-string with a %VERSION% placeholder then -replace "%VERSION%", $Version.</think><tool_call>edit<arg_key>newString</arg_key><arg_value># 4. Launcher: set the bundle environment, then start the single API
-# process that serves the UI and the native bridge.
-Write-Host "==> launcher"
-$bat = @'
+ = @'
 @echo off
 setlocal
 set HERE=%~dp0
@@ -175,6 +154,8 @@ timeout /t 4 /nobreak >nul
 start "" http://127.0.0.1:%TRINITY_API_PORT%/
 endlocal
 '@
+# Bake the version in as literal text so no batch variable expansion is
+# involved (the .bat never defines a VERSION var).
 $bat = $bat.Replace("%%VERSION%%", $Version)
 Set-Content -Path (Join-Path $stage "Trinity.bat") -Value $bat -Encoding Ascii
 # The swap script rides at the install root so the launcher can find it.
