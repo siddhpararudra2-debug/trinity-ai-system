@@ -217,6 +217,28 @@ jobs:
           } | Set-Content packaging/dist/SHA256SUMS.txt -Encoding Ascii
           Get-Content packaging/dist/SHA256SUMS.txt
 
+      # M13: the updater verifies an update by downloading latest.yml and
+      # matching the zip's sha256 against it. The manifest points at the
+      # PUBLIC download URL and describes the portable zip exactly.
+      - name: Generate update manifest (latest.yml)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zip = "packaging/dist/TrinityAI-$env:VERSION-win64.zip"
+          if (-not (Test-Path $zip)) { Write-Error "missing artifact: $zip"; exit 1 }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          $size = (Get-Item $zip).Length
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/TrinityAI-$env:VERSION-win64.zip"
+          @(
+            "version: $env:VERSION"
+            "url: $url"
+            "sha256: $hash"
+            "size: $size"
+          ) | Set-Content packaging/dist/latest.yml -Encoding Ascii
+          Get-Content packaging/dist/latest.yml
+
       - name: Attach artifacts to GitHub Release
         shell: pwsh
         env:
@@ -229,7 +251,8 @@ jobs:
           gh release upload "v$env:VERSION" --clobber `
             "packaging/dist/TrinityAI-$env:VERSION-win64.zip" `
             "packaging/dist/TrinityAI-$env:VERSION-win64-setup.exe" `
-            "packaging/dist/SHA256SUMS.txt"
+            "packaging/dist/SHA256SUMS.txt" `
+            "packaging/dist/latest.yml"
           # Re-pointing the tag (delete + push) flips the release to draft,
           # which makes its assets 404 for public downloaders. Re-publish.
           gh release edit "v$env:VERSION" --draft=false --latest=true
@@ -250,7 +273,7 @@ jobs:
             if (Test-Path $work) { Remove-Item $work -Recurse -Force }
             New-Item -ItemType Directory -Path $work -Force | Out-Null
             $zip = "TrinityAI-$env:VERSION-win64.zip"
-            foreach ($f in @("SHA256SUMS.txt", $zip, "TrinityAI-$env:VERSION-win64-setup.exe")) {
+            foreach ($f in @("SHA256SUMS.txt", $zip, "TrinityAI-$env:VERSION-win64-setup.exe", "latest.yml")) {
               $dest = Join-Path $work $f
               $attempt = 0
               while ($true) {
@@ -281,6 +304,32 @@ jobs:
               }
             }
             if (-not $ok) { exit 1 }
+            # latest.yml must honestly describe the PUBLISHED zip: a stale
+            # or wrong manifest breaks every bundle's updater, so the gate
+            # checks each field against the asset the user actually gets.
+            $latest = @{}
+            foreach ($line in (Get-Content (Join-Path $work "latest.yml"))) {
+              if ($line -match '^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$') {
+                $latest[$Matches[1]] = $Matches[2].Trim()
+              }
+            }
+            $pubZip = Join-Path $work $zip
+            $pubHash = (Get-FileHash $pubZip -Algorithm SHA256).Hash.ToLower()
+            $pubSize = (Get-Item $pubZip).Length
+            $wantUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/$zip"
+            if ($latest["version"] -ne $env:VERSION) {
+              Write-Output ("::error ::latest.yml version is '{0}', expected {1}" -f $latest["version"], $env:VERSION); $ok = $false
+            }
+            if ($latest["sha256"] -ne $pubHash) {
+              Write-Output "::error ::latest.yml sha256 does not match the published zip"; $ok = $false
+            }
+            if ($latest["size"] -ne [string]$pubSize) {
+              Write-Output ("::error ::latest.yml size is '{0}', expected {1}" -f $latest["size"], $pubSize); $ok = $false
+            }
+            if ($latest["url"] -ne $wantUrl) {
+              Write-Output ("::error ::latest.yml url is '{0}', expected {1}" -f $latest["url"], $wantUrl); $ok = $false
+            }
+            if ($ok) { Write-Host "latest.yml ok: points at the published zip with the right hash and size" }
             Expand-Archive -Path (Join-Path $work $zip) -DestinationPath $work -Force
             $bundle = Get-ChildItem $work -Directory -Recurse -Depth 2 | Where-Object {
               (Test-Path (Join-Path $_.FullName 'native')) -and (Test-Path (Join-Path $_.FullName 'api'))
