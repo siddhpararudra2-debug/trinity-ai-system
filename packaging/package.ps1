@@ -63,17 +63,26 @@ if ($signArgs.PfxPath) {
 # 2. backend: frozen uvicorn process.
 Write-Host "==> api"
 Write-Host "    pyinstaller"
+# Build-env identity check AT BUILD TIME (the deps step's environment is
+# not necessarily what this step resolves): which python runs the build,
+# which pyinstaller, where OCP sits.
+& python -c "import sys; import PyInstaller; import OCP; print('build exe:', sys.executable); print('build ver:', sys.version.split()[0]); print('PyInstaller:', PyInstaller.__file__); print('OCP:', OCP.__file__)" |
+    ForEach-Object { Write-Host ("    build-env: {0}" -f $_) }
 # PS 5.1 turns native stderr records into terminating errors under
 # Stop + 2>&1; success is verified by the artifact check, not the log.
+# Full PyInstaller log captured to a file: diagnose collection failures
+# without re-running a 10-minute build.
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
+$log = Join-Path (Join-Path $PSScriptRoot "dist") "pyi-build.log"
 try {
-    & python -m PyInstaller (Join-Path $PSScriptRoot "trinity-api.spec") --noconfirm `
-        --distpath (Join-Path $PSScriptRoot "dist") --workpath (Join-Path $PSScriptRoot "build") 2>&1 |
-        Out-Null
+    $pyiOut = & python -m PyInstaller (Join-Path $PSScriptRoot "trinity-api.spec") --noconfirm `
+        --distpath (Join-Path $PSScriptRoot "dist") --workpath (Join-Path $PSScriptRoot "build") *>&1 |
+        ForEach-Object { "$_" }
 } finally {
     $ErrorActionPreference = $prevEap
 }
+$pyiOut | Set-Content -Path $log -Encoding utf8
 if (-not (Test-Path (Join-Path $PSScriptRoot "dist/trinity-api/trinity-api.exe"))) {
     throw "PyInstaller produced no trinity-api.exe"
 }
@@ -86,7 +95,12 @@ $ocpPyds = @(Get-ChildItem $internal -Recurse -Filter "*.pyd" |
 $tkDlls = @(Get-ChildItem $internal -Recurse -Filter "TK*.dll")
 Write-Host ("OCP collected: {0} pyd, {1} TK dll" -f $ocpPyds.Count, $tkDlls.Count)
 if ($ocpPyds.Count -eq 0) {
-    Write-Output ("::error ::OCP was NOT collected: the build env lacks OpenCascade (pip install '.[cad]') or analysis failed")
+    Write-Output "::error ::OCP was NOT collected by PyInstaller"
+    $tail = @($pyiOut | Select-Object -Last 6) -join ('  |  ')
+    for ($i = 0; $i -lt $tail.Length; $i += 460) {
+        $len = [Math]::Min(460, $tail.Length - $i)
+        Write-Output ("::error ::pyi-tail: " + $tail.Substring($i, $len))
+    }
     exit 1
 }
 if ($tkDlls.Count -eq 0) {

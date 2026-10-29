@@ -107,7 +107,9 @@ jobs:
           # at build time so PyInstaller's analysis collects it + TK DLLs.
           pip install ".[cad]"
           python -c "import OCP; print('build-env OCP ok:', OCP.__file__)"
-          python -m pip install pyinstaller
+          # Pinned to the version the local pipeline proves; PyInstaller
+          # majors have drifted behavior around extension collection.
+          python -m pip install "pyinstaller==6.22.3"
 
       - name: Setup Node (frontend static export)
         uses: actions/setup-node@v6
