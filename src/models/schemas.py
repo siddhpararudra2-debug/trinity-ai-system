@@ -115,6 +115,30 @@ class CADGenerateRequest(BaseModel):
         return value
 
 
+class CADFamilySelector(BaseModel):
+    parameter: str
+    values: list[float] = Field(..., min_length=1, max_length=24)
+
+
+class CADFamilyRequest(BaseModel):
+    type: str = "quadcopter_frame"
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    family: CADFamilySelector
+
+    @field_validator("type")
+    @classmethod
+    def _validate_family_type(cls, value: str) -> str:
+        # Same schema-edge rule as generate: an unknown part type is a 422,
+        # never an engine-time 200/success:false.
+        if value not in list_supported_types():
+            raise PydanticCustomError(
+                "unsupported_cad_type",
+                "Unsupported CAD type '{name}'",
+                {"name": value},
+            )
+        return value
+
+
 class CADCatalogParameter(BaseModel):
     """One parameter of one part, as enforced by the engine (PRD §12)."""
 

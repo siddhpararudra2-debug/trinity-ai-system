@@ -33,6 +33,7 @@ from src.models.schemas import (
     AgentRunRequest,
     ArtifactOut,
     CADCatalog,
+    CADFamilyRequest,
     CADGenerateRequest,
     EngineCapability,
     ExecuteRequest,
@@ -166,6 +167,14 @@ async def math_solve(req: MathSolveRequest) -> dict:
 async def cad_generate(req: CADGenerateRequest) -> dict:
     return await asyncio.to_thread(
         job_manager.run_sync, "cad", "generate", req.model_dump()
+    )
+
+
+@router.post("/cad/families", response_model=ToolResponse)
+async def cad_families(req: CADFamilyRequest) -> dict:
+    """Parameter families: one part model, one parameter, many full variants."""
+    return await asyncio.to_thread(
+        job_manager.run_sync, "cad", "families", req.model_dump()
     )
 
 

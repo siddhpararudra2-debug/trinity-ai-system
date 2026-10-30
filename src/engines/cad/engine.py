@@ -22,6 +22,7 @@ from typing import Any
 from src.core.errors import GeometryValidationError, RequestValidationError
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
 from src.engines.cad.glb import write_glb
+from src.engines.cad.families import build_family
 from src.engines.cad.ir import PartIR
 from src.engines.cad.parts import DEFAULT_PART_TYPE, PartDefinition, get_part
 from src.engines.cad.primitives import Mesh, write_binary_stl
@@ -59,7 +60,7 @@ def step_unavailable_reason() -> str:
 class CADEngine(BaseEngine):
     name = "cad"
     version = "1.0"
-    capabilities = ("generate", "validate", "export", "preview")
+    capabilities = ("generate", "validate", "export", "preview", "families")
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "generate":
@@ -70,6 +71,8 @@ class CADEngine(BaseEngine):
             return self.execute_preview(parameters)
         if operation == "export":
             return self.execute_export(parameters)
+        if operation == "families":
+            return self.execute_families(parameters)
         raise RequestValidationError(f"CAD engine has no operation '{operation}'")
 
     # ----------------------------------------- execute() operation routes ---
@@ -86,6 +89,27 @@ class CADEngine(BaseEngine):
         ir = part.ir_class.from_request(parameters.get("parameters", {}))
         mesh = part.builder(ir)
         return part, ir, mesh
+
+    def execute_families(self, parameters: dict[str, Any]) -> EngineResult:
+        """Parameter families: truth per member (M14).
+
+        Success is about the OP, not the members: a family whose members
+        contain bound-violating variants is still a truthful answer.
+        """
+        part = get_part(parameters.get("type", DEFAULT_PART_TYPE))
+        selector = parameters.get("family") or {}
+        family = build_family(
+            part,
+            parameters.get("parameters") or {},
+            str(selector.get("parameter", "")),
+            selector.get("values") or [],
+        )
+        return EngineResult(
+            success=True,
+            engine=self.name,
+            operation="families",
+            result=family,
+        )
 
     def execute_validate(self, parameters: dict[str, Any]) -> EngineResult:
         part, ir, mesh = self._build_from_execute_params(parameters)
