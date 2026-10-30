@@ -189,6 +189,14 @@ broke. Kept because the next session will hit them again:
   build sets `NEXT_PUBLIC_TRINITY_API_URL=/api` before `npm run build`;
   the same codebase builds with the default `http://localhost:8000/api`
   for dev.
+- **A click and the assertion that reads its React state cannot share a
+  tick.** The cad suite clicked WIREFRAME and read `aria-pressed` in the
+  same synchronous `eval`; React re-rendered a tick later, so the check
+  was guaranteed to fail. Poll for the post-render state.
+- **A loading placeholder is a bot message too.** Counting
+  `.chat-message.bot` grew when `PROCESSING —` appeared, so the cad suite
+  read the placeholder instead of the reply. Wait for the settled
+  content, not for a count change.
 
 ### CI (GitHub Actions)
 - **A job cannot opt out of its workflow's cancellation policy.** The

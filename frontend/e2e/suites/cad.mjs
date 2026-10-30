@@ -52,10 +52,13 @@ export async function run({ cdp, check, WEB }) {
     return p ? p.innerText : '';
   })()`);
   check('validation verdict is VALIDATED', Boolean(validationText) && /VALIDATED/.test(validationText));
-  check('dimensional accuracy check passed', Boolean(validationText) && /Dimensional accuracy\s*PASS/i.test(validationText));
-  check('topology check passed', Boolean(validationText) && /Topology\s*PASS/i.test(validationText));
-  check('symmetry check passed', Boolean(validationText) && /Symmetry\s*PASS/i.test(validationText));
-  check('manufacturability check passed', Boolean(validationText) && /Manufacturability\s*PASS/i.test(validationText));
+  // These are the checks the CAD validator actually reports for this frame
+  // (src/engines/cad/validators.py). The old labels here named checks no
+  // engine emitted, so this suite could never pass.
+  check('dimensions within tolerance check passed', Boolean(validationText) && /DIMENSIONS WITHIN TOLERANCE\s*PASS/i.test(validationText));
+  check('all vertices finite check passed', Boolean(validationText) && /ALL VERTICES FINITE\s*PASS/i.test(validationText));
+  check('arm length positive check passed', Boolean(validationText) && /ARM LENGTH POSITIVE\s*PASS/i.test(validationText));
+  check('manufacturable min feature check passed', Boolean(validationText) && /MANUFACTURABLE MIN FEATURE\s*PASS/i.test(validationText));
 
   // =========================================================================
   // 3. 3D Geometry Viewer: Three.js Canvas & Interactive Controls
@@ -80,13 +83,25 @@ export async function run({ cdp, check, WEB }) {
   check('viewer displays model dimensions', Boolean(viewerInfo?.text) && /\d+(\.\d+)?\s*×\s*\d+(\.\d+)?.*MM/i.test(viewerInfo.text));
   check('viewer displays triangle count', Boolean(viewerInfo?.text) && /TRIANGLES:\s*[\d,]+/i.test(viewerInfo.text));
 
-  // Toggle wireframe mode
-  const wireframeToggled = await cdp.eval(`(() => {
+  // Toggle wireframe mode. React re-renders after the click handler returns,
+  // so read the state on a later tick instead of in the same synchronous eval.
+  await cdp.eval(`(() => {
     const btn = [...document.querySelectorAll('.ctrl-btn')].find(b => b.textContent.includes('WIREFRAME'));
     if (!btn) return false;
     btn.click();
-    return btn.classList.contains('is-active') || btn.getAttribute('aria-pressed') === 'true';
+    return true;
   })()`);
+  const wireframeToggled = await waitUntil(
+    async () => {
+      return cdp.eval(`(() => {
+        const btn = [...document.querySelectorAll('.ctrl-btn')].find(b => b.textContent.includes('WIREFRAME'));
+        if (!btn) return false;
+        return btn.classList.contains('is-active') || btn.getAttribute('aria-pressed') === 'true';
+      })()`);
+    },
+    Boolean,
+    5000,
+  );
   check('wireframe control toggles active', Boolean(wireframeToggled));
 
   // Toggle back to solid
@@ -182,14 +197,25 @@ export async function run({ cdp, check, WEB }) {
     return true;
   })()`);
 
-  // Wait for new bot message
-  let botGrew = false;
-  for (let i = 0; i < 40 && !botGrew; i += 1) {
-    const current = await cdp.eval(`document.querySelectorAll('.chat-message.bot').length`);
-    botGrew = current > botBefore;
-    if (!botGrew) await sleep(400);
-  }
-  check('form submission produces bot response', botGrew);
+  // Wait for the real reply. While the request is in flight the page renders
+  // a "PROCESSING —" bot bubble; counting bot messages alone therefore sees
+  // the placeholder and reads it before the result replaces it.
+  const botReply = await waitUntil(
+    async () => {
+      return cdp.eval(`(() => {
+        const msgs = document.querySelectorAll('.chat-message.bot');
+        const last = msgs[msgs.length - 1];
+        return { count: msgs.length, text: last ? last.innerText : '' };
+      })()`);
+    },
+    (state) =>
+      Boolean(state) && state.count > botBefore && !/PROCESSING/i.test(state.text),
+    30000,
+  );
+  check(
+    'form submission produces bot response',
+    Boolean(botReply) && botReply.count > botBefore && !/PROCESSING/i.test(botReply.text),
+  );
 
   const lastBotMessage = await cdp.eval(`(() => {
     const msgs = document.querySelectorAll('.chat-message.bot');
