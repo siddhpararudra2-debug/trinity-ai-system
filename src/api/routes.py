@@ -33,6 +33,7 @@ from src.models.schemas import (
     AgentRunRequest,
     ArtifactOut,
     CADCatalog,
+    CADDrawingsRequest,
     CADFamilyRequest,
     CADGenerateRequest,
     CADNestRequest,
@@ -184,6 +185,14 @@ async def cad_nest(req: CADNestRequest) -> dict:
     """Nesting: measured XY footprints packed on a stock sheet, proof included."""
     return await asyncio.to_thread(
         job_manager.run_sync, "cad", "nest", req.model_dump()
+    )
+
+
+@router.post("/cad/drawings", response_model=ToolResponse)
+async def cad_drawings(req: CADDrawingsRequest) -> dict:
+    """Engineering drawings: projected multi-sheet DXF views of one part."""
+    return await asyncio.to_thread(
+        job_manager.run_sync, "cad", "drawings", req.model_dump()
     )
 
 

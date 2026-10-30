@@ -21,6 +21,7 @@ from typing import Any
 
 from src.core.errors import GeometryValidationError, RequestValidationError
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
+from src.engines.cad.drawings import VIEW_ORDER, build_drawing_document
 from src.engines.cad.glb import write_glb
 from src.engines.cad.families import build_family
 from src.engines.cad.ir import PartIR
@@ -61,7 +62,15 @@ def step_unavailable_reason() -> str:
 class CADEngine(BaseEngine):
     name = "cad"
     version = "1.0"
-    capabilities = ("generate", "validate", "export", "preview", "families", "nest")
+    capabilities = (
+        "generate",
+        "validate",
+        "export",
+        "preview",
+        "families",
+        "nest",
+        "drawings",
+    )
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "generate":
@@ -76,6 +85,8 @@ class CADEngine(BaseEngine):
             return self.execute_families(parameters)
         if operation == "nest":
             return self.execute_nest(parameters)
+        if operation == "drawings":
+            return self.execute_drawings(parameters)
         raise RequestValidationError(f"CAD engine has no operation '{operation}'")
 
     # ----------------------------------------- execute() operation routes ---
@@ -163,6 +174,44 @@ class CADEngine(BaseEngine):
             engine=self.name,
             operation="nest",
             result=layout,
+        )
+
+    def execute_drawings(self, parameters: dict[str, Any]) -> EngineResult:
+        """Engineering drawings (M14): projected multi-sheet DXF of one part.
+
+        Same gate as export: geometry that fails the part's own validator
+        refuses because a drawing of an unmanufacturable part is exactly
+        as dangerous as its STEP file. View selection is data-checked here
+        too (engine-level 422), with the schema edge refusing unknown views
+        before the payload ever reaches the engine.
+        """
+        part, ir, mesh = self._build_from_execute_params(parameters)
+        views = parameters.get("views") or list(VIEW_ORDER)
+        ok, checks = self.validate(mesh, ir, part)
+        if not ok:
+            raise GeometryValidationError(
+                "Generated geometry failed validation", details={"checks": checks}
+            )
+        report, text, counts = build_drawing_document(mesh, views)
+        work_dir = Path(tempfile.mkdtemp(prefix="trinity_cad_"))
+        base_name = f"{part.filename_stem(ir)}_drawing_{uuid.uuid4().hex[:8]}"
+        dxf_path = work_dir / f"{base_name}.dxf"
+        dxf_path.write_text(text, encoding="utf-8")
+        return EngineResult(
+            success=True,
+            engine=self.name,
+            operation="drawings",
+            result={
+                "type": part.name,
+                "spec": ir.to_dict(),
+                "triangle_count": len(mesh.triangles),
+                "views": report,
+                "line_count_total": sum(r["line_count"] for r in report),
+                "sheet_count": len(report),
+                "dxf_verified_counts": counts,
+            },
+            pending_artifacts=[(str(dxf_path), "dxf")],
+            validation=ValidationResult(status="VALIDATED", checks=checks),
         )
 
     def execute_validate(self, parameters: dict[str, Any]) -> EngineResult:

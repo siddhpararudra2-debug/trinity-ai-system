@@ -164,6 +164,30 @@ class CADNestRequest(BaseModel):
     allow_rotation: bool = True
 
 
+CADDrawingView = Literal["top", "front", "side", "iso"]
+
+
+class CADDrawingsRequest(BaseModel):
+    type: str = "quadcopter_frame"
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    views: list[CADDrawingView] = Field(
+        default_factory=lambda: ["top", "front", "side", "iso"]
+    )
+
+    @field_validator("type")
+    @classmethod
+    def _validate_drawings_type(cls, value: str) -> str:
+        # Same schema-edge rule as generate/families/nest: an unknown part
+        # type is a 422, never an engine-time 200/success:false envelope.
+        if value not in list_supported_types():
+            raise PydanticCustomError(
+                "unsupported_cad_type",
+                "Unsupported CAD type '{name}'",
+                {"name": value},
+            )
+        return value
+
+
 class CADCatalogParameter(BaseModel):
     """One parameter of one part, as enforced by the engine (PRD §12)."""
 
