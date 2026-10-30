@@ -139,6 +139,31 @@ class CADFamilyRequest(BaseModel):
         return value
 
 
+class CADNestPartRequest(BaseModel):
+    type: str = "mounting_plate"
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    quantity: int = Field(default=1, ge=1, le=50)
+
+    @field_validator("type")
+    @classmethod
+    def _validate_nest_type(cls, value: str) -> str:
+        if value not in list_supported_types():
+            raise PydanticCustomError(
+                "unsupported_cad_type",
+                "Unsupported CAD type '{name}'",
+                {"name": value},
+            )
+        return value
+
+
+class CADNestRequest(BaseModel):
+    parts: list[CADNestPartRequest] = Field(..., min_length=1, max_length=12)
+    stock_width_mm: float = Field(..., gt=0)
+    stock_height_mm: float = Field(..., gt=0)
+    spacing_mm: float = Field(default=2.0, ge=0)
+    allow_rotation: bool = True
+
+
 class CADCatalogParameter(BaseModel):
     """One parameter of one part, as enforced by the engine (PRD §12)."""
 

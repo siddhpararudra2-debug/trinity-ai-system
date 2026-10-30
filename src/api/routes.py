@@ -35,6 +35,7 @@ from src.models.schemas import (
     CADCatalog,
     CADFamilyRequest,
     CADGenerateRequest,
+    CADNestRequest,
     EngineCapability,
     ExecuteRequest,
     JobOut,
@@ -175,6 +176,14 @@ async def cad_families(req: CADFamilyRequest) -> dict:
     """Parameter families: one part model, one parameter, many full variants."""
     return await asyncio.to_thread(
         job_manager.run_sync, "cad", "families", req.model_dump()
+    )
+
+
+@router.post("/cad/nest", response_model=ToolResponse)
+async def cad_nest(req: CADNestRequest) -> dict:
+    """Nesting: measured XY footprints packed on a stock sheet, proof included."""
+    return await asyncio.to_thread(
+        job_manager.run_sync, "cad", "nest", req.model_dump()
     )
 
 

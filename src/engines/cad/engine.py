@@ -24,6 +24,7 @@ from src.engines.base import BaseEngine, EngineResult, ValidationResult
 from src.engines.cad.glb import write_glb
 from src.engines.cad.families import build_family
 from src.engines.cad.ir import PartIR
+from src.engines.cad.nesting import NestJob, pack_layout
 from src.engines.cad.parts import DEFAULT_PART_TYPE, PartDefinition, get_part
 from src.engines.cad.primitives import Mesh, write_binary_stl
 from src.engines.cad.step import kernel_info, write_step
@@ -60,7 +61,7 @@ def step_unavailable_reason() -> str:
 class CADEngine(BaseEngine):
     name = "cad"
     version = "1.0"
-    capabilities = ("generate", "validate", "export", "preview", "families")
+    capabilities = ("generate", "validate", "export", "preview", "families", "nest")
 
     def execute(self, operation: str, parameters: dict[str, Any]) -> EngineResult:
         if operation == "generate":
@@ -73,6 +74,8 @@ class CADEngine(BaseEngine):
             return self.execute_export(parameters)
         if operation == "families":
             return self.execute_families(parameters)
+        if operation == "nest":
+            return self.execute_nest(parameters)
         raise RequestValidationError(f"CAD engine has no operation '{operation}'")
 
     # ----------------------------------------- execute() operation routes ---
@@ -109,6 +112,57 @@ class CADEngine(BaseEngine):
             engine=self.name,
             operation="families",
             result=family,
+        )
+
+    def execute_nest(self, parameters: dict[str, Any]) -> EngineResult:
+        """Nesting / plate packing (M14): measured XY footprints, proof included.
+
+        One bad part fails that part (added to `unplaced` with the real
+        reason), not the whole layout request - a broken parameter set
+        must not stop the parts that are packable.
+        """
+        try:
+            stock_w = float(parameters["stock_width_mm"])
+            stock_h = float(parameters["stock_height_mm"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RequestValidationError(
+                "nest requires positive stock_width_mm and stock_height_mm"
+            ) from exc
+        spacing = float(parameters.get("spacing_mm", 2.0))
+        allow_rotation = bool(parameters.get("allow_rotation", True))
+
+        jobs: list[NestJob] = []
+        entry_failures: list[dict[str, object]] = []
+        for index, entry in enumerate(parameters.get("parts", [])):
+            part_name = entry.get("type", DEFAULT_PART_TYPE)
+            label = f"{part_name}[{index}]"
+            try:
+                part = get_part(part_name)
+                ir = part.ir_class.from_request(entry.get("parameters", {}))
+                (min_c, max_c) = part.builder(ir).bounding_box()
+                quantity = max(1, int(entry.get("quantity", 1)))
+                for occurrence in range(quantity):
+                    jobs.append(
+                        NestJob(
+                            index=len(jobs),
+                            label=f"{label}#{occurrence + 1}",
+                            width_mm=max_c[0] - min_c[0],
+                            height_mm=max_c[1] - min_c[1],
+                        )
+                    )
+            except RequestValidationError as exc:
+                entry_failures.append(
+                    {"index": index, "label": label,
+                     "reason": f"part rejected: {exc}"}
+                )
+
+        layout = pack_layout(stock_w, stock_h, spacing, allow_rotation, jobs)
+        layout["unplaced"] = [*entry_failures, *layout["unplaced"]]
+        return EngineResult(
+            success=True,
+            engine=self.name,
+            operation="nest",
+            result=layout,
         )
 
     def execute_validate(self, parameters: dict[str, Any]) -> EngineResult:
