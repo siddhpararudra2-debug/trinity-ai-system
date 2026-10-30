@@ -50,6 +50,8 @@ habit — they are why the test counts only ever climb:
 | Ship portable zip **and** installer | `TrinityAI-<v>-win64.zip` + `TrinityAI-<v>-win64-setup.exe` from the same staged directory | Installer for normal users, zip for portable / no-install; identical contents by construction |
 | Inno Setup, per-user, no admin | Installs to `%LOCALAPPDATA%\Programs\TrinityAI` | Lowest friction; no UAC prompt |
 | No code signing is enforced-by-default (M12 harness shipped) | Binaries ship unsigned until a certificate secret is configured; when `TRINITY_SIGN_PFX` (+ `..._PASSWORD`, `..._TARGET=base64`) exists in the repo secrets, `Trinity.exe` and `setup.exe` are signed before hashing/compression | Harness (`packaging/sign_files.ps1`) works with a PFX or a zero-config self-signed code-signing cert (dev distribution); committing unsigned while the cert decision is pending is honest, and SmartScreen friction is a known, documented cost |
+| Bridge over duplication | Engines live in C++; Python routes to the native engine, never reimplements | One implementation, one place to verify; enshrined by M7's plan correction |
+| LLM transport tests stay skipped | No API keys on dev/CI machines | Documented refusal — the transports have offline contract tests via fixture transports instead |
 
 ### M12 signing policy (settled)
 
@@ -64,8 +66,6 @@ habit — they are why the test counts only ever climb:
   operations correct. Upgrade path when distribution goes public: Azure
   Trusted Signing (first choice) or an EV/OV cert; only the credential
   source changes, the pipeline stays as built.
-| Bridge over duplication | Engines live in C++; Python routes to the native engine, never reimplements | One implementation, one place to verify; enshrined by M7's plan correction |
-| LLM transport tests stay skipped | No API keys on dev/CI machines | Documented refusal — the transports have offline contract tests via fixture transports instead |
 
 ---
 
