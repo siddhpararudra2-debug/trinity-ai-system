@@ -140,6 +140,25 @@ def staging_dir() -> Path:
     return root / "update-pending"
 
 
+def _bundle_root(scratch: Path) -> Path | None:
+    """Locate the extracted bundle by layout, never by directory order.
+
+    Release zips nest the bundle in a versioned folder, but extraction
+    can also surface it at the archive root or leave unrelated
+    top-level folders behind (``__MACOSX``, entries written with
+    absolute paths). The first directory in listing order is not
+    necessarily the bundle.
+    """
+    candidates = [scratch]
+    candidates += sorted(
+        (p for p in scratch.iterdir() if p.is_dir()), key=lambda p: p.name
+    )
+    for candidate in candidates:
+        if all((candidate / d).is_dir() for d in ("native", "api", "web")):
+            return candidate
+    return None
+
+
 def apply_update(info: UpdateInfo) -> dict[str, Any]:
     """Download, hash-verify, extract, and PREPARE the update.
 
@@ -168,9 +187,8 @@ def apply_update(info: UpdateInfo) -> dict[str, Any]:
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(scratch)
     zip_path.unlink(missing_ok=True)
-    inner = next((p for p in scratch.iterdir() if p.is_dir()), None)
-    layout_ok = inner is not None and all((inner / d).is_dir() for d in ("native", "api", "web"))
-    if not layout_ok:
+    inner = _bundle_root(scratch)
+    if inner is None:
         shutil.rmtree(scratch, ignore_errors=True)
         raise ValueError("update rejected: extracted tree is not a Trinity bundle")
     marker = target / "swap.json"
@@ -222,5 +240,7 @@ def consume_pending_swap() -> dict[str, Any] | None:
         shutil.copytree(src, dst, dirs_exist_ok=True)
         swapped.append(sub)
     marker.unlink(missing_ok=True)
-    shutil.rmtree(source.parent, ignore_errors=True)
+    # Remove the extraction scratch explicitly: when the archive root is
+    # itself the bundle, source.parent is the staging dir, not the tree.
+    shutil.rmtree(staging_dir() / "tree", ignore_errors=True)
     return {"swapped": swapped, "version": plan.get("version")}

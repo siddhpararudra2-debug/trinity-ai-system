@@ -130,17 +130,30 @@ def _serve_zip(scratch: Path, zip_bytes: bytes):
     return server, f"http://127.0.0.1:{server.server_address[1]}/update.zip"
 
 
-def _fake_bundle(tmp_path: Path) -> bytes:
+def _fake_bundle(
+    tmp_path: Path, *, nested: bool = True, stray_top_level: bool = False
+) -> bytes:
+    """Build a release-like zip with relative, forward-slash entry names.
+
+    Entry order mirrors extraction order: a stray top-level folder can
+    therefore land before the bundle, which is exactly the shape that
+    broke on Linux (the old updater took the first directory it saw).
+    """
     root = tmp_path / "TrinityAI-9.9.9-win64"
     for sub in ("native", "api", "web"):
         (root / sub).mkdir(parents=True)
         (root / sub / "keep.txt").write_text(sub, encoding="utf-8")
     buf = tmp_path / "bundle.zip"
+    prefix = tmp_path if nested else root
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.write(root, arcname=str(root))
-        for f in root.rglob("*"):
-            if f.is_file():
-                zf.write(f, arcname=str(f.relative_to(tmp_path)))
+        if stray_top_level:
+            zf.writestr("aaa-stray/readme.txt", "not part of the bundle")
+        for f in sorted(root.rglob("*")):
+            arcname = f.relative_to(prefix).as_posix()
+            if f.is_dir():
+                zf.writestr(arcname + "/", "")
+            else:
+                zf.write(f, arcname=arcname)
     return buf.read_bytes()
 
 
@@ -187,8 +200,7 @@ def test_apply_update_rejects_bad_layout(isolated, tmp_path):
     (root / "junk" / "a.txt").write_text("x")
     buf = tmp_path / "bundle.zip"
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.write(root, arcname=str(root))
-        zf.write(root / "junk" / "a.txt", arcname="TrinityAI-x-win64/junk/a.txt")
+        zf.writestr("TrinityAI-x-win64/junk/a.txt", "x")
     zip_bytes = buf.read_bytes()
     server, url = _serve_zip(tmp_path, zip_bytes)
     try:
@@ -201,6 +213,44 @@ def test_apply_update_rejects_bad_layout(isolated, tmp_path):
     finally:
         server.shutdown()
     assert not (updater.staging_dir() / "swap.json").exists()
+
+
+def test_apply_update_finds_bundle_beside_stray_top_level_dir(isolated, tmp_path):
+    # Regression: Linux extraction created the stray folder first, and the
+    # updater accepted whichever directory the filesystem listed first.
+    zip_bytes = _fake_bundle(tmp_path, stray_top_level=True)
+    server, url = _serve_zip(tmp_path, zip_bytes)
+    try:
+        info = updater.UpdateInfo(
+            version="9.9.9", published_at="", url=url,
+            sha256=hashlib.sha256(zip_bytes).hexdigest(), size_bytes=len(zip_bytes),
+        )
+        out = updater.apply_update(info)
+    finally:
+        server.shutdown()
+    assert out == {"staged": True, "version": "9.9.9", "restart_required": True}
+    marker = json.loads(
+        (updater.staging_dir() / "swap.json").read_text(encoding="utf-8"))
+    assert Path(marker["source"]).name == "TrinityAI-9.9.9-win64"
+    assert (Path(marker["source"]) / "web" / "keep.txt").is_file()
+
+
+def test_apply_update_accepts_bundle_at_archive_root(isolated, tmp_path):
+    # A zip that stores native/api/web at its root is still a bundle.
+    zip_bytes = _fake_bundle(tmp_path, nested=False)
+    server, url = _serve_zip(tmp_path, zip_bytes)
+    try:
+        info = updater.UpdateInfo(
+            version="9.9.9", published_at="", url=url,
+            sha256=hashlib.sha256(zip_bytes).hexdigest(), size_bytes=len(zip_bytes),
+        )
+        out = updater.apply_update(info)
+    finally:
+        server.shutdown()
+    assert out["staged"] is True
+    marker = json.loads(
+        (updater.staging_dir() / "swap.json").read_text(encoding="utf-8"))
+    assert Path(marker["source"]) == updater.staging_dir() / "tree"
 
 
 def test_consume_pending_swap(isolated, tmp_path, monkeypatch):

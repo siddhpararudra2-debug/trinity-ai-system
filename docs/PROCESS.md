@@ -204,6 +204,13 @@ broke. Kept because the next session will hit them again:
   prefix bump when its entry set was no longer trustworthy, and the
   unconditional fallback restore was removed — a fallback hit is exactly
   where an incompatible older entry sneaks in.
+- **A test that passes on one filesystem's listing order is not
+  passing.** `_fake_bundle` wrote the bundle root with an absolute
+  `arcname`, so Linux extraction created `tmp/...` before the bundle
+  folder and the updater accepted the first directory it saw. Windows
+  only passed because NTFS happened to list the bundle first. Fixtures
+  now write relative, forward-slash entries; the code under test finds
+  the bundle by `native/api/web` layout, never by order.
 
 ---
 
