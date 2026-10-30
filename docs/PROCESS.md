@@ -67,6 +67,30 @@ habit — they are why the test counts only ever climb:
   Trusted Signing (first choice) or an EV/OV cert; only the credential
   source changes, the pipeline stays as built.
 
+### M13 auto-update policy (settled)
+
+- **Checks never download.** `GET /api/update/check` answers availability
+  (+ version/size) or an honest reason - offline, missing `latest.yml`,
+  already up to date - and performs zero file transfers beyond the two
+  documents it must read.
+- **Apply is explicit and idempotent-safe.** `POST /api/update/apply`
+  refuses without `{"confirm": true}`; then: download once → sha256 must
+  match `latest.yml` → extracted tree must actually be a Trinity bundle
+  (`native/api/web`) → staged under
+  `%LOCALAPPDATA%\TrinityAI\data\update-pending` with a `swap.json`
+  marker. Anything failing refuses with a reason and leaves nothing
+  half-installed.
+- **The swap happens at next boot, not in-process.** Windows cannot
+  replace a running exe, so `Trinity.bat` runs `swap_pending.ps1`
+  before the API boots: previous component dirs are kept as `.prev`
+  backups, the staged tree takes over, the marker is cleared, user data
+  (`TRINITY_STORAGE_ROOT`, outside the swap set) is never touched.
+- **`latest.yml` schema is project-defined** (`version / url / sha256 /
+  size`, pointing at the public download URL) and the release
+  verify-as-published gate downloads it back and proves every field
+  against the actually published zip - a stale or wrong manifest fails
+  the release instead of poisoning clients.
+
 ---
 
 ## Hard-won lessons (the debugging notes worth keeping)

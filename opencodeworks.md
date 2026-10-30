@@ -10,29 +10,37 @@ change it describes — never on its own.
 
 ## In progress
 
-**Stage 7 — M10 closed `v0.9.0` (release pipeline proven as published, run 9 green, `a1479fe`).**
-Next up: **M11 — OpenCascade `[cad]` extra carried into the PyInstaller bundle;
-bundle smoke executes a real STEP export** (docs/ROADMAP.md).
+**Stage 7 closed through M13 (release `v0.9.0` proven as published, run 13 green,
+`61a50b4`: M11 STEP-kernel bundle + M12 signing harness + M13 auto-update).**
+Next up: **M14 — CAD depth, one commit per op: nesting/plate packing,
+drawings/assembly export, parameter families** (docs/ROADMAP.md).
 
-Highlights of the M10 loop (9 release runs, 10 CI runs, all fixed forward):
+Highlights of the M11-M13 loop (runs 10-13, all fixed forward):
 
-- CI: Linux-portability of the daemon spawn test (`os.pathsep`, absolute fake
-  exe) got Backend tests green on Ubuntu — run 161 all-jobs-pass.
-- Release: Inno Setup installed on the runner with `TRINITY_ISCC` discovery;
-  windeployqt resolved via `where.exe` / `QT_ROOT_DIR` / `C:\Qt` glob with the
-  Qt action cache disabled (`dir: C:/Qt` pin takes real effect); vcpkg binary
-  cache save/restore split now persists across failed runs (12-13 min runs).
-- Diagnostics: pytest tail + packaging failures surface as job annotations
-  (short stdout lines; pwsh `-split` chunks were being dropped), plus a
-  github-gist dump path with `GH_TOKEN` for state probing.
-- Gate: the workflow downloads its own published assets back from the public
-  Release page, re-verifies SHA256SUMS, unzips, and runs the full bundle smoke
-  — `M10 GATE PASS` is now an enforced step, not a manual promise. Lesson:
-  deleting/re-pushing a tag flips the release to draft (assets 404); the
-  pipeline re-publishes it (`gh release edit --draft=false --latest=true`).
-- Local: `packaging/verify_release.ps1` re-runs the same gate from any machine
-  (this machine's ISP currently blackholes `release-assets.githubusercontent.com`
-  — TCP connects, body never flows; the runner-side gate covers it).
+- M11: PyInstaller pinned `6.22.3`; spec gains the OCP hiddenimports; runner
+  OCP `0 pyd, 0 TK dll` (runs 10-12) root-caused to **silent pwsh
+  native-command failures** — `pip install ".[cad]"` and the OCP import check
+  both failed on the runner's newest preinstalled Python and the step still
+  "succeeded". Cure: `actions/setup-python` pin 3.12 + per-command gates in
+  the deps step (`61a50b4`) + package.ps1 identity check that now **fails the
+  build BEFORE PyInstaller** instead of printing and carrying on.
+- M12: `sign_files.ps1` (PFX or zero-config self-signed, 60-day expiry gate)
+  wired into package + installer before hashing (order: sign → smoke →
+  compress → hash → publish); runner prints the honest "unsigned build" skip.
+- M13: updater core (manifest check never downloads; apply = sha256 + bundle
+  layout gates → staged tree + `swap.json`; **swap at next launcher boot**
+  because Windows cannot replace a running exe; storage root outside the
+  swap set), `/api/update/check` + `/apply` with mandatory `confirm`,
+  `latest.yml` generation in release.yml, the verify-as-published gate now
+  downloads `latest.yml` back and proves version/sha256/size/url against the
+  actually published zip, frontend banner with explicit consent.
+- The gotcha of the day: a programmatic launcher rebuild interpolated `$bat`
+  away inside a double-quoted string — parsed clean, failed at runtime
+  `CommandNotFoundException '='`. Lesson: **parse gates prove nothing; only
+  bare-metal script execution does** — the failure was caught by the local
+  full package run, not by the parser.
+- Run 13 assets as published: zip 190 MB, setup.exe 126 MB, SHA256SUMS.txt,
+  latest.yml; release re-published automatically after the tag re-point.
 
 ---
 
@@ -60,7 +68,13 @@ Highlights of the M10 loop (9 release runs, 10 CI runs, all fixed forward):
 
 ---
 
-## Done
+### Stage 7: Release Hardening (M10-M13 done)
+
+- [x] **M10** — tag `v0.9.0` pipeline-test cycle: release run 9 green end-to-end (`a1479fe`), prove-as-published gate enforced (`M10 GATE PASS`), tag-repoint draft-flip fixed with post-upload re-publish
+- [x] **M11** — OpenCascade `[cad]` in the PyInstaller bundle; real STEP export in the bundle smoke (runs 10-12 failing OCP collection root-caused to masked pwsh failures; runner Python pinned 3.12 inside `61a50b4`); run 13 proves the kernel as published
+- [x] **M12** — code-signing harness, sign → smoke → compress → hash → publish order, 60-day renewal gate, self-signed decision documented (`dcd4dbd`)
+- [x] **M13** — auto-update stack: updater core + gated routes (75bf618), `latest.yml` + as-published manifest gate (`12cfd04`), launcher repair (`66db7d5`), version stamp + swap-at-boot + frontend banner (`deb4882`); 10 updater tests; run 13 verifies `latest.yml` against the published zip
+- [ ] **M14** — queued: CAD depth, one commit per op (nesting, drawings, parameter families)
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
