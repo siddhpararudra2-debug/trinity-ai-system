@@ -10,37 +10,40 @@ change it describes — never on its own.
 
 ## In progress
 
-**Stage 7 closed through M13 (release `v0.9.0` proven as published, run 13 green,
-`61a50b4`: M11 STEP-kernel bundle + M12 signing harness + M13 auto-update).**
-Next up: **M14 — CAD depth, one commit per op: nesting/plate packing,
-drawings/assembly export, parameter families** (docs/ROADMAP.md).
+**Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
+`07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
+ruff clean).**
+Nothing further is defined in docs/ROADMAP.md after M14 — new milestones
+get planned when needed. Until then the standing rule holds: any release
+run re-tags `v0.9.0` at the newest commit (the workflow already carries
+the python pin, strict gates, signing env, and the latest.yml
+verify-as-published gate); `v1.0.0` stays untouched.
 
-Highlights of the M11-M13 loop (runs 10-13, all fixed forward):
+Highlights of the M14 loop (all three ops landed green; code lessons in PROCESS.md):
 
-- M11: PyInstaller pinned `6.22.3`; spec gains the OCP hiddenimports; runner
-  OCP `0 pyd, 0 TK dll` (runs 10-12) root-caused to **silent pwsh
-  native-command failures** — `pip install ".[cad]"` and the OCP import check
-  both failed on the runner's newest preinstalled Python and the step still
-  "succeeded". Cure: `actions/setup-python` pin 3.12 + per-command gates in
-  the deps step (`61a50b4`) + package.ps1 identity check that now **fails the
-  build BEFORE PyInstaller** instead of printing and carrying on.
-- M12: `sign_files.ps1` (PFX or zero-config self-signed, 60-day expiry gate)
-  wired into package + installer before hashing (order: sign → smoke →
-  compress → hash → publish); runner prints the honest "unsigned build" skip.
-- M13: updater core (manifest check never downloads; apply = sha256 + bundle
-  layout gates → staged tree + `swap.json`; **swap at next launcher boot**
-  because Windows cannot replace a running exe; storage root outside the
-  swap set), `/api/update/check` + `/apply` with mandatory `confirm`,
-  `latest.yml` generation in release.yml, the verify-as-published gate now
-  downloads `latest.yml` back and proves version/sha256/size/url against the
-  actually published zip, frontend banner with explicit consent.
-- The gotcha of the day: a programmatic launcher rebuild interpolated `$bat`
-  away inside a double-quoted string — parsed clean, failed at runtime
-  `CommandNotFoundException '='`. Lesson: **parse gates prove nothing; only
-  bare-metal script execution does** — the failure was caught by the local
-  full package run, not by the parser.
-- Run 13 assets as published: zip 190 MB, setup.exe 126 MB, SHA256SUMS.txt,
-  latest.yml; release re-published automatically after the tag re-point.
+- Families `ca61424`: truth per member — a bound-violating variant is
+  reported `valid: false` with the part's verbatim reason and never
+  dropped; per-member checksum = sha256 over canonical JSON of the
+  triangle soup + spec, so equal spec ⇒ equal checksum and different
+  geometry ⇒ different checksum.
+- Nesting `07e1d69`: the published layout ships WITH its pairwise
+  proof (no overlap, spacing held, all inside stock); the semantics
+  lesson corrected mid-proof — parts side by side share their y-range,
+  so the spacing rule is "either axis separates by the full spacing,"
+  i.e. **max(gap_x, gap_y) ≥ spacing**, not min.
+- Drawings `fe3e58f`: projections are the mesh's full unique wireframe
+  (documented as engineering truth about THIS tessellation, not a
+  hidden-line-removed print); pinned box counts (top/front/side=6,
+  iso=18) verified against the 18-edge enumeration; the emitted DXF is
+  recounted by parse-back before the op returns — a rendering drop
+  raises instead of publishing a document that lost strokes.
+- The gotcha of the stage: inserting `CADFamilySelector`/`CADFamilyRequest`
+  between `CADGenerateRequest`'s fields and its `@field_validator`
+  silently re-homed the validator onto the new class — unknown part
+  types turned into 200 success:false envelopes instead of 422s. The
+  existing suite caught it on the next full run. Rule recorded in
+  PROCESS.md: schema-edge rules get route tests immediately, and any
+  class insertion in `schemas.py` is followed by the schema-422 tests.
 
 ---
 
@@ -73,8 +76,17 @@ Highlights of the M11-M13 loop (runs 10-13, all fixed forward):
 - [x] **M10** — tag `v0.9.0` pipeline-test cycle: release run 9 green end-to-end (`a1479fe`), prove-as-published gate enforced (`M10 GATE PASS`), tag-repoint draft-flip fixed with post-upload re-publish
 - [x] **M11** — OpenCascade `[cad]` in the PyInstaller bundle; real STEP export in the bundle smoke (runs 10-12 failing OCP collection root-caused to masked pwsh failures; runner Python pinned 3.12 inside `61a50b4`); run 13 proves the kernel as published
 - [x] **M12** — code-signing harness, sign → smoke → compress → hash → publish order, 60-day renewal gate, self-signed decision documented (`dcd4dbd`)
-- [x] **M13** — auto-update stack: updater core + gated routes (75bf618), `latest.yml` + as-published manifest gate (`12cfd04`), launcher repair (`66db7d5`), version stamp + swap-at-boot + frontend banner (`deb4882`); 10 updater tests; run 13 verifies `latest.yml` against the published zip
-- [ ] **M14** — queued: CAD depth, one commit per op (nesting, drawings, parameter families)
+- [x] **M13** - auto-update stack: updater core + gated routes (75bf618), `latest.yml` + as-published manifest gate (`12cfd04`), launcher repair (`66db7d5`), version stamp + swap-at-boot + frontend banner (`deb4882`); 10 updater tests; run 13 verifies `latest.yml` against the published zip
+- [x] **M14** - delivered as Stage 8 below (one commit per op: families, nesting, drawings)
+
+---
+
+### Stage 8: M14 — CAD depth (done)
+
+- [x] Parameter families - `build_family` (`ca61424`): every member is a full variant (own params, real validator verdict + verbatim refusal reason, geometry stats, content checksum over triangle soup + spec); unknown family parameter → 422 with `supported_parameters`; bound-violating members reported invalid, never dropped, never blamed on the family; POST `/api/cad/families`; 7 tests
+- [x] Nesting / plate packing - shelf packer (`07e1d69`): measured XY footprints from real builders, deterministic order (longest side + stable tie-break), half-turn rotation for taller-than-wide parts, spacing rule with EITHER-axis separation semantics, published layout carries its own pairwise overlap+spacing proof (violation raises); bad parts land in `unplaced` with verbatim reasons; POST `/api/cad/nest`; 10 tests
+- [x] Drawings / assembly export - multi-sheet DXF (`fe3e58f`): top/front/side/iso views from the mesh's full unique wireframe (zero-length view-axis projections dropped, true isometric with 120-degree axis separation), framed+labeled 1:1 sheets on per-view layers; emitted DXF recounted against projections before the op returns; box truth pinned (top/front/side=6, iso=18); POST `/api/cad/drawings`; 16 tests
+- Suite at close: 375 passed / 40 skipped, ruff clean; catalog honesty rule held throughout - no op advertised until implemented + verified
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.

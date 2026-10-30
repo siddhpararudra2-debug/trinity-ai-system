@@ -124,6 +124,20 @@ broke. Kept because the next session will hit them again:
   `smoke_bundle.py` terminates its child explicitly in `finally`.
 
 ### Backend (Starlette / FastAPI / PyInstaller)
+- **A pydantic `field_validator` lives INSIDE its class body.** Inserting a
+  new request model between the fields and the decorator silently re-homes
+  the validator onto the new class (seen in M14: `CADGenerateRequest`'s
+  unsupported-type check became `CADFamilyRequest`'s, so unknown part
+  types turned into 200 success:false envelopes instead of 422s). The
+  existing route suite caught it on the next full run. Rule: every
+  schema-edge rule gets a route test immediately, and any class
+  insertion in `schemas.py` is followed by re-running the schema-422
+  tests before anything else.
+- **JobManager turns engine errors into 200 envelopes** - only the
+  schema edge produces 422. Any rule that must yield 422 (catalog
+  honesty: unsupported type, unknown drawing view) is enforced in
+  `src/models/schemas.py` validators; engine-side checks of the same
+  rule are honest-refusal copies, not the enforcement point.
 - **`StaticFiles(html=True)` returns a 404 `FileResponse` — it does not
   raise** — when a `404.html` exists in the directory (Next.js exports
   one). Any "catch the exception and retry" logic never fires. The
