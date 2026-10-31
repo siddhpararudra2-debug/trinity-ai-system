@@ -144,6 +144,31 @@ productization → agent surface → model-attach docs → honesty pass.
   The no-model deterministic fallback keeps `fallback`/`tool`/`job`
   backwards-compatible and now also carries its executed call as a
   runnable single node. Suite: 386 passed / 40 skipped, ruff clean.
+  CI #185 + Browser E2E #23 verified green on `864579b` before M15.2
+  started.
+
+- [x] M15.2 - plan in the UI. `frontend/lib/api/trinity.ts` gains
+  `streamPlan()` — a POST SSE client that forwards `delta` frames to an
+  `onDelta` callback and resolves on the first `final`/`error` frame,
+  filtering `plan.nodes` through a shape predicate so a malformed node
+  never reaches the graph. `DagRunPanel` gains the PLAN affordance: input
+  + button stream the request, raw deltas render in a scrolling `<pre>`
+  while the model thinks, and the final frame's validated nodes load into
+  the graph for an explicit EXECUTE — the plan is a proposal until the
+  operator presses the button, exactly the pipeline's loaded-by-plan path.
+  Source shown verbatim: "PLAN FROM MODEL — EDIT THEN EXECUTE", "PLAN
+  FROM DETERMINISTIC ROUTER — NO MODEL ATTACHED" (the no-endpoint truth),
+  or "PLAN REFUSED (code)" with the backend's verbatim reason. The panel's
+  workflow POST moved onto the shared `TRINITY_API_URL` seam (bare `/api`
+  only ever worked in the packaged same-origin mode). Two suite bugs fixed
+  while landing the new `dag` suite: the plan client must not read a 200
+  stream's body before streaming (`.json()` locks it — the fetch SUCCEEDED
+  while the client threw "already locked to a reader"), and the `+ NODE`
+  assertion may not read the React re-render in the click's tick.
+  Verification: E2E #23 (M15.1) concluded success first; lint + tsc +
+  production build clean; new dag suite 10/10; full browser run 115
+  assertions, 12 suites, 0 failed. Files: frontend/lib/api/trinity.ts,
+  frontend/components/trinity/DagRunPanel.tsx, frontend/e2e/suites/dag.mjs.
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.

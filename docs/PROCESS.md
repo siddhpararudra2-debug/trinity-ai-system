@@ -211,6 +211,15 @@ broke. Kept because the next session will hit them again:
   `.chat-message.bot` grew when `PROCESSING —` appeared, so the cad suite
   read the placeholder instead of the reply. Wait for the settled
   content, not for a count change.
+- **Never touch a 200 stream's body before streaming it.** The SSE client
+  copied the standard `response.json()` error-shape preamble from the
+  other API calls; on a 200 that call reads and locks the ReadableStream,
+  and the later `getReader()` died with "already locked to a reader" —
+  the fetch had succeeded and the client threw the plan away. Body
+  inspection is only for `!response.ok`, before the stream is read.
+- **Rebuilding `.next` under a live `next start` kills the server**, and
+  the launcher then shuts the whole stack down. Build before starting the
+  stack, never during; if the stack is already up, stop it first.
 
 ### CI (GitHub Actions)
 - **A job cannot opt out of its workflow's cancellation policy.** The

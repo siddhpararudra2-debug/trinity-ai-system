@@ -250,6 +250,115 @@ export function getArtifactUrl(artifactId: string): string {
   return `${TRINITY_API_URL}/artifacts/${artifactId}`;
 }
 
+// ----------------------------- M15: streamed plan over SSE -----------------
+
+export type PlanNodeSpec = {
+  id: string;
+  engine: string;
+  operation: string;
+  parameters: Record<string, unknown>;
+  dependencies: string[];
+};
+
+export type StreamPlanResult =
+  | { type: 'final'; source: string; summary: string; nodes: PlanNodeSpec[] }
+  | { type: 'error'; code: string; message: string };
+
+function specIsNode(value: unknown): value is PlanNodeSpec {
+  if (!value || typeof value !== 'object') return false;
+  const spec = value as Partial<PlanNodeSpec>;
+  return (
+    typeof spec.id === 'string' && spec.id !== '' &&
+    typeof spec.engine === 'string' && spec.engine !== '' &&
+    typeof spec.operation === 'string' && spec.operation !== '' &&
+    typeof spec.parameters === 'object' && spec.parameters !== null &&
+    Array.isArray(spec.dependencies)
+  );
+}
+
+/**
+ * Stream POST /api/intelligence/stream-plan.
+ *
+ * Delta tokens surface through `onDelta` as they arrive; the resolved
+ * outcome is returned as the last SSE frame: a `final` carrying the
+ * validated executable plan (nodes in POST /api/workflows/execute's exact
+ * shape) or an honest `error` frame (code + verbatim message) for an
+ * unparseable model reply. A non-OK HTTP response throws TrinityApiError
+ * like every other call.
+ */
+export async function streamPlan(
+  text: string,
+  onDelta: (text: string) => void,
+): Promise<StreamPlanResult> {
+  const response = await fetch(`${TRINITY_API_URL}/intelligence/stream-plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) {
+    // Only for error responses: reading the body locks the stream, and a
+    // 200 SSE body must stay unlocked for the reader below.
+    const payload: unknown = await response.json().catch(() => null);
+    throw apiError(payload, response.status);
+  }
+  if (!response.body) throw new Error('The API returned an empty stream.');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let last: StreamPlanResult | null = null;
+
+  const handle = (frame: string) => {
+    const line = frame.trim();
+    if (!line.startsWith('data:')) return;
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(line.slice(5).trim()) as Record<string, unknown>;
+    } catch {
+      return; // malformed frame: skip, never invent text
+    }
+    if (event.type === 'delta' && typeof event.text === 'string') {
+      onDelta(event.text);
+    } else if (event.type === 'error') {
+      const message =
+        event.message && typeof event.message === 'object'
+          ? (event.message as Record<string, unknown>)
+          : {};
+      last = {
+        type: 'error',
+        code: typeof message.code === 'string' ? message.code : 'stream_error',
+        message:
+          typeof message.message === 'string' ? message.message : 'planning failed',
+      };
+    } else if (event.type === 'final') {
+      const plan =
+        event.plan && typeof event.plan === 'object'
+          ? (event.plan as Record<string, unknown>)
+          : {};
+      last = {
+        type: 'final',
+        source: typeof plan.source === 'string' ? plan.source : '',
+        summary: typeof plan.summary === 'string' ? plan.summary : '',
+        nodes: Array.isArray(plan.nodes)
+          ? (plan.nodes as unknown[]).filter(specIsNode)
+          : [],
+      };
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    for (const frame of frames) handle(frame);
+  }
+  if (buffer.trim()) handle(buffer); // trailing frame without its blank line
+  if (!last) throw new Error('The stream ended without a final frame.');
+  return last;
+}
+
 export async function executeRequirement(text: string): Promise<TrinityResult> {
   const response = await fetch(`${TRINITY_API_URL}/requirements/execute`, {
     method: 'POST',
