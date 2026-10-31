@@ -67,6 +67,20 @@ habit — they are why the test counts only ever climb:
   Trusted Signing (first choice) or an EV/OV cert; only the credential
   source changes, the pipeline stays as built.
 
+### M15 agentic depth (settled)
+
+- **CI never attaches a model.** Runners verify the no-model truth —
+  fallback labels and verbatim refusals are the tested contract. The
+  model-attached path is verified locally against a documented recipe,
+  and its wire format stays pinned by scripted-fake tests, never by a
+  live model in CI.
+- **A plan frame is machine-readable or it does not ship.** The
+  stream-plan final frame carries validated `WorkflowNodeModel`-shaped
+  nodes that POST /api/workflows/execute accepts unchanged; model prose
+  is never exec-ed and never denatured by the UI.
+- **Agents may only call registry-advertised engine ops.** The
+  phantom-capability rule extends to whatsoever a model proposes.
+
 ### M13 auto-update policy (settled)
 
 - **Checks never download.** `GET /api/update/check` answers availability

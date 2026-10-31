@@ -50,6 +50,14 @@ from src.models.schemas import (
     WorkflowNodeResult,
 )
 from src.core.updater import UpdateInfo, apply_update, check_updates
+from src.intelligence.plan import (
+    PlanError,
+    build_plan_prompt,
+    build_plan_system_prompt,
+    parse_plan,
+    plan_frame,
+    validate_plan,
+)
 from src.workflows.dag import WorkflowNode, ordered as ordered_nodes
 
 router = APIRouter(prefix="/api")
@@ -300,9 +308,19 @@ async def stream_plan(req: StreamPlanRequest):
 
     With a model endpoint configured, delta tokens stream through as
     {"type":"delta","text":...} frames and a {"type":"final"} closes the
-    stream. Without one, this degrades truthfully: the deterministic router
-    either lands an executable plan ({"type":"final","tool":...}) or the
-    stream ends with an honest {"type":"error"} event — never a fake token.
+    stream carrying the *validated executable plan*:
+    {"plan":{"source":"model","summary":...,"nodes":[...]}} — the nodes use
+    exactly the shape POST /api/workflows/execute accepts, so a plan can be
+    run unchanged. A reply whose plan can't be parsed / validated (no JSON,
+    bad node shape, duplicate ids, unknown or cyclic dependencies, oversize)
+    ends the stream with an honest
+    {"type":"error","message":{"code":"plan_invalid", ...}} event instead of
+    a plan the UI would have to interpret.
+
+    Without a model, this degrades truthfully to the deterministic router:
+    one executable node plus the call it already executed, labeled
+    {"fallback":"deterministic_router"}. Never a fake token, never a stream
+    pretending a model is attached.
     """
 
     def sse(event: dict[str, Any]) -> str:
@@ -312,9 +330,32 @@ async def stream_plan(req: StreamPlanRequest):
         llm = _local_llm()
         if llm.available():
             try:
-                for text in llm.stream(req.text):
+                chunks: list[str] = []
+                for text in llm.stream(
+                    build_plan_prompt(req.text), system=build_plan_system_prompt()
+                ):
+                    chunks.append(text)
                     yield sse({"type": "delta", "text": text})
-                yield sse({"type": "final"})
+                try:
+                    parsed = parse_plan("".join(chunks))
+                    nodes = validate_plan(parsed)
+                except PlanError as exc:
+                    yield sse(
+                        {
+                            "type": "error",
+                            "message": {
+                                "code": "plan_invalid",
+                                "message": str(exc),
+                            },
+                        }
+                    )
+                    return
+                yield sse(
+                    {
+                        "type": "final",
+                        **plan_frame("model", parsed["summary"], nodes),
+                    }
+                )
                 return
             except EngineExecutionError as exc:
                 yield sse({"type": "error", "message": exc.to_dict()})
@@ -334,6 +375,13 @@ async def stream_plan(req: StreamPlanRequest):
             envelope = await _execute_tool(
                 parsed["domain"], parsed["operation"], parameters
             )
+            fallback_node = WorkflowNode(
+                id="n1",
+                engine=parsed["domain"],
+                operation=parsed["operation"],
+                parameters=parameters,
+                dependencies=[],
+            )
             yield sse(
                 {
                     "type": "final",
@@ -344,6 +392,12 @@ async def stream_plan(req: StreamPlanRequest):
                         "parameters": parameters,
                     },
                     "job": envelope,
+                    **plan_frame(
+                        "deterministic_router",
+                        f"{parsed['domain']}.{parsed['operation']} "
+                        "(deterministic router — no model attached)",
+                        [fallback_node],
+                    ),
                 }
             )
         except Exception as exc:  # noqa: BLE001 — router miss ends as an error event
