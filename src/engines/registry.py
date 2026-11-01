@@ -46,6 +46,7 @@ def bootstrap_engines() -> None:
     from src.engines.cad.engine import CADEngine
     from src.engines.math.engine import MathEngine
     from src.engines.native_bridge import NATIVE_ENGINES, NativeBridgeEngine
+    from src.engines.robotics.engine import RoboticsEngine
     from src.engines.scaffold import ScaffoldEngine
     from src.engines.simulation.engine import SimulationEngine
 
@@ -70,6 +71,9 @@ def bootstrap_engines() -> None:
             # run (Linux bundle, native-less CI). Advertises exactly the
             # ops that engine implements and tests.
             registry.register(SimulationEngine())
+        elif name == "robotics":
+            # M18.2: same rule — only the advertised FK/trajectory ops.
+            registry.register(RoboticsEngine())
         else:
             registry.register(ScaffoldEngine(name, capabilities))
 

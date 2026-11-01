@@ -134,9 +134,12 @@ def test_engines_endpoint_marks_scaffolds(monkeypatch):
         engines = {e["name"]: e for e in client.get("/api/engines").json()}
     assert engines["cad"].get("status") is None
     assert engines["math"].get("status") is None
-    # M18.1: simulation has a real Python fallback, so it is no longer a
-    # scaffold; the remaining five stay honest refusals without native.
+    # M18.1/M18.2: simulation and robotics have real Python fallbacks, so
+    # they are no longer scaffolds; the remaining four stay honest
+    # refusals without native.
     assert engines["simulation"].get("status") is None
     assert "simulate_spring_chain" in engines["simulation"]["capabilities"]
-    for name in ("pcb", "firmware", "vision", "research", "robotics"):
+    assert engines["robotics"].get("status") is None
+    assert "trajectory_plan" in engines["robotics"]["capabilities"]
+    for name in ("pcb", "firmware", "vision", "research"):
         assert engines[name]["status"] == "scaffolded", name

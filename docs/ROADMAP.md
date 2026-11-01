@@ -63,8 +63,10 @@ the M-rules: one concern per commit, verified before advertised.
   advertises (`simulate`, `simulate_spring_chain`) where no
   `Trinity.exe` exists; native stays preferred when present, and the
   native-only ledger/export paths are documented as such rather than
-  faked. Remaining engines (robotics, vision, research, pcb, firmware)
-  follow one op at a time.
+  faked. M18.2 gives `robotics` the same treatment for `kinematics`
+  (standard-DH FK) and `trajectory_plan` (linear joint-space motion).
+  Remaining engines (vision, research, pcb, firmware) follow one op at
+  a time.
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
   the transport abstraction gets a POSIX backend before any bundle
   claims native engines on Linux.
