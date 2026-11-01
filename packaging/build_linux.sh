@@ -53,7 +53,10 @@ echo "kernel collection gate ok ($KERNEL_OBJECTS kernel objects)"
 echo "== [3/5] web: static export pointed at the same-origin /api seam =="
 cd "$ROOT/frontend"
 npm ci
-NEXT_PUBLIC_TRINITY_API_URL=/api npm run build
+# The packager contract, mirrored from package.ps1: next.config.ts emits
+# output: 'export' only when TRINITY_STATIC_EXPORT=1 is set. Without it
+# next build writes .next/ and no out/, which the check below catches.
+TRINITY_STATIC_EXPORT=1 NEXT_PUBLIC_TRINITY_API_URL=/api npm run build
 if [ ! -f out/index.html ]; then
     echo "FAIL: frontend/out/index.html missing - static export failed" >&2
     exit 1

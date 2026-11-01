@@ -47,14 +47,24 @@ jobs:
         with:
           node-version: '20'
       - name: Build (config + web + kernel gates are all inside build_linux.sh)
-        run: bash packaging/build_linux.sh
+        run: |
+          set -o pipefail
+          bash packaging/build_linux.sh 2>&1 | tee linux-build.log
       - name: Smoke-verify the assembled bundle
-        run: python packaging/smoke_bundle.py packaging/dist/TrinityAI-*-linux64 --platform linux
+        run: |
+          set -o pipefail
+          python packaging/smoke_bundle.py packaging/dist/TrinityAI-*-linux64 --platform linux 2>&1 | tee linux-smoke.log
       - name: Annotate the honest outcome on failure
         if: failure()
         run: |
-          echo "::error::Linux bundle build or smoke failed — see the Build/Smoke steps above"
-          [ -f packaging/build/trinity-api/xref-trinity-api.html ] || true
+          # Job logs are not readable without a repo token; the tail goes
+          # into annotations instead (the ci.yml pytest pattern).
+          for f in linux-build.log linux-smoke.log; do
+            [ -f "$f" ] || continue
+            echo "::group::$f tail"
+            tail -120 "$f" | sed 's/%/%25/g; s/\r//g' | fold -s -w 500 | sed 's/^/::error ::/' | tail -10
+            echo "::endgroup::"
+          done
       - name: Upload the verified bundle
         uses: actions/upload-artifact@v6
         with:
@@ -69,4 +79,6 @@ jobs:
           path: |
             packaging/build/trinity-api/xref-trinity-api.html
             packaging/build/trinity-api/warn-trinity-api.txt
+            linux-build.log
+            linux-smoke.log
           if-no-files-found: ignore
