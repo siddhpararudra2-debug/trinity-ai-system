@@ -77,5 +77,6 @@ printf 'native engines: unavailable by design on this platform bundle -- the\n' 
 echo "== [5/5] zip =="
 cd "$(dirname "$OUT")"
 rm -f "TrinityAI-$VER-linux64.zip"
-zip -r -q "TrinityAI-$VER-linux64.zip" "$(basename "$OUT")"
+# `zip` is not preinstalled on the runner; the stdlib zipfile module is.
+python -m zipfile -c "TrinityAI-$VER-linux64.zip" "$(basename "$OUT")"
 echo "BUILD OK: $OUT"
