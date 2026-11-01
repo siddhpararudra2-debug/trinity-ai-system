@@ -396,7 +396,7 @@ productization → agent surface → model-attach docs → honesty pass.
   200 + marker; future schema 99 -> `DataSchemaError`) and a frozen
   bundle's smoke storage carrying `schema_version: 1`.
 
-- [ ] M18.1 - simulation Python fallback. `src/engines/simulation/engine.py`
+- [x] M18.1 - simulation Python fallback. `src/engines/simulation/engine.py`
   implements the two advertised ops where no `Trinity.exe` exists
   (Linux bundle, native-less CI): `simulate` is closed-form linear
   motion with optional constant acceleration (`dt`/`dt_s` alias,
@@ -411,9 +411,9 @@ productization → agent surface → model-attach docs → honesty pass.
   registry still prefers `NativeBridgeEngine` whenever the binary
   exists. The native-only `project_rules` ledger and CSV/JSON artifact
   export are not faked. 16 new tests; suite 414 passed / 40 skipped;
-  ruff clean. Ticked only after CI is green.
+  ruff green. Proven on push.
 
-- [ ] M18.2 - robotics Python fallback. `src/engines/robotics/engine.py`
+- [x] M18.2 - robotics Python fallback. `src/engines/robotics/engine.py`
   implements the two advertised ops without a native daemon:
   `kinematics` is standard-DH FK with the native default two-link chain,
   `dh_params` replacement rows and the native bounds, zero-default
@@ -423,10 +423,9 @@ productization → agent surface → model-attach docs → honesty pass.
   verification, a 1M-step cap, and the same 20k-sample downsample.
   `robotics` no longer reports `scaffolded` where no `Trinity.exe`
   exists; the joint/link IR ops stay native-only and unadvertised.
-  29 new tests; suite 443 passed / 40 skipped; ruff clean. Ticked only
-  after CI is green.
+  29 new tests; suite 443 passed / 40 skipped; ruff green. Proven on push.
 
-- [ ] M18.3 - vision Python fallback. A new `[vision]` extra (Pillow,
+- [x] M18.3 - vision Python fallback. A new `[vision]` extra (Pillow,
   pypdf) backs two advertised ops: `image_inspect` mirrors the native
   `load_image` envelope, resolves uploaded `artifact_id`s, counts palette
   channels like OpenCV, and refuses bad images with the native messages;
@@ -434,17 +433,16 @@ productization → agent surface → model-attach docs → honesty pass.
   encrypted-PDF and non-UTF-8 refusals, and says OCR is native-only for
   scanned PDFs. Without the extra both refuse with an install hint. CI
   installs `.[vision]`; the Linux builder installs `.[cad,vision]`. 20
-  new tests; suite 463 passed / 40 skipped; ruff clean. Ticked only after
-  CI is green.
+  new tests; suite 463 passed / 40 skipped; ruff green. Proven on push.
 
-- [ ] M18.4 - research Python fallback. `search` keeps the native hit
+- [x] M18.4 - research Python fallback. `search` keeps the native hit
   shape, tokenization, stopwords, scoring, ranking, and snippet rules.
   An optional `documents[]` payload searches the caller's material; with
   no payload the repo's Markdown docs are indexed lazily, and the
   PyInstaller spec ships those docs so the Linux bundle has a real
   corpus. `index_document`/`summarize_results`/export stay native-only.
-  25 new tests; suite 488 passed / 40 skipped; ruff clean. Ticked only
-  after CI is green.
+  25 new tests; suite 488 passed / 40 skipped; ruff green. Proven on
+  push.
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
