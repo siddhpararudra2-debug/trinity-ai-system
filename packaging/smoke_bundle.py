@@ -1,16 +1,23 @@
 """End-to-end smoke check for a packaged Trinity distribution.
 
-Run against a distribution directory (native/ + api/ + web/):
-starts trinity-api.exe with the bundled layout's environment, then
+Run against a distribution directory:
+  windows: native/ + api/ + web/  (Trinity.exe daemon included)
+  linux:   api/ + web/            (M16 - no native daemon on this bundle)
+
+Starts the bundled trinity-api binary with the layout's environment, then
 asserts, in order:
   1. /api/health answers (the process is genuinely up)
   2. / serves the static UI
   3. /chat resolves through the .html retry
-  4. an engine execution answers through the bundled native bridge
-  5. the OpenCascade kernel works IN THE BUNDLE: the catalog reports
+  4. an engine execution answers -- through the bundled native bridge on
+     Windows, through the Python math engine on Linux
+  5. (linux) a native-backed engine refuses with the honest
+     capability_unavailable reason inside the frozen bundle -- absence
+     must be stated, never papered over
+  6. the OpenCascade kernel works IN THE BUNDLE: the catalog reports
      step as available and a real STEP export produces OCCT stats
      (M11 - the bundle without a working kernel fails the smoke)
-  6. the updater route answers with the availability shape (M13 -
+  7. the updater route answers with the availability shape (M13 -
      offline is fine: available:false with a reason)
 
 Exit code 0 only when every step really answered -- the same rule the
@@ -29,7 +36,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-REQUIRED_DIRS = ("native", "api", "web")
+REQUIRED_DIRS_BY_PLATFORM = {
+    "windows": ("native", "api", "web"),
+    "linux": ("api", "web"),
+}
 
 
 def _get(url: str, timeout: float = 5.0) -> tuple[int, str]:
@@ -44,30 +54,40 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("dist", help="path to the assembled distribution directory")
     parser.add_argument("--port", type=int, default=8241)
+    parser.add_argument(
+        "--platform", choices=sorted(REQUIRED_DIRS_BY_PLATFORM), default="windows",
+        help="which bundle layout this is (default: windows, unchanged)")
     args = parser.parse_args()
 
     dist = Path(args.dist).resolve()
-    missing = [d for d in REQUIRED_DIRS if not (dist / d).is_dir()]
+    required = REQUIRED_DIRS_BY_PLATFORM[args.platform]
+    missing = [d for d in required if not (dist / d).is_dir()]
     if missing:
         print(f"FAIL: distribution missing: {missing}", file=sys.stderr)
         return 1
-    api_exe = dist / "api" / "trinity-api.exe"
-    if not api_exe.is_file():
-        print(f"FAIL: {api_exe} not found", file=sys.stderr)
+    api_name = "trinity-api.exe" if args.platform == "windows" else "trinity-api"
+    api_bin = dist / "api" / api_name
+    if not api_bin.is_file():
+        print(f"FAIL: {api_bin} not found", file=sys.stderr)
         return 1
 
     env = os.environ.copy()
     env["TRINITY_API_PORT"] = str(args.port)
     env["TRINITY_UI_DIR"] = str(dist / "web")
-    env["TRINITY_NATIVE_EXEC"] = str(dist / "native" / "Trinity.exe")
-    env["TRINITY_QT_BIN"] = str(dist / "native")
+    env["TRINITY_STORAGE_ROOT"] = str(dist.parent / "smoke-data" / dist.name)
     # User data lives NEXT TO nothing the installer owns: keep the
     # package read-only by putting storage in the smoke scratch space
-    # (the real launcher uses %LOCALAPPDATA%).
-    env["TRINITY_STORAGE_ROOT"] = str(dist.parent / "smoke-data" / dist.name)
+    # (the real launcher uses %LOCALAPPDATA% on Windows and
+    # ~/.local/share on Linux).
+    if args.platform == "windows":
+        env["TRINITY_NATIVE_EXEC"] = str(dist / "native" / "Trinity.exe")
+        env["TRINITY_QT_BIN"] = str(dist / "native")
+    # Linux: deliberately no TRINITY_NATIVE_EXEC -- the bridge must keep
+    # the six native-backed engines on ScaffoldEngine and refuse them
+    # honestly; that refusal is what step 5 below proves.
 
     proc = subprocess.Popen(
-        [str(api_exe)],
+        [str(api_bin)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
         env=env,
@@ -102,10 +122,18 @@ def main() -> int:
             return 1
         findings.append("chat route ok")
 
-        body = json.dumps({
-            "engine": "research", "operation": "search",
-            "parameters": {"query": "package smoke probe"},
-        }).encode()
+        if args.platform == "windows":
+            body = json.dumps({
+                "engine": "research", "operation": "search",
+                "parameters": {"query": "package smoke probe"},
+            }).encode()
+        else:
+            # Linux: the probe answers through the Python math engine —
+            # the native bridge is absent from this bundle by design.
+            body = json.dumps({
+                "engine": "math", "operation": "evaluate",
+                "parameters": {"expression": "2+3"},
+            }).encode()
         req = urllib.request.Request(
             f"{base}/api/execute", data=body,
             headers={"Content-Type": "application/json"})
@@ -115,6 +143,26 @@ def main() -> int:
             print(f"FAIL: engine probe refused: {out.get('errors')}", file=sys.stderr)
             return 1
         findings.append("engine probe ok")
+
+        # --- M16 (linux): absence must be stated, never papered over ----
+        # Inside the frozen bundle, a native-backed engine answers with
+        # the scaffold's honest capability_unavailable refusal.
+        if args.platform == "linux":
+            body = json.dumps({
+                "engine": "pcb", "operation": "create",
+                "parameters": {"spec": "smoke probe"},
+            }).encode()
+            req = urllib.request.Request(
+                f"{base}/api/execute", data=body,
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                out = json.loads(resp.read())
+            codes = [e.get("code") for e in (out.get("errors") or [])]
+            if out.get("success") or "capability_unavailable" not in codes:
+                print(f"FAIL: linux bundle must refuse native-backed "
+                      f"engines honestly: {out}", file=sys.stderr)
+                return 1
+            findings.append("native-backed refusal honest")
 
         # --- M11: the bundled OpenCascade kernel must genuinely work ------
         # The catalog is pure registry read; `step` flips to available only

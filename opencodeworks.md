@@ -287,6 +287,44 @@ productization → agent surface → model-attach docs → honesty pass.
   This closes Stage 9 / M15 as planned (M15.1 → M15.6 all green).
   Files: docs/MILESTONES.md, docs/ROADMAP.md, docs/PROCESS.md.
 
+- [x] **Stage 10 (open): the deferred list becomes work — see ROADMAP.**
+
+- [ ] M16.1 - Linux portable bundle build + smoke pipeline. The deferred
+  "macOS/Linux packaging" item stops being a recorded wish: CI is the
+  only Linux the project owns, so CI builds and verifies the bundle.
+  Decision recorded in the scripts themselves: the Linux bundle is
+  `api/ + web/ + trinity.sh` — no native/, because the Trinity.exe
+  daemon is Windows-only (WinHTTP, Qt6, MSVC), and the registry must
+  keep the six native-backed engines on their honest scaffold
+  refusals *inside the frozen bundle* (the smoke proves that refusal:
+  `pcb/create` answers `capability_unavailable`, never a paper-over).
+  Mechanics: `packaging/trinity-api.spec` becomes cross-platform (the
+  config datas path is joined at build time — one spec, no forks to
+  drift); `packaging/smoke_bundle.py` gains `--platform` (windows keeps
+  the exact prior behavior incl. the native-bridge research probe;
+  linux asserts health/UI/chat, math answering through the Python
+  engine, the native refusal, the M11 kernel gate — catalog reports
+  `step` available and a real STEP export carries volume_mm3 — and the
+  M13 updater-route shape); `packaging/build_linux.sh` mirrors the
+  release.yml build recipe (requirements + `[cad]` + pinned
+  PyInstaller 6.22.3) with the Linux cousin of the M11 diagnostics: an
+  OCP build-env import gate before freezing and a `TK*.so`/`OCP*.so`
+  collection-count gate after; `packaging/trinity.sh` records the data
+  root decision (XDG_DATA_HOME, default `~/.local/share/TrinityAI/data`
+  — the bundle dir stays read-only friendly) and states there is no
+  swap-scan/boot step because auto-update stays Windows-only by M13's
+  manifest scope (latest.yml keeps referencing the win64 asset — as
+  does the next release commit — so M13's gates are not weakened).
+  `.github/workflows/linux-package.yml` (paths: packaging/**, src/**,
+  itself + workflow_dispatch, own concurrency group) runs build then
+  smoke then uploads the artifact with build diagnostics on failure.
+  Local proof on the existing Windows dist: smoke `--platform windows`
+  green (default platform behavior unchanged). Files:
+  packaging/trinity-api.spec, packaging/smoke_bundle.py,
+  packaging/build_linux.sh, packaging/trinity.sh,
+  .github/workflows/linux-package.yml, work.md, opencodeworks.md,
+  docs/ROADMAP.md.
+
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
   Commits: `760c317` firmware PlatformIO · `7b3408f` pcb trace DRC + Gerber · `541934d` simulation RK4 + spring chain · `f4d1e5f` vision contours + ORB · bridge/README commit (see git log).

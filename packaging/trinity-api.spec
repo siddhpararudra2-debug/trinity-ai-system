@@ -16,11 +16,19 @@
 # are declared explicitly so the frozen importer finds them regardless
 # of hook coverage, and the OCP wheels' TK*.dll dependencies reach
 # _internal/ through PyInstaller's binary dependency scan.
+#
+# M16: the same spec builds BOTH platform bundles. The config path is
+# joined at build time (no hard separator), the binary dependency scan
+# collects TK*.dll on Windows and TK*.so on Linux alike, and the
+# pywin32-only importers PyInstaller adds on Windows simply do not exist
+# on a POSIX build — one spec, no per-platform forks to drift.
+import os
+
 a = Analysis(
     ["trinity_api.py"],
     pathex=["."],
     binaries=[],
-    datas=[("..\\config", "config")],
+    datas=[(os.path.join("..", "config"), "config")],
     hiddenimports=[
         "uvicorn.logging",
         "uvicorn.loops.auto",

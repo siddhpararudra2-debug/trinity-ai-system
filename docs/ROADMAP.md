@@ -27,12 +27,40 @@ what is *not* done.
    decision; re-tagging old shas from later stages is not done and the
    `v0.9.0` workflow runs stay as the published proof of the pipeline.
 
+## Stage 10 (open): working the deferred list
+
+Started because "recorded, not promised" was read as permission to keep
+recorded forever — it is not. Working order is verification capacity,
+not convenience: M16 first (a Linux machine exists only in CI, so CI
+must be the builder), then the data seam, engine depth last, and the
+native daemon port only after the machinery it needs ships. Each keeps
+the M-rules: one concern per commit, verified before advertised.
+
+- **M16 — Linux portable bundle** (in work): same PyInstaller spec
+  (now cross-platform), same smoke contract with a `--platform linux`
+  layout (api/ + web/ + trinity.sh, no native/ — native-backed engines
+  must refuse honestly *inside the bundle*, which the smoke now
+  proves), kernel-collection gate on `TK*.so`/`OCP*.so` count, and
+  `.github/workflows/linux-package.yml` builds + smokes on the runner.
+  Second commit once green: attach the zip to releases with manifest
+  semantics kept Windows-scoped for the updater (latest.yml keeps
+  referencing the win64 asset — M13's gates stay intact).
+- **M17 — data schema/migration seam** (queued): versioned
+  `DATA_SCHEMA` marker applied at startup over `TRINITY_STORAGE_ROOT`,
+  migrations explicit and tested, unknown-future-version refuses and
+  says so rather than guessing.
+- **M18 — engine depth beyond CAD** (queued): smallest
+  verify-before-advertise increments the registry rules allow.
+- **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
+  the transport abstraction gets a POSIX backend before any bundle
+  claims native engines on Linux.
+
 ## Deferred (recorded on purpose, not promised)
 
-- macOS/Linux packaging — the bundle, signing, and swap-on-boot
-  machinery is Windows-shaped; porting means a real layout decision
-  (where does the data root live, what replaces the Inno Setup
-  installer), not a build flag.
+- macOS/Linux packaging — **M16 in work, Linux side first (see Stage
+  10)**: the bundle, signing, and swap-on-boot machinery is
+  Windows-shaped; the honest Linux bundle ships without native engines
+  and says so.
 - New engine types beyond CAD depth — same verify-before-advertise
   rule that took phantom capabilities out of the registry applies.
 - Schema/migration of existing user data stores.

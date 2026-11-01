@@ -1,0 +1,69 @@
+# M16 Linux portable bundle: build on the runner and smoke-verify the
+# result — the whole shipped pipeline, not a dry-run.
+#
+# This workflow exists because no local Linux machine builds these
+# bundles: CI *is* the packaging environment, the same way the Windows
+# release workflow is. It triggers only on the files a Linux bundle can
+# be affected by (packaging scripts, backend source) and on demand.
+#
+# Browser E2E and CI keep their own files; this is deliberately
+# separate so a bundle rebuild never cancels and is never cancelled by
+# ordinary pushes.
+
+name: Linux Package
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+    paths:
+      - 'packaging/**'
+      - 'src/**'
+      - '.github/workflows/linux-package.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Build + smoke Linux portable bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+      - name: Build (config + web + kernel gates are all inside build_linux.sh)
+        run: bash packaging/build_linux.sh
+      - name: Smoke-verify the assembled bundle
+        run: python packaging/smoke_bundle.py packaging/dist/TrinityAI-*-linux64 --platform linux
+      - name: Annotate the honest outcome on failure
+        if: failure()
+        run: |
+          echo "::error::Linux bundle build or smoke failed — see the Build/Smoke steps above"
+          [ -f packaging/build/trinity-api/xref-trinity-api.html ] || true
+      - name: Upload the verified bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: TrinityAI-linux64-zip
+          path: packaging/dist/TrinityAI-*-linux64.zip
+          if-no-files-found: error
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-build-diagnostics
+          path: |
+            packaging/build/trinity-api/xref-trinity-api.html
+            packaging/build/trinity-api/warn-trinity-api.txt
+          if-no-files-found: ignore
