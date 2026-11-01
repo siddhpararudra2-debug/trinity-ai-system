@@ -377,7 +377,7 @@ productization → agent surface → model-attach docs → honesty pass.
   it, and the download-back verification passed. The release is a
   prerelease, and `/releases/latest` still resolves to `v0.9.0`.
 
-- [ ] M17 - data schema/migration seam. `DATA_SCHEMA.json` at
+- [x] M17 - data schema/migration seam. `DATA_SCHEMA.json` at
   `TRINITY_STORAGE_ROOT` records `schema_version`; `src/core/data_schema.py`
   owns the marker, the explicit numbered `MIGRATIONS` chain, and the
   refusal rules. Startup is `ensure_storage_layout()` →
@@ -390,7 +390,11 @@ productization → agent surface → model-attach docs → honesty pass.
   message naming the problem. Tests: fresh root, idempotent re-run,
   legacy adoption with rows preserved, future-version refusal,
   corrupt shapes, negative version, migration-chain completeness, and
-  missing-migration refusal. Ticked only after CI is green.
+  missing-migration refusal. Green: CI #200 @ `1b277da` (pytest 398
+  passed / 40 skipped, ruff clean) and Linux Package #7 @ `1b277da`.
+  Local proof also covered the real lifespan path (fresh root -> health
+  200 + marker; future schema 99 -> `DataSchemaError`) and a frozen
+  bundle's smoke storage carrying `schema_version: 1`.
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.

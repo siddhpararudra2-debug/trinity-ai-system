@@ -50,12 +50,13 @@ the M-rules: one concern per commit, verified before advertised.
   updater (latest.yml still references only the win64 asset — M13's
   gates stay intact). The proof release is a prerelease;
   `/releases/latest` still resolves to `v0.9.0`.
-- **M17 — data schema/migration seam** (in work): `DATA_SCHEMA.json`
-  marker at `TRINITY_STORAGE_ROOT` recording `schema_version`, applied
-  at startup before the database is touched. Legacy unmarked storage is
-  version 0 and migration 1 is the idempotent v1 schema init; future
-  versions refuse and say so rather than guessing, corrupt markers
-  refuse the same way, and the migration chain is explicit and tested.
+- **M17 — data schema/migration seam** (done, CI #200 @ `1b277da`):
+  `DATA_SCHEMA.json` marker at `TRINITY_STORAGE_ROOT` recording
+  `schema_version`, applied at startup before the database is touched.
+  Legacy unmarked storage is version 0 and migration 1 is the idempotent
+  v1 schema init; future versions refuse and say so rather than guessing,
+  corrupt markers refuse the same way, and the migration chain is
+  explicit and tested. Linux Package #7 @ `1b277da` is green too.
 - **M18 — engine depth beyond CAD** (queued): smallest
   verify-before-advertise increments the registry rules allow.
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
