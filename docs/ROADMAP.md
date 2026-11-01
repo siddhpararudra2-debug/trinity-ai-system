@@ -57,8 +57,14 @@ the M-rules: one concern per commit, verified before advertised.
   v1 schema init; future versions refuse and say so rather than guessing,
   corrupt markers refuse the same way, and the migration chain is
   explicit and tested. Linux Package #7 @ `1b277da` is green too.
-- **M18 — engine depth beyond CAD** (queued): smallest
-  verify-before-advertise increments the registry rules allow.
+- **M18 — engine depth beyond CAD** (in work): smallest
+  verify-before-advertise increments the registry rules allow. M18.1
+  gives `simulation` a real Python fallback for the two ops it
+  advertises (`simulate`, `simulate_spring_chain`) where no
+  `Trinity.exe` exists; native stays preferred when present, and the
+  native-only ledger/export paths are documented as such rather than
+  faked. Remaining engines (robotics, vision, research, pcb, firmware)
+  follow one op at a time.
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
   the transport abstraction gets a POSIX backend before any bundle
   claims native engines on Linux.

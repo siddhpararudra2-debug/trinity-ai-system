@@ -47,6 +47,7 @@ def bootstrap_engines() -> None:
     from src.engines.math.engine import MathEngine
     from src.engines.native_bridge import NATIVE_ENGINES, NativeBridgeEngine
     from src.engines.scaffold import ScaffoldEngine
+    from src.engines.simulation.engine import SimulationEngine
 
     registry.register(MathEngine())
     registry.register(CADEngine())
@@ -64,6 +65,11 @@ def bootstrap_engines() -> None:
     ):
         if name in bridged:
             registry.register(NativeBridgeEngine(name, NATIVE_ENGINES[name]))
+        elif name == "simulation":
+            # M18.1: a real Python fallback where the native daemon cannot
+            # run (Linux bundle, native-less CI). Advertises exactly the
+            # ops that engine implements and tests.
+            registry.register(SimulationEngine())
         else:
             registry.register(ScaffoldEngine(name, capabilities))
 
