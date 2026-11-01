@@ -184,13 +184,59 @@ The backend provides a comprehensive REST API for interacting with the engines a
 
 ### Connecting your own LLM
 
-Set `TRINITY_MODEL_ENDPOINT` (a full OpenAI-compatible chat-completions URL —
-Ollama, LM Studio, llama.cpp-server, vLLM or your own server) and optionally
-`TRINITY_MODEL_NAME`; no API key is needed. Availability is competitive:
-until an endpoint is configured, streaming and agent endpoints degrade
-truthfully (deterministic-router fallback for stream-plan, explicit
-`capability_unavailable` refusal for agents) and never pretend a model is
-attached.
+The model surface works with any **OpenAI-compatible** `chat/completions`
+endpoint — self-hosted, keyless, no account:
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `TRINITY_MODEL_ENDPOINT` | yes | The **full** `chat/completions` URL, OpenAI wire shape |
+| `TRINITY_MODEL_NAME` | no | Model name sent in the body (default: `local-model`) |
+| `TRINITY_MODEL_API_KEY` | no | Sent as `Authorization: Bearer <key>` only when set — some gateways demand any non-empty key |
+
+```bash
+# Ollama — pull a model first, then expose its OpenAI-compatible route
+ollama pull llama3.1
+export TRINITY_MODEL_ENDPOINT=http://127.0.0.1:11434/v1/chat/completions
+export TRINITY_MODEL_NAME=llama3.1
+
+# LM Studio (local server tab) / llama.cpp-server / vLLM
+#   LM Studio:     http://127.0.0.1:1234/v1/chat/completions
+#   llama.cpp:     http://127.0.0.1:8080/v1/chat/completions
+#   vLLM:          http://127.0.0.1:8100/v1/chat/completions
+export TRINITY_MODEL_NAME=$(curl -s http://127.0.0.1:1234/v1/models | jq -r '.data[0].id')
+
+# PowerShell equivalent
+$env:TRINITY_MODEL_ENDPOINT = "http://127.0.0.1:11434/v1/chat/completions"
+$env:TRINITY_MODEL_NAME = "llama3.1"
+```
+
+The endpoint must be the **OpenAI-shaped** path — Ollama's native
+`/api/chat` route speaks a different wire format and will fail with an
+error that names the endpoint verbatim.
+
+**Attach-time vs call-time truth.** Configuration is checked at attach
+(the endpoint env var present or absent — that is all): with an endpoint
+configured but unreachable, calls fail with
+`local model request failed: …` surfaced verbatim in the response and
+the panel. Verify your attach with the product, not a health check:
+fill the AGENT WORKBENCH prompt and press RUN AGENT, or ask the PLAN
+panel to plan a request.
+
+**What turns on when a model is attached:** `POST
+/api/intelligence/stream-plan` streams real token deltas (the PLAN panel
+labels them "PLAN FROM MODEL — EDIT THEN EXECUTE") and closes with a
+validated executable plan; `POST /api/agents/{coder|researcher}/run`
+executes the multi-step loop. Any instruct-capable model works — the
+loop parses JSON action objects from ordinary replies; no tool-API
+support is required.
+
+**What stays deterministic, with or without an attach:** engine
+execution, DAG execution, jobs, and artifacts never consult the model.
+Without an endpoint these intelligence surfaces degrade honestly and
+label themselves: the PLAN panel plans via the deterministic router
+("PLAN FROM DETERMINISTIC ROUTER — NO MODEL ATTACHED") and the agent
+endpoints refuse with `capability_unavailable`, naming
+`TRINITY_MODEL_ENDPOINT`. Nothing pretends a model is attached.
 
 ### Example Request (CAD Generation)
 
