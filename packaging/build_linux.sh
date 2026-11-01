@@ -42,12 +42,13 @@ echo "== [2/5] api: PyInstaller onedir (shared spec) =="
 cd "$ROOT/packaging"
 rm -rf build/trinity-api dist/trinity-api
 python -m PyInstaller --clean -y trinity-api.spec
-KERNEL_OBJECTS=$(find dist/trinity-api/_internal -name 'TK[^.]*.so' -o -name 'OCP*.so' | wc -l)
+KERNEL_OBJECTS=$(find dist/trinity-api/_internal \
+    \( -name 'libTK*.so*' -o -name 'OCP*.so*' \) | wc -l)
 if [ "$KERNEL_OBJECTS" -lt 5 ]; then
-    echo "FAIL: kernel collection gate: $KERNEL_OBJECTS kernel .so objects in _internal (expected > 5)" >&2
+    echo "FAIL: kernel collection gate: $KERNEL_OBJECTS kernel objects in _internal (expected > 5)" >&2
     exit 1
 fi
-echo "kernel collection gate ok ($KERNEL_OBJECTS kernel .so objects)"
+echo "kernel collection gate ok ($KERNEL_OBJECTS kernel objects)"
 
 echo "== [3/5] web: static export pointed at the same-origin /api seam =="
 cd "$ROOT/frontend"

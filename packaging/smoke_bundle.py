@@ -146,11 +146,14 @@ def main() -> int:
 
         # --- M16 (linux): absence must be stated, never papered over ----
         # Inside the frozen bundle, a native-backed engine answers with
-        # the scaffold's honest capability_unavailable refusal.
+        # the scaffold's honest capability_unavailable refusal. Probe an
+        # op the scaffold actually advertises: pcb lists validate, not
+        # create, and a scaffold refuses any op — asking for an
+        # unadvertised one would prove nothing about a real capability.
         if args.platform == "linux":
             body = json.dumps({
-                "engine": "pcb", "operation": "create",
-                "parameters": {"spec": "smoke probe"},
+                "engine": "pcb", "operation": "validate",
+                "parameters": {},
             }).encode()
             req = urllib.request.Request(
                 f"{base}/api/execute", data=body,

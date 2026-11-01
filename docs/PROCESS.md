@@ -256,6 +256,20 @@ broke. Kept because the next session will hit them again:
   only passed because NTFS happened to list the bundle first. Fixtures
   now write relative, forward-slash entries; the code under test finds
   the bundle by `native/api/web` layout, never by order.
+- **A cross-platform gate must name the artifact the platform actually
+  ships.** The Linux OCP wheel keeps its kernel under
+  `cadquery_ocp.libs/libTK<name>-<hash>.so.7.9.3` — versioned and
+  hashed, not Windows' `TK*.dll` and not a bare `TK*.so`. The Linux
+  bundle gate copied the Windows shape, so its patterns could not
+  match any of the wheel's `libTK*` objects; a bundle whose kernel was
+  collected correctly would still fail the gate. Gate on what the
+  wheel really ships (`libTK*.so*`), and read the names from the
+  wheel's central directory before writing the check.
+- **Probe a refusal on an op the engine actually advertises.** The
+  Linux smoke first asked for `pcb/create`; `pcb` advertises
+  `validate/generate/export/add_net/add_track` (there is no `create`).
+  A scaffold refuses any op, so that probe could pass while proving
+  nothing about a real capability. `pcb/validate` is the honest probe.
 
 ---
 

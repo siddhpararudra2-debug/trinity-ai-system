@@ -40,7 +40,7 @@ the M-rules: one concern per commit, verified before advertised.
   (now cross-platform), same smoke contract with a `--platform linux`
   layout (api/ + web/ + trinity.sh, no native/ — native-backed engines
   must refuse honestly *inside the bundle*, which the smoke now
-  proves), kernel-collection gate on `TK*.so`/`OCP*.so` count, and
+  proves), kernel-collection gate on `libTK*.so*`/`OCP*.so*` count, and
   `.github/workflows/linux-package.yml` builds + smokes on the runner.
   Second commit once green: attach the zip to releases with manifest
   semantics kept Windows-scoped for the updater (latest.yml keeps
