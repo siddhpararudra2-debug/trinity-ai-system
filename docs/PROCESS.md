@@ -136,6 +136,12 @@ broke. Kept because the next session will hit them again:
   `trinity-api.exe` from a failed run makes `Compress-Archive` fail with
   "file in use". `Stop-Process -Name trinity-api -Force` before archiving;
   `smoke_bundle.py` terminates its child explicitly in `finally`.
+- **PS 5.1 text ops must never touch UTF-8 source files.** A bulk edit
+  done with `Get-Content`/`Set-Content` decoded UTF-8 as cp1252 and
+  re-encoded it — every `·`, `—`, `↓`, `☑` in the file became mojibake at
+  once. Source edits are edit-tool rules, not PowerShell pipelines; when
+  this bit, the file was restored with `git checkout --` and the same
+  changes applied one edit at a time.
 
 ### Backend (Starlette / FastAPI / PyInstaller)
 - **A pydantic `field_validator` lives INSIDE its class body.** Inserting a
@@ -220,6 +226,14 @@ broke. Kept because the next session will hit them again:
 - **Rebuilding `.next` under a live `next start` kills the server**, and
   the launcher then shuts the whole stack down. Build before starting the
   stack, never during; if the stack is already up, stop it first.
+- **A walkthrough must PERFORM the choice it asserts — offered is not
+  selected.** The dag suite once verified `generate` was present in the
+  operation select but never set it; the select silently kept `solve`,
+  the node saved as the wrong engine, and four downstream assertions
+  (artifact link, thread chips, insert, guard text) failed as a cascade
+  of one missing `change` event. Stateful UI suites: after asserting a
+  control is *offered*, act on it, then assert the post-action state
+  names the act.
 
 ### CI (GitHub Actions)
 - **A job cannot opt out of its workflow's cancellation policy.** The
