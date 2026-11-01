@@ -36,20 +36,20 @@ must be the builder), then the data seam, engine depth last, and the
 native daemon port only after the machinery it needs ships. Each keeps
 the M-rules: one concern per commit, verified before advertised.
 
-- **M16 — Linux portable bundle** (in work): same PyInstaller spec
+- **M16 — Linux portable bundle** (done): same PyInstaller spec
   (now cross-platform), same smoke contract with a `--platform linux`
   layout (api/ + web/ + trinity.sh, no native/ — native-backed engines
   must refuse honestly *inside the bundle*, which the smoke now
   proves), kernel-collection gate on `libTK*.so*`/`OCP*.so*` count, and
   `.github/workflows/linux-package.yml` builds + smokes on the runner.
-  M16.1 is green (Linux Package #6 @ `79955ee`: build + smoke passed,
-  340 MB artifact uploaded). M16.2 — release attach — is implemented
-  and awaiting its proof tag: `release.yml` gains a parallel
-  `linux-package` job, the Windows job downloads its artifact and adds
-  the zip to the manifest, upload, and download-back verification,
-  while manifest semantics stay Windows-scoped for the updater
-  (latest.yml keeps referencing the win64 asset — M13's gates stay
-  intact).
+  M16.1 is green (Linux Package #6 @ `79955ee`) and M16.2 is green
+  (Release #14 @ `ab67607`, tag `v1.0.0-m16proof`): the parallel
+  `linux-package` job built + smoked the Linux zip, the Windows job
+  downloaded it and added it to the manifest, upload, and download-back
+  verification, while manifest semantics stay Windows-scoped for the
+  updater (latest.yml still references only the win64 asset — M13's
+  gates stay intact). The proof release is a prerelease;
+  `/releases/latest` still resolves to `v0.9.0`.
 - **M17 — data schema/migration seam** (queued): versioned
   `DATA_SCHEMA` marker applied at startup over `TRINITY_STORAGE_ROOT`,
   migrations explicit and tested, unknown-future-version refuses and
@@ -62,10 +62,11 @@ the M-rules: one concern per commit, verified before advertised.
 
 ## Deferred (recorded on purpose, not promised)
 
-- macOS/Linux packaging — **M16 in work, Linux side first (see Stage
-  10)**: the Linux bundle builds + smokes green and is joining the
-  release flow; signing and swap-on-boot machinery stay Windows-shaped,
-  and the honest Linux bundle ships without native engines and says so.
+- macOS/Linux packaging — **M16 done for Linux (see Stage 10); macOS
+  still deferred**: the Linux bundle builds, smokes, and ships through
+  the release flow; signing and swap-on-boot machinery stay
+  Windows-shaped, and the honest Linux bundle ships without native
+  engines and says so.
 - New engine types beyond CAD depth — same verify-before-advertise
   rule that took phantom capabilities out of the registry applies.
 - Schema/migration of existing user data stores.
