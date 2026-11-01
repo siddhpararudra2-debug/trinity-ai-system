@@ -10,6 +10,7 @@ import ArtifactPanel from './ArtifactPanel';
 import BridgedEngines from './BridgedEngines';
 import DagRunPanel from './DagRunPanel';
 import type { WorkflowNodeSpec } from './DagRunPanel';
+import AgentPanel from './AgentPanel';
 
 const DEFAULT_DAG: WorkflowNodeSpec[] = [
   {
@@ -83,6 +84,10 @@ export default function TrinityWorkspace() {
 
         <section className="container" style={{ paddingBottom: 48 }}>
           <DagRunPanel nodes={dagNodes} onNodesChange={setDagNodes} />
+        </section>
+
+        <section className="container" style={{ paddingBottom: 48 }}>
+          <AgentPanel />
         </section>
 
         <BridgedEngines />

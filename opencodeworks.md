@@ -200,6 +200,33 @@ productization → agent surface → model-attach docs → honesty pass.
   Files: frontend/components/trinity/DagRunPanel.tsx,
   frontend/e2e/suites/dag.mjs, docs/PROCESS.md.
 
+- [x] M15.4 - agent surface. `frontend/components/trinity/AgentPanel.tsx`
+  (AGENT WORKBENCH, wired under the DAG panel) is the UI for the
+  backend's multi-step loop contract: the role select carries exactly the
+  route's two roles (coder, researcher), the prompt gates the run button
+  only after a React-flushed non-empty input, and `runAgent()` in
+  `frontend/lib/api/trinity.ts` POSTs `/api/agents/{role}/run` with the
+  route's `{prompt[, max_steps]}` shape. Rendering is the loop's own
+  record, nothing synthesized: call steps show `engine · operation`, the
+  true success/FAILED with the first error verbatim and artifact chips
+  through `getArtifactUrl`; the loop's `invalid_model_reply` and
+  `invalid_tool` steps render under their own names; the summary appears
+  only when the loop returned `completed`, and a spent budget says "STEP
+  BUDGET EXHAUSTED" instead of pretending success. The CI truth is the
+  refusal path: no model endpoint → the API's `capability_unavailable`
+  payload renders verbatim (code, env_var, message) under the machine
+  label "AGENT REFUSED — NO MODEL ATTACHED", with no summary and no fake
+  steps; e2e additionally pins that the refusal names the agent actually
+  selected (coder refusal vs researcher refusal after an explicit role
+  change — offered is not selected). Backend untouched: the refusal and
+  the agent-loop shapes were already pinned by `test_stage4_api.py` and
+  the scripted-fake loop tests. Points to M15.5: this refusal message is
+  the only place that names `TRINITY_MODEL_ENDPOINT`; M15.5 documents
+  attaching a real one. Files: frontend/lib/api/trinity.ts,
+  frontend/components/trinity/AgentPanel.tsx,
+  frontend/components/trinity/TrinityWorkspace.tsx,
+  frontend/e2e/suites/agent.mjs.
+
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
   Commits: `760c317` firmware PlatformIO · `7b3408f` pcb trace DRC + Gerber · `541934d` simulation RK4 + spring chain · `f4d1e5f` vision contours + ORB · bridge/README commit (see git log).

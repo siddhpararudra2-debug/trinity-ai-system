@@ -359,6 +359,64 @@ export async function streamPlan(
   return last;
 }
 
+// ----------------------------- M15.4: agent surface ------------------------
+
+export type AgentStepOut = {
+  step: number;
+  action: string;
+  engine?: string;
+  operation?: string;
+  parameters?: Record<string, unknown>;
+  success?: boolean;
+  job_id?: string;
+  artifacts?: ArtifactOut[];
+  errors?: { message: string; code?: string; details?: unknown }[];
+  error?: string;
+  tool?: unknown;
+};
+
+export type AgentRunOut = {
+  success: boolean;
+  role?: string;
+  status?: string;
+  summary?: string;
+  steps?: AgentStepOut[];
+  errors?: { message: string; code?: string; details?: unknown }[];
+};
+
+/**
+ * Run the coder/researcher agent loop (POST /api/agents/{role}/run).
+ *
+ * The no-model refusal arrives as a 200 `{success: false, errors:
+ * [capability_unavailable]}` — callers render that refusal verbatim, they
+ * never synthesize a run. Agent steps carry only registry-advertised
+ * engine ops; failed calls come back with their real errors and artifacts
+ * link through getArtifactUrl.
+ */
+export async function runAgent(
+  role: string,
+  prompt: string,
+  maxSteps?: number,
+): Promise<AgentRunOut> {
+  const response = await fetch(`${TRINITY_API_URL}/agents/${role}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      typeof maxSteps === 'number'
+        ? { prompt, max_steps: maxSteps }
+        : { prompt },
+    ),
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw apiError(payload, response.status);
+  }
+  if (!payload || typeof payload !== 'object' || !('success' in payload)) {
+    throw new Error('The API returned an invalid response.');
+  }
+  return payload as AgentRunOut;
+}
+
 export async function executeRequirement(text: string): Promise<TrinityResult> {
   const response = await fetch(`${TRINITY_API_URL}/requirements/execute`, {
     method: 'POST',
