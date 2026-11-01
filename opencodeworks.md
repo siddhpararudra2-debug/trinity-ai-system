@@ -358,6 +358,22 @@ productization → agent surface → model-attach docs → honesty pass.
   Package #6 @ `79955ee` (CI #196) — build + smoke passed and the
   340 MB `TrinityAI-linux64-zip` artifact was uploaded.
 
+- [ ] M16.2 - Linux bundle joins the release flow.
+  `.github/workflows/release.yml` gains a parallel `linux-package` job
+  (ubuntu-latest, Python 3.12, Node 20: build + `smoke_bundle.py
+  --platform linux`, artifact upload). The Windows `package` job
+  declares `needs: linux-package`, downloads the artifact, and adds
+  `TrinityAI-<ver>-linux64.zip` to `SHA256SUMS.txt`, the release
+  upload, and the download-back verification (hash-checked as
+  published; the Linux binary itself is smoked before upload in the
+  same run). `latest.yml` is deliberately untouched — it still
+  describes only the win64 portable zip, so M13's updater gates are
+  not weakened. Proof requires a tag: suffixed tags (e.g.
+  `v1.0.0-m16proof`) publish as prereleases and are never marked
+  latest, because `src/core/updater.py` reads `/releases/latest`;
+  `v1.0.0` and `v0.9.0` are untouched. Ticked only after the proof
+  tag's release run is green end to end.
+
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
   Commits: `760c317` firmware PlatformIO · `7b3408f` pcb trace DRC + Gerber · `541934d` simulation RK4 + spring chain · `f4d1e5f` vision contours + ORB · bridge/README commit (see git log).

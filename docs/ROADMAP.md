@@ -42,9 +42,14 @@ the M-rules: one concern per commit, verified before advertised.
   must refuse honestly *inside the bundle*, which the smoke now
   proves), kernel-collection gate on `libTK*.so*`/`OCP*.so*` count, and
   `.github/workflows/linux-package.yml` builds + smokes on the runner.
-  Second commit once green: attach the zip to releases with manifest
-  semantics kept Windows-scoped for the updater (latest.yml keeps
-  referencing the win64 asset — M13's gates stay intact).
+  M16.1 is green (Linux Package #6 @ `79955ee`: build + smoke passed,
+  340 MB artifact uploaded). M16.2 — release attach — is implemented
+  and awaiting its proof tag: `release.yml` gains a parallel
+  `linux-package` job, the Windows job downloads its artifact and adds
+  the zip to the manifest, upload, and download-back verification,
+  while manifest semantics stay Windows-scoped for the updater
+  (latest.yml keeps referencing the win64 asset — M13's gates stay
+  intact).
 - **M17 — data schema/migration seam** (queued): versioned
   `DATA_SCHEMA` marker applied at startup over `TRINITY_STORAGE_ROOT`,
   migrations explicit and tested, unknown-future-version refuses and
@@ -58,9 +63,9 @@ the M-rules: one concern per commit, verified before advertised.
 ## Deferred (recorded on purpose, not promised)
 
 - macOS/Linux packaging — **M16 in work, Linux side first (see Stage
-  10)**: the bundle, signing, and swap-on-boot machinery is
-  Windows-shaped; the honest Linux bundle ships without native engines
-  and says so.
+  10)**: the Linux bundle builds + smokes green and is joining the
+  release flow; signing and swap-on-boot machinery stay Windows-shaped,
+  and the honest Linux bundle ships without native engines and says so.
 - New engine types beyond CAD depth — same verify-before-advertise
   rule that took phantom capabilities out of the registry applies.
 - Schema/migration of existing user data stores.
