@@ -65,8 +65,11 @@ the M-rules: one concern per commit, verified before advertised.
   native-only ledger/export paths are documented as such rather than
   faked. M18.2 gives `robotics` the same treatment for `kinematics`
   (standard-DH FK) and `trajectory_plan` (linear joint-space motion).
-  Remaining engines (vision, research, pcb, firmware) follow one op at
-  a time.
+  M18.3 adds `vision` with `image_inspect` and `document_parse` behind a
+  light `[vision]` extra; M18.4 adds `research` with `search` over
+  caller-supplied documents or the bundled repo docs. `pcb` and
+  `firmware` remain native-Windows with honest refusals until the POSIX
+  native transport lands.
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
   the transport abstraction gets a POSIX backend before any bundle
   claims native engines on Linux.

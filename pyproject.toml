@@ -22,6 +22,11 @@ dependencies = [
 # Without it every path stays honest: the catalog reports step as
 # unavailable with a reason, and STL/GLB/JSON are unaffected.
 cad = ["cadquery>=2.8"]
+# M18.3: Python vision fallback for image_inspect (Pillow) and
+# document_parse (pypdf). Both are light; OCR still needs a system
+# tesseract binary and stays native-only. Without the extra the engine
+# refuses with an install hint instead of pretending.
+vision = ["pillow>=10.0", "pypdf>=4.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -26,7 +26,7 @@ OUT="$ROOT/packaging/dist/TrinityAI-$VER-linux64"
 echo "== [1/5] build env (mirrors release.yml: requirements + [cad] + pinned PyInstaller) =="
 python -m pip install --upgrade pip
 python -m pip install -r "$ROOT/requirements.txt"
-python -m pip install ".[cad]"
+python -m pip install ".[cad,vision]"
 python -m pip install "pyinstaller==6.22.3"
 
 # M11 lesson, Linux side: the kernel must be importable in the build env

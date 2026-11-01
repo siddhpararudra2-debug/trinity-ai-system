@@ -46,9 +46,11 @@ def bootstrap_engines() -> None:
     from src.engines.cad.engine import CADEngine
     from src.engines.math.engine import MathEngine
     from src.engines.native_bridge import NATIVE_ENGINES, NativeBridgeEngine
+    from src.engines.research.engine import ResearchEngine
     from src.engines.robotics.engine import RoboticsEngine
     from src.engines.scaffold import ScaffoldEngine
     from src.engines.simulation.engine import SimulationEngine
+    from src.engines.vision.engine import VisionEngine
 
     registry.register(MathEngine())
     registry.register(CADEngine())
@@ -74,6 +76,13 @@ def bootstrap_engines() -> None:
         elif name == "robotics":
             # M18.2: same rule — only the advertised FK/trajectory ops.
             registry.register(RoboticsEngine())
+        elif name == "vision":
+            # M18.3: image_inspect + document_parse only; OCR and contour
+            # extraction stay native-only and unadvertised.
+            registry.register(VisionEngine())
+        elif name == "research":
+            # M18.4: search over request documents or the bundled repo docs.
+            registry.register(ResearchEngine())
         else:
             registry.register(ScaffoldEngine(name, capabilities))
 

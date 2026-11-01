@@ -37,7 +37,16 @@ a = Analysis(
     ["trinity_api.py"],
     pathex=[REPO_ROOT],
     binaries=[],
-    datas=[(os.path.join("..", "config"), "config")],
+    datas=[
+        (os.path.join("..", "config"), "config"),
+        # M18.4: the research fallback's repo-docs corpus ships with the
+        # bundle (a few hundred KB); without these the Linux search op
+        # would have an empty default corpus.
+        (os.path.join("..", "README.md"), "."),
+        (os.path.join("..", "work.md"), "."),
+        (os.path.join("..", "opencodeworks.md"), "."),
+        (os.path.join("..", "docs"), "docs"),
+    ],
     hiddenimports=[
         "uvicorn.logging",
         "uvicorn.loops.auto",
