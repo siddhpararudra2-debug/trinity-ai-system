@@ -59,7 +59,7 @@ jobs:
         run: |
           # Job logs are not readable without a repo token; the tail goes
           # into annotations instead (the ci.yml pytest pattern).
-          for f in linux-build.log linux-smoke.log; do
+          for f in linux-smoke.log linux-build.log; do
             [ -f "$f" ] || continue
             echo "::group::$f tail"
             tail -120 "$f" | sed 's/%/%25/g; s/\r//g' | fold -s -w 500 | sed 's/^/::error ::/' | tail -10
@@ -81,4 +81,5 @@ jobs:
             packaging/build/trinity-api/warn-trinity-api.txt
             linux-build.log
             linux-smoke.log
+            packaging/dist/smoke-data/*-api.log
           if-no-files-found: ignore

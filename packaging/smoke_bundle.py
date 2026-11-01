@@ -86,9 +86,16 @@ def main() -> int:
     # the six native-backed engines on ScaffoldEngine and refuse them
     # honestly; that refusal is what step 5 below proves.
 
+    # The API's own log is the only evidence when the frozen process dies
+    # at startup (it used to go to DEVNULL). Keep it next to the smoke
+    # data and print its tail when the health poll times out.
+    api_log_path = dist.parent / "smoke-data" / f"{dist.name}-api.log"
+    api_log_path.parent.mkdir(parents=True, exist_ok=True)
+    api_log = api_log_path.open("w", encoding="utf-8", errors="replace")
+
     proc = subprocess.Popen(
         [str(api_bin)],
-        stdout=subprocess.DEVNULL,
+        stdout=api_log,
         stderr=subprocess.STDOUT,
         env=env,
     )
@@ -107,6 +114,13 @@ def main() -> int:
                 continue
         if not healthy:
             print("FAIL: /api/health never answered", file=sys.stderr)
+            api_log.flush()
+            tail = api_log_path.read_text(
+                encoding="utf-8", errors="replace").splitlines()[-40:]
+            if tail:
+                print("--- bundled api log (tail) ---", file=sys.stderr)
+                for line in tail:
+                    print(line, file=sys.stderr)
             return 1
         findings.append("health ok")
 
@@ -209,6 +223,7 @@ def main() -> int:
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+        api_log.close()
 
     print("SMOKE OK:", "; ".join(findings))
     return 0
