@@ -270,6 +270,13 @@ broke. Kept because the next session will hit them again:
   `validate/generate/export/add_net/add_track` (there is no `create`).
   A scaffold refuses any op, so that probe could pass while proving
   nothing about a real capability. `pcb/validate` is the honest probe.
+- **`pathex=["."]` in a spec is the caller's cwd, not the repo.**
+  Windows happened to run PyInstaller from the repo root, so `src`
+  resolved; the Linux builder `cd`s into `packaging/` first, so `.`
+  became `packaging/` and `src` was silently excluded — the frozen API
+  started and died with `ModuleNotFoundError: No module named 'src'`.
+  Resolve the root from `SPECPATH` (`os.path.dirname(SPECPATH)`) so the
+  spec means the same thing regardless of where it is invoked.
 
 ---
 

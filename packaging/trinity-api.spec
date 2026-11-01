@@ -24,9 +24,18 @@
 # on a POSIX build — one spec, no per-platform forks to drift.
 import os
 
+# M16: resolve the repo root from the spec's own location, never from the
+# caller's cwd. The Windows packager runs PyInstaller from the repo root,
+# where pathex=["."] happened to find `src`; the Linux builder cd's into
+# packaging/ first, so "." was packaging/ and `src` was silently left out
+# of the bundle -- the frozen API died at startup with
+# ModuleNotFoundError: No module named 'src'. SPECPATH is the directory
+# holding this spec, so its parent is the repo root on both platforms.
+REPO_ROOT = os.path.dirname(SPECPATH)
+
 a = Analysis(
     ["trinity_api.py"],
-    pathex=["."],
+    pathex=[REPO_ROOT],
     binaries=[],
     datas=[(os.path.join("..", "config"), "config")],
     hiddenimports=[
