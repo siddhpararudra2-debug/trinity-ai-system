@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.routes import router
 from src.core.config import ensure_storage_layout, resolve_cors_origins, settings
+from src.core.data_schema import apply_data_schema
 from src.core.errors import TrinityError
 from src.core.logging_config import configure_logging, get_logger
 from src.db.database import init_db
@@ -24,6 +25,11 @@ log = get_logger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_storage_layout()
+    # M17: refuse a storage root written by a newer Trinity before the
+    # database is touched; migration 0 -> 1 then applies the v1 schema.
+    apply_data_schema()
+    # Still idempotent on every start: a marker at the current version
+    # with a missing DB file is recreated rather than failing later.
     init_db()
     bootstrap_engines()
     log.info(

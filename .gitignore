@@ -49,6 +49,8 @@ data/*.db-*
 data/**/*.db
 data/trinity.db
 data/trinity.db-*
+# M17 runtime marker: written by startup/tests, never source.
+data/DATA_SCHEMA.json
 data/artifacts/*
 data/jobs/*
 data/cad/*
