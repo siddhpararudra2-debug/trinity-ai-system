@@ -71,9 +71,9 @@ habit — they are why the test counts only ever climb:
 
 - **CI never attaches a model.** Runners verify the no-model truth —
   fallback labels and verbatim refusals are the tested contract. The
-  model-attached path is verified locally against a documented recipe,
-  and its wire format stays pinned by scripted-fake tests, never by a
-  live model in CI.
+  model-attached path is verified locally against a documented recipe
+  (README, "Connecting your own LLM" since M15.5), and its wire format
+  stays pinned by scripted-fake tests, never by a live model in CI.
 - **A plan frame is machine-readable or it does not ship.** The
   stream-plan final frame carries validated `WorkflowNodeModel`-shaped
   nodes that POST /api/workflows/execute accepts unchanged; model prose
@@ -269,9 +269,9 @@ it plus the last two rungs:
    self-verify: they generate inputs, compute expected values, and pin
    numbers, so they are the ones that caught missing `/EHsc` and the
    registry's false claims.
-2. **Python suite** — `python -m pytest` (348 passed / 24 skipped; the 24
-   are the settled skip gates: no API keys, no native exe in that
-   checkout). Ruff clean after.
+2. **Python suite** — `python -m pytest` (386 passed / 40 skipped after
+   Stage 9; the skip gates grow on purpose: no API keys, no native exe
+   in that checkout, no live model in CI). Ruff clean after.
 3. **Doctest binary standalone** — asserts the suite passes *outside
    ctest*, catching environment differences.
 4. **Native engine selftest** — `Trinity.exe --selftest` runs the whole

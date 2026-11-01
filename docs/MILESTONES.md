@@ -5,9 +5,12 @@ from the first commit through the standalone distribution. Written from the
 work log (`opencodeworks.md`) and cross-checked against Git history; commit
 hashes are verified, never from memory.
 
-Status at the time of writing (`316ff23`): **all planned milestones M1–M9
-complete**, 404/404 native doctests, 348 passed / 24 skipped Python tests,
-ruff clean, everything pushed to `origin/main`.
+Status: **M1–M9 complete, and the later stages closed too** — Stage 7
+(M10–M13 release hardening), Stage 8 (M14 CAD depth), Stage 9 (M15
+agentic workflow depth). Suite counts climb stage by stage; at Stage 9
+close: 404/404 native doctests, 386 passed / 40 skipped Python tests,
+ruff clean, Browser E2E 137 assertions / 13 suites / 0 failed,
+everything pushed to `origin/main`.
 
 For *how* the work was done (rules, decisions, lessons), see
 [PROCESS.md](PROCESS.md). For what comes next, see [ROADMAP.md](ROADMAP.md).
@@ -29,6 +32,12 @@ For *how* the work was done (rules, decisions, lessons), see
 | Stage 4 | Intelligence layer: real SSE streaming, multi-step agent loop, DAG execution | `40d6b09`, `3b63b78` | 380 / 344 |
 | Stage 5 | Engine depth: PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 spring chain, robotics IK verified | `760c317`, `7b3408f`, `541934d`, `f4d1e5f`, `282bda5` | 404 / 347 |
 | Stage 6 (M9) | Packaging & standalone distribution: portable zip + installer + release CI | `e87598e`…`48ff1cf` | 404 / 348 |
+| M10 | Release pipeline proven *as published* (`v0.9.0` pipeline-test tag): download-back + SHA256 + bundle smoke | `7b2a20f` (run 9) | — / — |
+| M11 | OpenCascade STEP kernel inside the bundle; smoke exports and re-imports real STEP | `549b0db`, `61a50b4`, `92c7890` | — / — |
+| M12 | Signing harness: sign before hash, 60-day expiry gate, honest unsigned skip | `dcd4dbd` | — / — |
+| M13 | Auto-update: `latest.yml` manifest, hash-verified staged apply, swap at next boot | `75bf618`, `12cfd04`, `deb4882` | — / 342 |
+| M14 | CAD depth: parameter families, nesting with pairwise proof, multi-sheet DXF | `ca61424`, `07e1d69`, `fe3e58f` | — / 375 |
+| Stage 9 (M15) | Agentic workflow depth: plan contract → plan UI → DAG productization → agent surface → attach docs | `864579b`…`7943acc` | — / 386 + E2E 137 |
 
 ---
 
@@ -437,9 +446,120 @@ Close state: python 348 passed / 24 skipped; ruff clean. Commits
 
 ---
 
+## Stage 7: release hardening (M10–M13)
+
+- **M10 — the pipeline met a real tag.** `v0.9.0` was cut as the
+  pipeline-test tag (`v1.0.0` deliberately untouched until a
+  release-owner makes that call). The first real run surfaced
+  Linux-portability failures in the daemon spawn test, an Inno Setup
+  runner install, windeployqt resolution, pwsh annotation loss, and a
+  draft-Release bug (tag delete + push left assets 404) — all fixed,
+  and the proof step hardened from "freshly staged" to "*as published*":
+  the gate downloads the zip back from the public Release page,
+  re-verifies `SHA256SUMS`, and smokes the unzipped bundle (`93678f1`,
+  `a7479d1`, `a1479fe`, close `7b2a20f`).
+- **M11 — the STEP-kernel gap closed for real.** The catalog had been
+  honestly reporting `step` unavailable *because the bundle truly
+  lacked OpenCascade*. `549b0db` carried the `[cad]` hiddenimports into
+  `trinity-api.spec`; silent native-command failures on the runner were
+  root-caused and cured by pinned Python 3.12 + identity gates
+  (`61a50b4`); `92c7890` pinned PyInstaller 6.22.3 with a build-env
+  identity check and captured `pyi-build.log`. Release run 13 proved
+  the bundled kernel: catalog ok, real STEP export (volume 1847.5,
+  opencascade 7.9.3.1).
+- **M12 — signing, with the policy settled before the harness.**
+  `dcd4dbd` ships what packaging uses today: sign *before* hashing (so
+  the manifest describes shipped bytes), a 60-day expiry gate, and an
+  honest "unsigned build" skip when no secret exists. Decision
+  recorded: self-signed for private use now; trusted signing begins
+  when distribution goes public.
+- **M13 — auto-update without silent force-upgrades.** `75bf618`: the
+  check never downloads; apply is explicit (`confirm: true`),
+  sha256-verified, layout-gated; the swap happens at next boot because
+  Windows cannot replace a running exe. `12cfd04` generated and gated
+  `latest.yml` as-published (run 13: manifest matched the published
+  zip); `deb4882` kept the frontend consent explicit. Later repairs:
+  `772a0e2`/`66db7d5` rebuilt launcher blocks eaten by shell edits, and
+  `7bfa4d8` fixed the updater fake bundles' Linux extraction order that
+  CI found after M14.
+
+---
+
+## Stage 8: M14 — CAD depth, one op per commit (`ca61424`, `07e1d69`, `fe3e58f`)
+
+Parameter families (every member a full variant with its own validator
+verdict and checksum — an unknown family parameter is a 422 naming the
+supported ones), nesting/plate packing (deterministic shelf packer
+whose layout carries its own pairwise overlap proof; oversized parts
+come out `unplaced` with reasons), drawings (multi-sheet DXF where the
+emitted file is parsed back and recounted before returning). Stage
+close: suite 375 / 40 skipped, ruff clean (`6b05d5e`). CI then found
+what local runs missed — `8fbb046` fixed three never-green cad E2E
+assertions that had been checking things no CAD engine itself emitted —
+which is the browser-suite honesty rule working as designed.
+
+---
+
+## Stage 9: M15 — agentic workflow depth (`864579b`…`7943acc`)
+
+- **M15.1 plan contract** (`864579b`): `/api/intelligence/stream-plan`
+  closes with a validated *executable* plan. The system prompt is built
+  from the live registry roster, so the model cannot name a phantom
+  engine; every bad reply (shape, duplicate ids, unknown deps, cycles,
+  oversize) degrades to an honest `plan_invalid` error event with a
+  verbatim reason; the deterministic fallback keeps its contract and
+  now also carries its call as a runnable node. A route test executes a
+  model plan unchanged through the workflow endpoint. Suite 386 / 40.
+- **M15.2 plan in the UI** (`97e582c`): the PLAN affordance — request
+  in, deltas stream raw while the model thinks, the final frame's
+  validated nodes load into the graph for an explicit EXECUTE, never
+  auto-run. Every source is labeled verbatim ("PLAN FROM MODEL — EDIT
+  THEN EXECUTE" / "PLAN FROM DETERMINISTIC ROUTER — NO MODEL ATTACHED" /
+  "PLAN REFUSED (code)"). Two suite bugs fixed in the same commit (the
+  200-stream body lock; reading React state in the click's tick).
+- **M15.3 DagRunPanel productization** (`23eeb6a`): a real node editor —
+  engines rostered from the live registry, operation select following
+  the engine's catalog, JSON params with verbatim parse errors,
+  dependency chips, threaded-ref insertion from paths *observed in the
+  completed run* (shallow scalars surface before nested subtrees so the
+  chip cap cannot hide `triangle_count`), artifact links, and a
+  remove-guard naming dependents. Lessons filed in PROCESS.md: offered
+  is not selected (an unselected `solve` default cascaded four suite
+  failures); rebuilds under live `next start` kill the web server; PS
+  5.1 text ops mangle UTF-8 sources. Dag suite 21 checks; browser
+  126 / 12 suites.
+- **M15.4 agent surface** (`5d6d1bf`): the AGENT WORKBENCH renders the
+  loop's own record — call steps with true success/errors/artifacts,
+  `invalid_model_reply` and `invalid_tool` steps under their own names,
+  summary only when the loop actually completed, budget exhaustion by
+  name — and the no-model refusal verbatim ("AGENT REFUSED — NO MODEL
+  ATTACHED", naming `TRINITY_MODEL_ENDPOINT`), never a synthetic run or
+  fake steps. Agent suite 11 checks; browser 137 / 13 suites. Backend
+  was untouched: the refusal contract was already pinned.
+- **M15.5 model-attach docs** (`7943acc`): README "Connecting your own
+  LLM" became the operating manual — variables, per-server attaches,
+  the Ollama-native-route wire-shape warning, and the attach-time vs
+  call-time truth (reachability is a fact of calls, not a health
+  check). Docs-only push: CI #189 green; the Browser E2E workflow is
+  path-filtered to code paths and correctly did not run — E2E stays
+  green on the last code sha `5d6d1bf` (#26). No product code changed,
+  so `7943acc` introduces no browser-testable behavior.
+
+Suite counts at stage close: pytest 386 passed / 40 skipped, ruff
+clean; Browser E2E 137 assertions / 13 suites / 0 failed; CI + Browser
+E2E workflows green on every code commit of the stage (CI #187+#188, E2E
+#25+#26 on `23eeb6a`/`5d6d1bf`).
+
+---
+
 ## Where this leaves the project
 
-Everything planned, shipped and verified end to end. The known gaps are
-deliberate and documented in [ROADMAP.md](ROADMAP.md): unsigned binaries,
-Windows-only packaging, no auto-update, and the OpenCascade STEP kernel not
-carried into the bundle (the catalog truthfully reports it unavailable).
+Everything planned through Stage 9 has shipped and been verified end to
+end. The current limits are deliberate and stated by the product itself
+wherever they are observable; [ROADMAP.md](ROADMAP.md) keeps the honest
+list: Windows-only packaging (no macOS/Linux bundle), self-signed
+certificates until public distribution begins (M12's settled policy),
+a single OpenAI-shaped self-hosted model seam whose CI truth is pinned
+by scripted fakes — CI never attaches a model — and `v1.0.0` remaining
+untagged until a release-owner decides (the pipeline-proven tag is
+`v0.9.0`).

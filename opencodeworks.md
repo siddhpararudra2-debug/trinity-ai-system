@@ -220,9 +220,12 @@ productization → agent surface → model-attach docs → honesty pass.
   selected (coder refusal vs researcher refusal after an explicit role
   change — offered is not selected). Backend untouched: the refusal and
   the agent-loop shapes were already pinned by `test_stage4_api.py` and
-  the scripted-fake loop tests. Points to M15.5: this refusal message is
-  the only place that names `TRINITY_MODEL_ENDPOINT`; M15.5 documents
-  attaching a real one. Files: frontend/lib/api/trinity.ts,
+  the scripted-fake loop tests. Verification: E2E #26 for M15.4
+  concluded success first; lint + tsc + production build clean; the new
+  `agent` suite 11/11; full browser run 137 assertions, 13 suites,
+  0 failed; pytest 386 / 40 skipped + ruff clean. CI #188 + Browser E2E
+  #26 verified green on `5d6d1bf` before M15.5 started. Files:
+  frontend/lib/api/trinity.ts,
   frontend/components/trinity/AgentPanel.tsx,
   frontend/components/trinity/TrinityWorkspace.tsx,
   frontend/e2e/suites/agent.mjs.
@@ -248,8 +251,41 @@ productization → agent surface → model-attach docs → honesty pass.
   jobs, and artifacts never consult the model, and the no-endpoint
   degradations keep their verbatim machine labels. Docs-only op: no
   product change; verification = the full pre-push chain re-run (pytest
-  386 / 40 skipped + ruff clean) with frontend untouched. Files:
-  README.md.
+  386 / 40 skipped + ruff clean) with frontend untouched. Push fact
+  recorded (kept honest in M15.6 too): a README/docs-only push does not
+  trigger the Browser E2E workflow — `.github/workflows/e2e.yml` is
+  path-filtered to code paths (app/native, frontend, src, tests, itself),
+  so CI #189 is the green run for `7943acc` and Browser E2E #26 remains
+  the green proof for the last code sha `5d6d1bf`. Files: README.md.
+
+- [x] M15.6 - honesty pass. The three durable docs brought to present
+  truth, every hash re-verified against git log rather than recalled:
+  MILESTONES.md gained the through-Stage-9 status line, timeline rows
+  for M10–M14 and Stage 9 (M15.1–M15.5 with their real shas and
+  per-stage test counts), full Stage 7/8 narratives (the v0.9.0
+  as-published release proof, run 13's OpenCascade bundle closure,
+  signing policy settled before the harness, `latest.yml` matched
+  as-published, the launcher-block repairs and the CI-found
+  Linux extraction order), the Stage 9 chain (including the docs-only
+  path-filter fact above), and a rewritten closing paragraph — the old
+  one still listed "unsigned binaries / no auto-update / STEP not in
+  bundle" as live gaps although M11/M13/M12 deliberately closed exactly
+  those three. ROADMAP.md was rewritten out of stale future tense (it
+  still planned "tag v1.0.0", which the settled policy replaced with
+  the `v0.9.0` pipeline-test tag while `v1.0.0` stays untouched) into
+  the honest current form: four product-visible limits stated plainly
+  (Windows-only packaging, self-signed certs until public distribution,
+  one OpenAI-shaped model seam CI never attaches, `v1.0.0` untagged by
+  decision), the recorded-not-promised deferred list, and an explicit
+  statement that nothing in the deferred list is advertised by the
+  product. PROCESS.md's verification chain now quotes the current suite
+  basis (386 / 40 skipped with the reason the skip gates grew) and its
+  M15 settled decision points at the README attach recipe. No product
+  code changed anywhere in the pass — it is a docs-only truth
+  reconciliation, gated by pytest + ruff and thereby CI-only at push
+  (the E2E path filter is itself part of the recorded mechanism).
+  This closes Stage 9 / M15 as planned (M15.1 → M15.6 all green).
+  Files: docs/MILESTONES.md, docs/ROADMAP.md, docs/PROCESS.md.
 
 - [x] **Stage 5: engine feature depth — PlatformIO firmware, PCB trace DRC + Gerber, OpenCV contours/ORB, RK4 multi-body, robotics IK verification**
   Native: FirmwareEngine integrates PlatformIO (`platformIoSpecFor` maps ESP32/STM32/RP2040 to their platformio.ini boards; `runPlatformIoBuild` writes ini+source, runs the real `pio` binary, collects `.pio/build/*/firmware.{hex,bin,elf,uf2}` as `firmware_hex`/`firmware_binary`/`firmware_image` artifacts; truthful `capability_unavailable` when no toolchain exists — `test_firmware_platformio` drives a compiled fake `platformio.exe` including an env-switched failure). PCB gains `TrackSegment` in the IR plus geometric trace DRC (`trace.width`, `trace.clearance` via a public segment-distance seam, `trace.in_bounds`, `trace.keepout`, `trace.net_known`) and an `add_track` op, and RS-274X Gerber export (`GerberExport`, Mo=2/Nd=6, `D01` draws + `D03` aperture flashes, Edge.Cuts outline, per-layer self-verification before success — export now produces kicad + json + F_Cu + Edge_Cuts). Vision adds real `extract_contours` (Canny → `cv::findContours` with per-contour area/centroid/bbox and min-area filtering) and `match_features` (ORB `detectAndCompute` + Hamming knn + Lowe ratio test; honest zero keypoints/matches for flat images, refuses without OpenCV). Simulation adds a `method` field (`semi_implicit_euler` | `rk4`; RK4 integrates constant-force dynamics to machine precision — doctest-pinned against the closed-form trajectory) and a `multi_body`/`spring_chain`: bodies from an explicit `objects[]` array, coupled Hooke integration RK4 or Euler, body-0 samples, per-body `final_states` with kinetic/spring/total energy, energy conservation validated at 1%. Robotics verified: DLS IK already clamps every iterate to joint limits and reports `withinLimits` truthfully; doctest coverage existed. Python: `native_bridge.py` NATIVE_ENGINES/OP_MAP gained `pcb/add_track`, `image_contours`→`extract_contours`, `image_match_features`→`match_features`, and `simulate_spring_chain`, keeping the bidirectional advertised↔mapped pin green. Doctest counts after each commit: firmware 385, PCB 394, simulation 400, vision 404 (all green); Python 344 passed / 24 skipped; ruff clean.
