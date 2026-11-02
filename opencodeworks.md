@@ -10,6 +10,25 @@ change it describes — never on its own.
 
 ## In progress
 
+**Stage 11 — cross-checks + verified report: `decided.md` is the plan of
+record (Phase 0/M19 decided; M20 design-record + cross-checks next).** The
+decided plan: one shared design record (parts, nets+pins, board size, holes
+and connectors, firmware pin map), ~10 deterministic cross-checks across
+CAD/PCB/firmware/BOM each returning PASS/WARN/FAIL with a reason and a
+location, a verified report page (overall status, per-check list, fix hints,
+HTML export), status extended to VERIFIED/WARNING/FAILED at record level
+(mock-free semantics: WARN never grants VERIFIED; a missing input is WARN
+`cannot_verify`, never a PASS), then BOM + local projects + snapshots, the
+30-50-prompt eval set with a one-command runner, LLM seam docs + read-only
+Inspect mode, and the optional data layer (reference library with
+human-reviewed candidates; India parts/fabs with INR + last-updated dates).
+Phase 0's rule table (gate C00 + checks C01-C11) is decided in that file and
+now carries evidence tags (IR-today / record-side / needs-extension) verified
+against the actual `PcbDesign.hpp` / `FirmwareProject.hpp` field inventories —
+the user confirmed the tolerances (0.5 mm / 0.2 mm / 80%), the tagging, and
+the docs-only landing. Every phase lands one concern per commit with
+done-when criteria written down before the work starts.
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**
