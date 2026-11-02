@@ -157,9 +157,26 @@ concrete:
    WARN never grants VERIFIED, so a cannot_verify WARN denies it too
    (`status_counts()` carries the tally the report shows). VERIFIED is
    a statement about *implemented* checks only: an inactive check
-   (C11's BOM match until Phase 2) is named as inactive in the report
+   (until now C11's BOM match) is named as inactive in the report
    footer and never counted — an honestly-incomplete checker never
    pretends to coverage it does not have.
+9. **The BOM grammar and C11's compare (M21.1).** The record's `bom`
+   section is `{lines[]}` with per-ref lines `{ref, part, value,
+   quantity, package}` — one line per populated component ref. `part`
+   is the annotation nobody can invent from the IR (the board carries
+   no MPN): the board-derived builder leaves it `""`, and C11 compares
+   only what the board genuinely knows — refs 1:1, `value` and
+   `package` against the component's `value`/`footprint`
+   (string-collapsed, case-sensitive — an attribute difference is a
+   WARN naming each attribute), and `quantity` against how many
+   components carry that ref (the board population count, normally 1).
+   Missing or extra ref lines on either side FAIL; a malformed lines
+   entry WARNs (C06's convention); `bom` absent = WARN cannot_verify.
+   The CSV export writes exactly the decided columns `ref, part,
+   value, quantity, package` with stdlib `csv`, round-trip tested by
+   parse-back. XLSX ships only behind a real reader/writer library,
+   verified by reading the file back — never hand-rolled bytes called
+   an xlsx.
 
 ---
 
@@ -215,7 +232,9 @@ Done when: a wrong pin gives FAILED with the correct reason.
 - **M21.1 BOM export** — ref, part, value, quantity, package. CSV first
   (stdlib, round-trippable, tested by parse-back). XLSX ships only behind a
   real reader/writer library, verified by reading the file back — never
-  hand-rolled bytes called an xlsx.
+  hand-rolled bytes called an xlsx. C11's BOM match activates with this
+  milestone (compare semantics in convention 9); a record whose BOM comes
+  from the board-derived builder can be VERIFIED.
 - **M21.2 local project open/save** — the design record saved and loaded
   locally (the Phase 1 storage layout gains its user entry points).
 - **M21.3 snapshots** — every generate snapshots the record, with a history

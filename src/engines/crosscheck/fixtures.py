@@ -41,6 +41,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from src.core.config import REPO_ROOT
+from src.engines.crosscheck.bom import bom_from_pcb
 from src.engines.crosscheck.check import run_checks
 from src.engines.crosscheck.record import DesignRecord, build_record, load_record
 
@@ -205,8 +206,9 @@ def _base_enclosure() -> dict:
 
 
 def _base_sections() -> dict[str, object]:
+    base_pcb = _base_pcb()
     return {
-        "pcb": _base_pcb(),
+        "pcb": base_pcb,
         "firmware": _base_firmware(),
         "holes": [{"ref": "H1", "pos_mm": {"x": 2.5, "y": 2.5},
                    "diameter_mm": 3.0}],
@@ -214,6 +216,9 @@ def _base_sections() -> dict[str, object]:
                         "width_mm": 10.0, "height_mm": 5.0,
                         "kind": "usb_c"}],
         "enclosure": _base_enclosure(),
+        # The BOM derives from the board (M21.1): part stays "" — the
+        # MPN is annotation nobody can invent from the IR.
+        "bom": bom_from_pcb(base_pcb),
         # Every rider of each rail is metered; both rails sit at about
         # 40% of capacity (601/600 would fail C07 — 240/600 here PASSes).
         "power": {
@@ -345,7 +350,10 @@ def _good_esp32_regulator() -> DesignRecord:
         "mcu_rail": {"class": "3.3V"},
     }
     return _record(
-        "good_esp32_regulator", pcb=regulator_pcb, power=power
+        "good_esp32_regulator",
+        pcb=regulator_pcb,
+        power=power,
+        bom=bom_from_pcb(regulator_pcb),
     )
 
 

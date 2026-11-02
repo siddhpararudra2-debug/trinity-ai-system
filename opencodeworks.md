@@ -123,6 +123,34 @@ capability claim: exactly the decided key set, nothing smuggled.
 10 prompts at eval-001..eval-010, domains 3 cad / 2 pcb / 2 firmware /
 2 math / 1 mixed. 14 tests; suite 624 passed / 26 skipped, ruff clean.
 
+**M21.1 the BOM lands and C11 activates**: decided.md got convention 9
+first — the record's `bom` section is `{lines[]}` with per-ref lines
+`{ref, part, value, quantity, package}`, and `part` is the honest empty
+string: the board IR carries no MPN, so the board-derived builder leaves
+it blank for a human or a later pipeline to annotate. `bom_from_pcb()`
+emits one line per populated component with rebuilt scalars (nothing
+shared with the board), absent board value/footprint stated as `""` —
+absence stays absence, never an invented default. C11 compares only
+what the board genuinely knows: refs 1:1, `value`/`package`
+string-collapsed but case-sensitive (an attribute difference WARNs
+naming each attribute — `'1K'` vs `'1k'` is a WARN, not a match),
+`quantity` against the ref's population count; a missing or extra ref
+line FAILs, a malformed lines entry WARNs (C06's convention), an absent
+section is WARN cannot_verify. Duplicate refs meter honestly: a
+builder's line quantity 1 against two populated instances WARNs
+`quantity 1 vs 2`; declaring the true population 2 PASSes. The CSV
+export is stdlib with exactly the decided columns, refuses every
+unrenderable input (absent/malformed sections, non-scalar cells — never
+a silently truncated purchasing file), and the acceptance contract is
+the round-trip: parse-back reproduces the lines byte-faithfully
+(awkward commas and quotes included), quantity int-when-integral else
+float. `INACTIVE_CHECKS` empties — the footer names inactive checks
+only when some exist, and a monkeypatch test pins that honesty clause
+for whatever goes named-but-unimplemented next. Fixtures regenerate
+with bom sections: goods VERIFIED at 12 PASS, the five breaks keep
+their single-FAIL contract. 19 tests; suite 643 passed / 26 skipped,
+ruff clean.
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 
+from src.engines.crosscheck.bom import bom_from_pcb
 from src.engines.crosscheck.check import (
     CHECK_ORDER,
     FAIL,
@@ -233,6 +234,9 @@ def _good_record() -> object:
         enclosure=copy.deepcopy(_ENCLOSURE),
         power=copy.deepcopy(_POWER),
         engine_checks=copy.deepcopy(_ENGINE_CHECKS),
+        # C11 needs the BOM; deriving it from the board is M21.1's own
+        # decided builder, not a hand-built copy.
+        bom=bom_from_pcb(_good_pcb()),
     )
 
 
@@ -259,7 +263,9 @@ def test_good_record_passes_every_implemented_check() -> None:
     assert c04.evidence["pins"][2]["note"].endswith("gpio_out'")
     # The report-level triad: a fully green run is VERIFIED.
     assert overall_status(checks) == OVERALL_VERIFIED
-    assert status_counts(checks) == {PASS: 11, WARN: 0, FAIL: 0}
+    assert status_counts(checks) == {
+        PASS: len(CHECK_ORDER), WARN: 0, FAIL: 0,
+    }
 
 
 def test_missing_sections_fail_c01_and_cannot_verify_the_rest() -> None:

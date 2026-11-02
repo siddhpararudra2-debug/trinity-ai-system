@@ -384,7 +384,31 @@
       }
     ]
   },
-  "bom": null,
+  "bom": {
+    "lines": [
+      {
+        "ref": "U1",
+        "part": "",
+        "value": "ESP32-WROOM-32",
+        "quantity": 1,
+        "package": "ESP32-WROOM-32"
+      },
+      {
+        "ref": "J1",
+        "part": "",
+        "value": "USB-C",
+        "quantity": 1,
+        "package": "USB_C_Receptacle"
+      },
+      {
+        "ref": "R1",
+        "part": "",
+        "value": "1k",
+        "quantity": 1,
+        "package": "R_0402"
+      }
+    ]
+  },
   "power": {
     "rails": [
       {

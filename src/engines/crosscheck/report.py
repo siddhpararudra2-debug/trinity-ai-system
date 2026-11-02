@@ -90,12 +90,19 @@ FIX_HINTS: dict[str, str] = {
         "Widen or move a cutout so each external connector sits "
         "inside a window with at least 0.5 mm clearance."
     ),
+    "C11": (
+        "Make the record's bom section line up 1:1 with the populated "
+        "components: one line per ref with matching value and package, "
+        "and a quantity equal to how many components carry that ref "
+        "(build the lines from the board with bom_from_pcb, then "
+        "annotate part numbers)."
+    ),
 }
 
 # Implemented-but-inactive checks: named in the report footer, never a
-# row, never counted. C11's BOM part match activates with Phase 2, when
-# the BOM export exists for it to read.
-INACTIVE_CHECKS: tuple[str, ...] = ("C11",)
+# row, never counted. The list is empty since C11's BOM match shipped
+# (M21.1); a future named-but-inactive check goes back on it.
+INACTIVE_CHECKS: tuple[str, ...] = ()
 
 _BANNER_CLASS: dict[str, str] = {
     "VERIFIED": "banner-verified",
@@ -236,12 +243,13 @@ def render_html(report: dict[str, Any]) -> str:
         "least one FAIL. A WARN never grants VERIFIED — a check that "
         "could not verify its input warns, it never passes by default.</p>"
     )
-    parts.append(
-        "<p><b>Inactive checks.</b> C11 (BOM part match) is not "
-        "implemented yet: it activates with Phase 2, when the BOM "
-        "export exists to read. It is listed here so its silence is "
-        "explicit; it is never counted in this report.</p>"
-    )
+    if INACTIVE_CHECKS:
+        names = ", ".join(INACTIVE_CHECKS)
+        parts.append(
+            f"<p><b>Inactive checks.</b> {names} "
+            "is not implemented yet: listed here so its silence is "
+            "explicit. It is never counted in this report.</p>"
+        )
     parts.append(
         "<p>This page was generated fresh from the stored record at "
         "request time; no report copy is archived. The export format is "

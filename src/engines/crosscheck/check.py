@@ -23,7 +23,10 @@ never guessed). Bands per decided.md: C08/C10 clearances below 0.5 mm
 WARN, negative means the inner escapes the window (FAIL); C09 pairs
 standoffs with board holes at ≤ 0.2 mm drift PASS, ≤ 1.0 mm WARN, beyond
 that the standoff simply has no hole (FAIL; `HOLE_CAPTURE_MM = 1.0`).
-C11's BOM match activates with Phase 2; the report assembly is M20.5.
+C11 (M21.1) matches the BOM against the board's populated components:
+refs 1:1, value/package compared string-collapsed and case-sensitive,
+quantity against the ref's population count (`decided.md`, convention
+9).
 
 ``overall_status()`` folds a run into the report-level triad decided in
 `decided.md`: VERIFIED = every check PASS (the C00 gate included);
@@ -1544,9 +1547,175 @@ def _check_c07(record: DesignRecord) -> CheckResult:
     )
 
 
+# --- the BOM match (C11; the grammar lives in crosscheck.bom) -------------
+
+def _nonempty_text(value: Any) -> str:
+    """The string-collapsed view of an attribute (M21.1 convention 9):
+    stripped, case-sensitive; an absent field reads as the empty string
+    because "absent" is a state the board genuinely has."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _check_c11(record: DesignRecord) -> CheckResult:
+    id_, name = "C11", "bom_matches_parts"
+    if record.pcb is None:
+        return _cannot_verify(id_, name, "the record lacks a pcb section")
+    if record.bom is None:
+        return _cannot_verify(
+            id_,
+            name,
+            "the record carries no bom section; build one with "
+            "bom_from_pcb(record.pcb) or annotate the lines",
+            "bom",
+        )
+    if not isinstance(record.bom, dict):
+        return _cannot_verify(id_, name, "the bom section is malformed",
+                              "bom")
+    components = record.pcb.get("components")
+    if not isinstance(components, list):
+        return _cannot_verify(
+            id_, name, "pcb.components is absent or malformed",
+            "pcb.components",
+        )
+    lines = record.bom.get("lines")
+    if not isinstance(lines, list):
+        return _cannot_verify(
+            id_, name, "bom.lines is absent or malformed", "bom.lines"
+        )
+    # The board population: ref -> (count, value, package). Duplicate
+    # refs compare against their first occurrence; a refless component
+    # cannot enter a BOM, so it is a WARN (C06's convention).
+    board: dict[str, tuple[int, str, str]] = {}
+    rows: list[tuple[str, str, str, str]] = []
+    for component in components:
+        if not isinstance(component, dict):
+            rows.append((
+                WARN,
+                "a pcb component is not an object; it cannot populate "
+                "the BOM",
+                "pcb.components",
+                "",
+            ))
+            continue
+        ref = _nonempty_text(component.get("ref"))
+        if not ref:
+            rows.append((
+                WARN,
+                "a pcb component carries no ref; the BOM cannot name it",
+                "pcb.components",
+                "",
+            ))
+            continue
+        if ref in board:
+            count, value, package = board[ref]
+            board[ref] = (count + 1, value, package)
+        else:
+            board[ref] = (
+                1,
+                _nonempty_text(component.get("value")),
+                _nonempty_text(component.get("footprint")),
+            )
+    for line in lines:
+        if not isinstance(line, dict):
+            rows.append((
+                WARN,
+                "a bom.lines entry is not an object; it cannot be "
+                "matched",
+                "bom.lines",
+                "",
+            ))
+            continue
+        ref = _nonempty_text(line.get("ref"))
+        if not ref:
+            rows.append((
+                WARN,
+                "a BOM line names no ref; it cannot match a component",
+                "bom.lines",
+                "",
+            ))
+            continue
+        populated = board.pop(ref, None)
+        if populated is None:
+            rows.append((
+                FAIL,
+                f"BOM line '{ref}' matches no populated component "
+                "(extra ref)",
+                ref,
+                "",
+            ))
+            continue
+        count, board_value, board_package = populated
+        mismatches: list[str] = []
+        line_value = _nonempty_text(line.get("value"))
+        if line_value != board_value:
+            mismatches.append(
+                f"value '{line_value}' vs '{board_value}'"
+            )
+        line_package = _nonempty_text(line.get("package"))
+        if line_package != board_package:
+            mismatches.append(
+                f"package '{line_package}' vs '{board_package}'"
+            )
+        line_quantity = line.get("quantity")
+        quantity = _as_float(line_quantity)
+        if quantity is None or quantity != count:
+            mismatches.append(
+                f"quantity {line_quantity!r} vs {count}"
+            )
+        if mismatches:
+            rows.append((
+                WARN,
+                f"BOM line '{ref}' differs from the populated part: "
+                f"{'; '.join(mismatches)}",
+                ref,
+                "",
+            ))
+        else:
+            rows.append((
+                PASS,
+                (
+                    f"BOM line '{ref}' matches the populated part "
+                    f"('{board_value}', package '{board_package}', "
+                    f"quantity {count})"
+                ),
+                ref,
+                "",
+            ))
+    for ref in sorted(board):
+        rows.append((
+            FAIL,
+            f"no BOM line for populated component '{ref}' (missing "
+            "ref)",
+            ref,
+            "",
+        ))
+    if not rows:
+        return CheckResult(
+            check_id=id_,
+            name=name,
+            status=PASS,
+            reason=(
+                "the board populates no components and the BOM names "
+                "none; the ref sets match (both empty)"
+            ),
+            location="bom",
+            evidence={"bom": []},
+        )
+    return _aggregate(
+        id_,
+        name,
+        "the BOM lines match the populated components 1:1 on ref, "
+        "value, package and quantity",
+        rows,
+        "bom",
+    )
+
+
 CHECK_ORDER: tuple[str, ...] = ("C00", "C01", "C02", "C03", "C04",
                                 "C05", "C06", "C07", "C08", "C09",
-                                "C10")
+                                "C10", "C11")
 _CHECKS = {
     "C00": _check_c00,
     "C01": _check_c01,
@@ -1559,6 +1728,7 @@ _CHECKS = {
     "C08": _check_c08,
     "C09": _check_c09,
     "C10": _check_c10,
+    "C11": _check_c11,
 }
 
 
@@ -1592,7 +1762,6 @@ def status_counts(checks: list[CheckResult]) -> dict[str, int]:
 
 
 def run_checks(record: DesignRecord) -> list[CheckResult]:
-    """Run the implemented cross-checks in the decided order (C11's BOM
-    match activates with Phase 2; the report assembly is M20.5; this
-    list grows, never reorders)."""
+    """Run the implemented cross-checks in the decided order (C00's
+    gate through C11's BOM match; this list grows, never reorders)."""
     return [_CHECKS[id_](record) for id_ in CHECK_ORDER]

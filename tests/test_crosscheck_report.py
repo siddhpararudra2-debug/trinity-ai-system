@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.engines.crosscheck import record as record_module
+from src.engines.crosscheck import report as report_module
 from src.engines.crosscheck.check import CHECK_ORDER, run_checks
 from src.engines.crosscheck.report import (
     FIX_HINTS,
@@ -42,9 +43,10 @@ def test_fix_hints_cover_exactly_the_implemented_checks() -> None:
     assert set(FIX_HINTS) == set(CHECK_ORDER)
     for hint in FIX_HINTS.values():
         assert isinstance(hint, str) and hint.strip()
-    # C11 is the known inactive check: named, but never a row.
-    assert INACTIVE_CHECKS == ("C11",)
-    assert not {"C11"} & set(CHECK_ORDER)
+    # C11 shipped with M21.1: implemented and active, so it is in the
+    # run order with a hint — and the inactive list is empty.
+    assert INACTIVE_CHECKS == ()
+    assert "C11" in CHECK_ORDER
 
 
 def test_assemble_report_matches_a_fresh_run_checks_call() -> None:
@@ -176,14 +178,25 @@ def test_render_html_footer_states_semantics_and_honesty() -> None:
     lowered = page.lower()
     # The decided status semantics, spelled out on the page.
     assert "a warn never grants verified" in lowered
-    # C11 is named as inactive and never counted.
-    assert "C11" in page
-    assert "never counted in this report" in page
-    assert "phase 2" in lowered
     # No PDF generator is vendored — the page says so, and offers the
     # browser's print-to-PDF as the export path.
     assert "print this page to pdf" in lowered
     assert "no pdf generator is vendored" in lowered
+    # Every implemented check runs (C11 shipped with M21.1): no
+    # inactive-checks paragraph may claim otherwise.
+    assert "inactive checks" not in lowered
+
+
+def test_render_html_names_inactive_checks_when_any_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The report's honesty convention (decided.md convention 8): a
+    # named-but-inactive check is stated in the footer, never counted.
+    monkeypatch.setattr(report_module, "INACTIVE_CHECKS", ("C11",))
+    page = render_html(assemble_report(_good_record()))
+    assert "C11" in page
+    assert "is not implemented yet" in page
+    assert "never counted in this report" in page
 
 
 # --- the route -------------------------------------------------------------
