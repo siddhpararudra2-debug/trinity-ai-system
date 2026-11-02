@@ -8,8 +8,14 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import (
+    APIRouter,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 from src.agents.coder import CoderAgent
 from src.agents.loop import refusal
@@ -25,6 +31,8 @@ from src.core.errors import (
 from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
 from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
+from src.engines.crosscheck.record import DesignRecordError, load_record
+from src.engines.crosscheck.report import assemble_report, render_html
 from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
 from src.jobs.manager import job_manager
@@ -101,6 +109,23 @@ def download_artifact(artifact_id: str) -> FileResponse:
     if not path.is_file():
         raise ArtifactNotFoundError(f"No artifact file for id '{artifact_id}'")
     return FileResponse(str(path), filename=path.name)
+
+
+@router.get("/projects/{record_id}/report")
+def get_verified_report(record_id: str) -> HTMLResponse:
+    """Render the project's verified report (M20.5).
+
+    The checks run fresh at request time against the stored design
+    record — the report is generated, never archived. An unknown,
+    invalid or unreadable record id is a 404: DesignRecordError is not
+    a TrinityError, so main.py's handler would map an escaped one to
+    500; the route owns the translation to 404 instead.
+    """
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return HTMLResponse(render_html(assemble_report(record)))
 
 
 # Extensions the native vision engine can actually decode. Kept in step with

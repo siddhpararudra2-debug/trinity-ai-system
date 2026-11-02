@@ -155,7 +155,11 @@ concrete:
    `overall_status()` folds a run: VERIFIED = every check PASS (the C00
    gate included); WARNING = no FAIL but ≥1 WARN; FAILED = any FAIL.
    WARN never grants VERIFIED, so a cannot_verify WARN denies it too
-   (`status_counts()` carries the tally the report shows).
+   (`status_counts()` carries the tally the report shows). VERIFIED is
+   a statement about *implemented* checks only: an inactive check
+   (C11's BOM match until Phase 2) is named as inactive in the report
+   footer and never counted — an honestly-incomplete checker never
+   pretends to coverage it does not have.
 
 ---
 

@@ -72,6 +72,29 @@ of a rail net needs declared draw data. The triad is computed by
 `overall_status()` — VERIFIED only when every check PASSes, so a
 cannot_verify WARN denies VERIFIED. decided.md conventions 7-8. 22
 tests; suite 584 passed / 26 skipped, ruff clean.
+**M20.5 the verified report**: assembly, hints, and the HTML route, in
+one concern. `assemble_report()` never re-reads a stored verdict —
+every call runs the checks fresh and folds rows
+`{check_id, name, status, reason, location, hint}` with the computed
+triad and tally. The fix hints are the part users will re-read most,
+so they are repo-owned static text keyed by check id, never
+model-generated; tests enforce the hint keys equal CHECK_ORDER exactly
+in both directions. `render_html()` writes a self-contained page where the discipline is
+in the details: escaping happens as each record-derived
+value enters the page (a poisoned record renders as inert text), the
+CSS lives in a plain module constant outside the f-strings, and the
+page carries no scripts or external references at all. The footer does
+the advertising-restraint work: it spells out the status semantics,
+names C11 as inactive and never counted (VERIFIED means every
+*implemented* check PASSes — convention 8 extended), and states that
+no PDF generator is vendored, print the page instead. The route runs
+the checks live per request and owns the DesignRecordError → 404
+translation (main.py's envelope then wraps it as `http_error`).
+Land-mines the tests caught mid-flight: a stray `</div>` in the row
+builder; asserting bare class names against a page whose stylesheet
+legitimately contains every rule (assert the attribute); hint text
+compared pre-escaping (assert the escaped form). 12 tests; suite 596
+passed / 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
