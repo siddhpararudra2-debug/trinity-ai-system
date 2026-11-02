@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from src.engines.crosscheck.record import (
+    OPTIONAL_SECTIONS,
     REQUIRED_SECTIONS,
     DesignRecord,
     DesignRecordError,
@@ -139,6 +140,17 @@ CONNECTORS: list = [{"ref": "J1", "pos_mm": {"x": 30.0, "y": 40.0},
 BOM: dict = {"lines": [{"ref": "U1", "part": "ESP32-WROOM-32",
                         "value": "ESP32", "quantity": 1,
                         "package": "WROOM"}]}
+POWER: dict = {
+    "rails": [
+        {"net": "VCC", "class": "3.3V", "capacity_ma": 600.0,
+         "draws": [{"ref": "U1", "draw_ma": 240.0}]},
+    ],
+    "mcu_rail": {"class": "3.3V"},
+}
+ENGINE_CHECKS: list = [
+    {"artifact": "pcb", "op": "validate", "status": "VALIDATED"},
+    {"artifact": "firmware", "op": "validate", "status": "VERIFIED"},
+]
 
 
 def _full_kwargs() -> dict:
@@ -149,6 +161,8 @@ def _full_kwargs() -> dict:
         "connectors": CONNECTORS,
         "enclosure": ENCLOSURE,
         "bom": BOM,
+        "power": POWER,
+        "engine_checks": ENGINE_CHECKS,
     }
 
 
@@ -161,6 +175,8 @@ def test_build_stores_only_what_is_given() -> None:
     assert record.connectors is None
     assert record.enclosure is None
     assert record.bom is None
+    assert record.power is None
+    assert record.engine_checks is None
     # The invented-nothing truth, visible before any check runs.
     assert record.absent_required_sections() == [
         "holes", "connectors", "enclosure"
@@ -170,7 +186,7 @@ def test_build_stores_only_what_is_given() -> None:
 def test_full_record_reports_no_absent_sections() -> None:
     record = build_record("snap", **_full_kwargs())
     assert record.absent_required_sections() == []
-    for name in REQUIRED_SECTIONS + ("bom",):
+    for name in REQUIRED_SECTIONS + OPTIONAL_SECTIONS:
         assert getattr(record, name) is not None
 
 
@@ -208,6 +224,8 @@ def test_save_load_roundtrip(tmp_path: Path) -> None:
     assert loaded.pcb["components"][0]["ref"] == "U1"
     assert loaded.firmware["pin_mappings"][0]["mcu_pin"] == "GPIO21"
     assert loaded.bom["lines"][0]["part"] == "ESP32-WROOM-32"
+    assert loaded.power["rails"][0]["net"] == "VCC"
+    assert loaded.engine_checks[0]["artifact"] == "pcb"
 
 
 def test_partial_record_roundtrip_stays_honestly_partial(
@@ -217,7 +235,8 @@ def test_partial_record_roundtrip_stays_honestly_partial(
     record = build_record("demo", pcb=PCB_FRAGMENT, firmware=FIRMWARE_FRAGMENT)
     save_record(record, root)
     loaded = load_record("demo", root)
-    for name in ("holes", "connectors", "enclosure", "bom"):
+    for name in ("holes", "connectors", "enclosure", "bom", "power",
+                 "engine_checks"):
         assert getattr(loaded, name) is None
     assert loaded.absent_required_sections() == [
         "holes", "connectors", "enclosure"
@@ -314,8 +333,10 @@ def test_from_dict_refuses_missing_record_id() -> None:
         ("firmware", []),
         ("enclosure", 7),
         ("bom", []),
+        ("power", []),
         ("holes", {"wrongly": "an object"}),
         ("connectors", "x"),
+        ("engine_checks", {}),
     ],
 )
 def test_section_shape_refusals(field: str, bad_value: object) -> None:

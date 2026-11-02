@@ -16,10 +16,14 @@ import copy
 from src.engines.crosscheck.check import (
     CHECK_ORDER,
     FAIL,
+    OVERALL_FAILED,
+    OVERALL_VERIFIED,
     PASS,
     WARN,
     CheckResult,
+    overall_status,
     run_checks,
+    status_counts,
 )
 from src.engines.crosscheck.record import build_record
 
@@ -191,6 +195,34 @@ def _good_firmware() -> dict:
     }
 
 
+# A green C00 gate: one VALIDATED engine check per constituent artifact
+# (status strings are the src/models/schemas.py ValidationLevel chain).
+_ENGINE_CHECKS = [
+    {"artifact": "pcb", "op": "validate", "status": "VALIDATED"},
+    {"artifact": "firmware", "op": "validate", "status": "VERIFIED"},
+    {"artifact": "cad", "op": "nest", "status": "VALIDATED"},
+]
+# A coherent power section: both board power nets classified (VCC rides
+# power-typed pads on U1/J1; GND on U1/J1/R1), every rider metered,
+# draws at 40-41% of capacity, and the MCU's 3.3 V rail present.
+_POWER = {
+    "rails": [
+        {"net": "VCC", "class": "3.3V", "capacity_ma": 600.0,
+         "draws": [
+             {"ref": "U1", "draw_ma": 240.0},
+             {"ref": "J1", "draw_ma": 0.0},
+         ]},
+        {"net": "GND", "class": "0V", "capacity_ma": 600.0,
+         "draws": [
+             {"ref": "U1", "draw_ma": 240.0},
+             {"ref": "J1", "draw_ma": 0.0},
+             {"ref": "R1", "draw_ma": 5.0},
+         ]},
+    ],
+    "mcu_rail": {"class": "3.3V"},
+}
+
+
 def _good_record() -> object:
     return build_record(
         "good-design",
@@ -199,6 +231,8 @@ def _good_record() -> object:
         holes=copy.deepcopy(_HOLES),
         connectors=copy.deepcopy(_CONNECTORS),
         enclosure=copy.deepcopy(_ENCLOSURE),
+        power=copy.deepcopy(_POWER),
+        engine_checks=copy.deepcopy(_ENGINE_CHECKS),
     )
 
 
@@ -223,6 +257,9 @@ def test_good_record_passes_every_implemented_check() -> None:
     c04 = by_id["C04"]
     assert c04.evidence["pins"], "C04 must carry its per-pin rows"
     assert c04.evidence["pins"][2]["note"].endswith("gpio_out'")
+    # The report-level triad: a fully green run is VERIFIED.
+    assert overall_status(checks) == OVERALL_VERIFIED
+    assert status_counts(checks) == {PASS: 11, WARN: 0, FAIL: 0}
 
 
 def test_missing_sections_fail_c01_and_cannot_verify_the_rest() -> None:
@@ -236,6 +273,8 @@ def test_missing_sections_fail_c01_and_cannot_verify_the_rest() -> None:
         result = _check(checks, check_id)
         assert result.status == WARN
         assert result.reason.startswith("cannot_verify")
+    # C01's FAIL dominates: the run cannot be VERIFIED or WARNING.
+    assert overall_status(checks) == OVERALL_FAILED
 
 
 def test_c02_exact_family_and_missing_matches() -> None:

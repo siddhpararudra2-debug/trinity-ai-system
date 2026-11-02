@@ -20,9 +20,11 @@ import copy
 from src.engines.crosscheck.check import (
     CHECK_ORDER,
     FAIL,
+    OVERALL_WARNING,
     PASS,
     WARN,
     run_checks,
+    overall_status,
 )
 from src.engines.crosscheck.record import build_record
 
@@ -114,6 +116,9 @@ def test_good_geometry_record_completes_with_c01_c08_c09_c10() -> None:
     c10 = _check(checks, "C10")
     assert c10.evidence["connectors"][0]["status"] == PASS
     assert c10.evidence["connectors"][0]["note"] == "cutout 'C1'"
+    # No FAIL here, but the electrical sections are absent — the run
+    # is WARNING, never VERIFIED (WARN never grants VERIFIED).
+    assert overall_status(checks) == OVERALL_WARNING
 
 
 def test_c08_board_sticking_out_fails_naming_edge_and_mm() -> None:

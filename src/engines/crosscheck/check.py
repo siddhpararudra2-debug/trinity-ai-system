@@ -1,7 +1,20 @@
-"""Cross-checks (M20.2-M20.3): the checker the verified report builds on.
+"""Cross-checks (M20.2-M20.4): the checker the verified report builds on.
+
+C00 is the engine gate: the record's ``engine_checks`` entries must all
+be VALIDATED/VERIFIED (the status chain ``src/models/schemas.py`` owns).
+A FAILED engine check fails the gate with the engine's reason verbatim;
+an unfinished status (e.g. GENERATED) is a WARN cannot_verify — an
+engine check the record never made is never passed by default.
 
 C01-C05 cover the firmware/board wiring (record completeness, MCU
-identity, pin existence, named nets, peripheral counterparts); C08-C10
+identity, pin existence, named nets, peripheral counterparts); C06-C07
+cover the electrical record-side annotations: C06 wants exactly one
+declared rail class per board power net (discovered from
+``power_in``/``power_out`` pads) plus the MCU's rail on the board, and
+C07 weighs each rail's declared draws against its ``capacity_ma`` (≤ 80%
+PASS, ≤ 100% WARN, over capacity FAIL; a rider without declared draw
+data WARNs). Both read the ``power`` section — absent means WARN
+cannot_verify, never a guessed rail. C08-C10
 cover the enclosure geometry the design record owns itself — board
 inside the cavity, standoffs on board holes, connectors inside cutouts —
 in a single mm frame where `enclosure.cavity_mm` must carry its own
@@ -10,7 +23,13 @@ never guessed). Bands per decided.md: C08/C10 clearances below 0.5 mm
 WARN, negative means the inner escapes the window (FAIL); C09 pairs
 standoffs with board holes at ≤ 0.2 mm drift PASS, ≤ 1.0 mm WARN, beyond
 that the standoff simply has no hole (FAIL; `HOLE_CAPTURE_MM = 1.0`).
-C06/C07, the C00 gate and report assembly land in their own milestones.
+C11's BOM match activates with Phase 2; the report assembly is M20.5.
+
+``overall_status()`` folds a run into the report-level triad decided in
+`decided.md`: VERIFIED = every check PASS (the C00 gate included);
+WARNING = no FAIL but at least one WARN; FAILED = any check FAILed or
+any engine check FAILED. WARN never grants VERIFIED, so a cannot_verify
+WARN denies it too.
 
 Each check reads the design record (`src.engines.crosscheck.record`) and
 returns exactly one verdict with a human-readable reason and a location:
@@ -1066,22 +1085,514 @@ def _check_c10(record: DesignRecord) -> CheckResult:
     return result
 
 
-CHECK_ORDER: tuple[str, ...] = ("C01", "C02", "C03", "C04", "C05",
-                                "C08", "C09", "C10")
+# --- the C00 gate and the electrical record-side checks -------------------
+
+# C00 speaks the exact status chain src/models/schemas.py owns
+# (ValidationLevel). VALIDATED/VERIFIED close the gate; FAILED fails it;
+# anything else (a GENERATED-only artifact, say) is a validation the
+# record never completed: WARN cannot_verify, never a PASS by default.
+GATE_GREEN_STATUSES: tuple[str, ...] = ("VALIDATED", "VERIFIED")
+GATE_FAILED_STATUS: str = "FAILED"
+
+# C07: a rail's summed draw above this fraction of capacity warns —
+# above 100% of capacity fails (decided tolerance, 80%).
+RAIL_WARN_FRACTION = 0.8
+
+
+def _check_c00(record: DesignRecord) -> CheckResult:
+    id_, name = "C00", "engine_checks_green"
+    gate = record.engine_checks
+    if gate is None:
+        return _cannot_verify(
+            id_,
+            name,
+            "the record carries no engine-check gate (engine_checks "
+            "absent)",
+            "engine_checks",
+        )
+    if not isinstance(gate, list):
+        return _cannot_verify(
+            id_, name, "engine_checks is malformed", "engine_checks"
+        )
+    rows: list[tuple[str, str, str, str]] = []
+    for entry in gate:
+        if not isinstance(entry, dict):
+            rows.append((
+                WARN,
+                "an engine_checks entry is not an object; it cannot be "
+                "a gate verdict",
+                "engine_checks",
+                "",
+            ))
+            continue
+        artifact = str(entry.get("artifact", "")) or "?artifact"
+        op = str(entry.get("op", "")) or "?op"
+        status = str(entry.get("status", ""))
+        detail = str(entry.get("detail", "") or entry.get("reason", ""))
+        where = f"{artifact}.{op}"
+        if status in GATE_GREEN_STATUSES:
+            rows.append((
+                PASS,
+                f"engine check {where}: {status}",
+                artifact,
+                detail,
+            ))
+        elif status == GATE_FAILED_STATUS:
+            rows.append((
+                FAIL,
+                f"engine check {where} FAILED"
+                + (f": {detail}" if detail else ""),
+                artifact,
+                f"status '{status}'",
+            ))
+        elif not status:
+            rows.append((
+                WARN,
+                f"engine check {where} carries no status; the gate "
+                "cannot weigh it",
+                artifact,
+                "",
+            ))
+        else:
+            rows.append((
+                WARN,
+                f"engine check {where} has not completed a validation "
+                f"(status: {status})",
+                artifact,
+                "an engine check the record never made cannot be "
+                "passed by default",
+            ))
+    if not rows:
+        return _cannot_verify(
+            id_,
+            name,
+            "engine_checks holds no entries; no engine has validated "
+            "anything yet",
+            "engine_checks",
+        )
+    return _aggregate(
+        id_,
+        name,
+        "every recorded engine check is VALIDATED or VERIFIED",
+        rows,
+        "engine_checks",
+    )
+
+
+def _board_power_nets(pcb: dict[str, Any]) -> set[str]:
+    """Nets (as declared in the netlist) that a power-typed pad rides —
+    the board's power topology, straight from the pads' electrical
+    types. Undeclared pad nets are C04's business and are ignored here.
+    """
+    known = set(_net_index(pcb))
+    nets: set[str] = set()
+    components = pcb.get("components")
+    if not isinstance(components, list):
+        return nets
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        pins = component.get("pins")
+        if not isinstance(pins, list):
+            continue
+        for pin in pins:
+            if not isinstance(pin, dict):
+                continue
+            if str(pin.get("electrical", "")) in ("power_in", "power_out"):
+                net = str(pin.get("net", ""))
+                if net and net in known:
+                    nets.add(net)
+    return nets
+
+
+def _check_c06(record: DesignRecord) -> CheckResult:
+    id_, name = "C06", "voltage_domains_compatible"
+    if record.pcb is None:
+        return _cannot_verify(id_, name, "the record lacks a pcb section")
+    if record.power is None:
+        return _cannot_verify(
+            id_,
+            name,
+            "the record lacks a power section; rail classes live there",
+            "power",
+        )
+    rails = record.power.get("rails")
+    if not isinstance(rails, list):
+        return _cannot_verify(
+            id_, name, "power.rails is absent or malformed",
+            "power.rails",
+        )
+    board_power = _board_power_nets(record.pcb)
+    net_index = _net_index(record.pcb)
+    rows: list[tuple[str, str, str, str]] = []
+    rails_by_net: dict[str, set[str | None]] = {}
+    for rail in rails:
+        if not isinstance(rail, dict):
+            rows.append((
+                WARN,
+                "a power.rails entry is not an object; it cannot be "
+                "classified",
+                "power.rails",
+                "",
+            ))
+            continue
+        net_name = str(rail.get("net", "")).strip()
+        cls = str(rail.get("class", "")).strip()
+        if not net_name:
+            rows.append((
+                WARN,
+                "a rail entry names no net; it cannot be classified",
+                "power.rails",
+                "",
+            ))
+            continue
+        if net_name not in net_index:
+            rows.append((
+                FAIL,
+                (
+                    f"rail '{net_name}' names a net the board netlist "
+                    "does not declare"
+                ),
+                net_name,
+                "",
+            ))
+            continue
+        if not cls:
+            rows.append((
+                WARN,
+                (
+                    f"power net '{net_name}' is declared but carries no "
+                    "rail class (unclassified)"
+                ),
+                net_name,
+                "",
+            ))
+        elif net_name not in board_power:
+            rows.append((
+                WARN,
+                (
+                    f"rail '{net_name}' names a declared net that no "
+                    "power-typed pad rides; the board does not show it "
+                    "as power"
+                ),
+                net_name,
+                f"declared class '{cls}'",
+            ))
+        rails_by_net.setdefault(net_name, set()).add(cls or None)
+    for net_name, classes in rails_by_net.items():
+        if len({c for c in classes if c}) > 1:
+            rows.append((
+                FAIL,
+                (
+                    f"power net '{net_name}' carries "
+                    f"{len({c for c in classes if c})} classes "
+                    f"({', '.join(sorted({c for c in classes if c}))})"
+                ),
+                net_name,
+                "",
+            ))
+    for net_name in sorted(board_power):
+        if net_name not in rails_by_net:
+            rows.append((
+                WARN,
+                (
+                    f"power net '{net_name}' is present on the board but "
+                    "no rail classifies it"
+                ),
+                net_name,
+                "",
+            ))
+    mcu_rail = record.power.get("mcu_rail")
+    if not isinstance(mcu_rail, dict):
+        rows.append((
+            WARN,
+            (
+                "cannot_verify: power.mcu_rail is absent; the MCU's "
+                "expected rail cannot be checked"
+            ),
+            "power.mcu_rail",
+            "",
+        ))
+    else:
+        expected = str(mcu_rail.get("class", "")).strip()
+        if not expected:
+            rows.append((
+                WARN,
+                (
+                    "power.mcu_rail states no rail class; the MCU's "
+                    "rail cannot be checked"
+                ),
+                "power.mcu_rail",
+                "",
+            ))
+        else:
+            carriers = sorted(
+                net_name
+                for net_name, classes in rails_by_net.items()
+                if expected in {c for c in classes if c}
+                and net_name in board_power
+            )
+            if carriers:
+                rows.append((
+                    PASS,
+                    (
+                        f"the MCU's rail '{expected}' is carried by "
+                        f"board power net(s) {', '.join(carriers)}"
+                    ),
+                    carriers[0],
+                    "",
+                ))
+            else:
+                rows.append((
+                    FAIL,
+                    (
+                        f"the MCU's rail '{expected}' is missing from "
+                        "the board: no board power net carries it"
+                    ),
+                    "power.mcu_rail",
+                    "",
+                ))
+    return _aggregate(
+        id_,
+        name,
+        (
+            "every board power net carries exactly one rail class and "
+            "the MCU's rail exists on the board"
+        ),
+        rows,
+        "nets",
+    )
+
+
+def _riders_by_net(pcb: dict[str, Any]) -> dict[str, set[str]]:
+    """Refs (all components, the MCU included) with at least one pad on
+    each net — who a rail's draw data must account for."""
+    riders: dict[str, set[str]] = {}
+    components = pcb.get("components")
+    if not isinstance(components, list):
+        return riders
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        ref = str(component.get("ref", ""))
+        if not ref:
+            continue
+        pins = component.get("pins")
+        if not isinstance(pins, list):
+            continue
+        for pin in pins:
+            if isinstance(pin, dict):
+                net = str(pin.get("net", ""))
+                if net:
+                    riders.setdefault(net, set()).add(ref)
+    return riders
+
+
+def _check_c07(record: DesignRecord) -> CheckResult:
+    id_, name = "C07", "current_budget"
+    if record.pcb is None:
+        return _cannot_verify(id_, name, "the record lacks a pcb section")
+    if record.power is None:
+        return _cannot_verify(
+            id_,
+            name,
+            "the record lacks a power section; rail draws and "
+            "capacities live there",
+            "power",
+        )
+    rails = record.power.get("rails")
+    if not isinstance(rails, list):
+        return _cannot_verify(
+            id_, name, "power.rails is absent or malformed",
+            "power.rails",
+        )
+    if not rails:
+        return _cannot_verify(
+            id_,
+            name,
+            "power.rails declares no rails; there is nothing to weigh",
+            "power.rails",
+        )
+    riders = _riders_by_net(record.pcb)
+    rows: list[tuple[str, str, str, str]] = []
+    for rail in rails:
+        if not isinstance(rail, dict):
+            rows.append((
+                WARN,
+                "a power.rails entry is not an object; its draw cannot "
+                "be weighed",
+                "power.rails",
+                "",
+            ))
+            continue
+        net_name = str(rail.get("net", "")).strip() or "?rail"
+        capacity = _as_float(rail.get("capacity_ma"))
+        if capacity is None or capacity <= 0:
+            rows.append((
+                WARN,
+                (
+                    f"rail '{net_name}' declares no usable "
+                    "capacity_ma; its draw is not weighed"
+                ),
+                net_name,
+                "",
+            ))
+            continue
+        declared: dict[str, float] = {}
+        draws = rail.get("draws")
+        if isinstance(draws, list):
+            for draw in draws:
+                if not isinstance(draw, dict):
+                    rows.append((
+                        WARN,
+                        (
+                            f"a draw entry on rail '{net_name}' is not "
+                            "an object"
+                        ),
+                        net_name,
+                        "",
+                    ))
+                    continue
+                ref = str(draw.get("ref", "")).strip()
+                ma = _as_float(draw.get("draw_ma"))
+                if not ref or ma is None:
+                    rows.append((
+                        WARN,
+                        (
+                            f"a draw entry on rail '{net_name}' lacks "
+                            "ref or draw_ma"
+                        ),
+                        net_name,
+                        "",
+                    ))
+                    continue
+                if ma < 0:
+                    rows.append((
+                        WARN,
+                        (
+                            f"draw for '{ref}' on rail '{net_name}' is "
+                            "negative and cannot be summed"
+                        ),
+                        net_name,
+                        f"declared {ma:g} mA",
+                    ))
+                    continue
+                if ref not in riders.get(net_name, set()):
+                    rows.append((
+                        WARN,
+                        (
+                            f"draw data for '{ref}' on rail "
+                            f"'{net_name}', but the board puts no pad "
+                            "of it on this net"
+                        ),
+                        net_name,
+                        f"declared {ma:g} mA",
+                    ))
+                declared[ref] = declared.get(ref, 0.0) + ma
+        unmetered = sorted(
+            riders.get(net_name, set()) - declared.keys()
+        )
+        for ref in unmetered:
+            rows.append((
+                WARN,
+                (
+                    f"'{ref}' rides rail '{net_name}' on the board but "
+                    "declares no draw data"
+                ),
+                ref,
+                "without it the budget is under-counted",
+            ))
+        total = sum(declared.values())
+        ratio = total / capacity
+        pct = ratio * 100.0
+        if ratio > 1.0:
+            rows.append((
+                FAIL,
+                (
+                    f"rail '{net_name}' is over budget: {total:.1f} mA "
+                    f"drawn of {capacity:.1f} mA capacity"
+                ),
+                net_name,
+                f"{pct:.0f}% of capacity",
+            ))
+        elif ratio > RAIL_WARN_FRACTION:
+            rows.append((
+                WARN,
+                (
+                    f"rail '{net_name}' runs at {pct:.0f}% of capacity "
+                    f"({total:.1f} of {capacity:.1f} mA)"
+                ),
+                net_name,
+                "81-100% of capacity",
+            ))
+        else:
+            rows.append((
+                PASS,
+                (
+                    f"rail '{net_name}' draws {total:.1f} mA of "
+                    f"{capacity:.1f} mA ({pct:.0f}%)"
+                ),
+                net_name,
+                "",
+            ))
+    return _aggregate(
+        id_,
+        name,
+        "every weighed rail holds at 80% of its capacity",
+        rows,
+        "rails",
+    )
+
+
+CHECK_ORDER: tuple[str, ...] = ("C00", "C01", "C02", "C03", "C04",
+                                "C05", "C06", "C07", "C08", "C09",
+                                "C10")
 _CHECKS = {
+    "C00": _check_c00,
     "C01": _check_c01,
     "C02": _check_c02,
     "C03": _check_c03,
     "C04": _check_c04,
     "C05": _check_c05,
+    "C06": _check_c06,
+    "C07": _check_c07,
     "C08": _check_c08,
     "C09": _check_c09,
     "C10": _check_c10,
 }
 
 
+OVERALL_VERIFIED = "VERIFIED"
+OVERALL_WARNING = "WARNING"
+OVERALL_FAILED = "FAILED"
+
+
+def overall_status(checks: list[CheckResult]) -> str:
+    """The report-level triad (`decided.md`, status semantics): VERIFIED
+    = every cross-check PASS **and** the engine-check gate green — i.e.
+    every check in ``checks`` is a PASS; WARNING = no FAIL but at least
+    one WARN; FAILED = any check FAILed (an engine check FAILed is a
+    C00 FAIL). WARN never grants VERIFIED, so a cannot_verify WARN
+    denies it too."""
+    statuses = [result.status for result in checks]
+    if FAIL in statuses:
+        return OVERALL_FAILED
+    if WARN in statuses:
+        return OVERALL_WARNING
+    return OVERALL_VERIFIED
+
+
+def status_counts(checks: list[CheckResult]) -> dict[str, int]:
+    """The per-verdict tally the report shows next to the status."""
+    counts = {PASS: 0, WARN: 0, FAIL: 0}
+    for result in checks:
+        if result.status in counts:
+            counts[result.status] += 1
+    return counts
+
+
 def run_checks(record: DesignRecord) -> list[CheckResult]:
-    """Run the implemented cross-checks in the decided order (the C00 gate
-    and C06/C07/C11 land in their own milestones; this list grows, never
-    reorders)."""
+    """Run the implemented cross-checks in the decided order (C11's BOM
+    match activates with Phase 2; the report assembly is M20.5; this
+    list grows, never reorders)."""
     return [_CHECKS[id_](record) for id_ in CHECK_ORDER]

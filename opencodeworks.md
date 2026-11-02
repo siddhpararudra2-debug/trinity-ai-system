@@ -57,6 +57,21 @@ The test writing itself caught fixture sloppiness before it shipped:
 dropping one hole turned an expected drift-WARN into an honest FAIL two
 standoffs over — the aggregate rule doing its job. 15 tests; suite
 562 passed / 26 skipped, ruff clean.
+**M20.4 C00 gate + C06/C07 + the overall triad**: the last two electrical
+checks and the engine gate landed on the same honesty shape. The C00
+gate reads `engine_checks[]` — per-artifact engine-validate verdicts
+stored verbatim from the engines, statuses from src/models/schemas.py's
+chain: FAILED surfaces the engine's own reason word-for-word;
+GENERATED-only is WARN cannot_verify (an engine check never made is
+never passed by default). C06/C07 read a new record-side `power`
+section (rails with class/capacity/draws + mcu_rail) — the board IR has
+no rail classes, so the record carries them or the checks say
+cannot_verify. Grammar worth noting: a rail without a usable capacity
+is *not weighed* but WARNs (silence would fake a PASS), and every rider
+of a rail net needs declared draw data. The triad is computed by
+`overall_status()` — VERIFIED only when every check PASSes, so a
+cannot_verify WARN denies VERIFIED. decided.md conventions 7-8. 22
+tests; suite 584 passed / 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,

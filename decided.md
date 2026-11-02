@@ -131,6 +131,31 @@ concrete:
    `HOLE_CAPTURE_MM = 1.0`). C10's exposing cutout must fully contain
    the connector rect to count; a connector no cutout contains FAILs
    with its closest window named.
+7. **The gate and the electrical annotations are record-side (M20.4).**
+   `engine_checks[]` stores each constituent artifact's engine-validate
+   verdict verbatim (`{artifact, op, status, detail}`); statuses are the
+   `src/models/schemas.py` chain — VALIDATED/VERIFIED close the C00
+   gate, FAILED fails it with the detail verbatim, any unfinished status
+   (e.g. GENERATED) is WARN cannot_verify (an engine check the record
+   never made is never passed by default). The `power` section carries
+   `rails[]` (`{net, class, capacity_ma, draws[]}`) and `mcu_rail`
+   (`{class}`): C06 wants exactly **one** declared class per *board
+   power net* (discovered from `power_in`/`power_out` pads; a
+   present-but-unclassified net WARNs; two classes on one net FAIL; the
+   MCU's rail absent from the board FAILs); C07 weighs sum(draws)
+   against capacity_ma — ≤ 80% PASS (`RAIL_WARN_FRACTION = 0.8`),
+   81–100% WARN, over capacity FAIL; a rider (any pad on the rail net,
+   the MCU included) without draw data WARNs, and a rail without a
+   usable capacity is not weighed (WARN — nothing unweighed passes
+   silently). Both sections stay optional in record schema v1: absent =
+   WARN cannot_verify (adding optional keys does not bump
+   RECORD_SCHEMA_VERSION; an older build refuses the new keys by name
+   via the existing unknown-key refusal).
+8. **The overall triad is computed, never carried.**
+   `overall_status()` folds a run: VERIFIED = every check PASS (the C00
+   gate included); WARNING = no FAIL but ≥1 WARN; FAILED = any FAIL.
+   WARN never grants VERIFIED, so a cannot_verify WARN denies it too
+   (`status_counts()` carries the tally the report shows).
 
 ---
 

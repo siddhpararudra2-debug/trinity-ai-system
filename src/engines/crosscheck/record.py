@@ -45,7 +45,12 @@ RECORD_FILENAME = "record.json"
 # the evidence source for parts / nets+pins / board size; ``firmware``
 # carries the MCU, pin map and peripherals; the rest are record-side
 # annotations until an IR grows the field. ``bom`` stays optional until
-# Phase 2 makes it real.
+# Phase 2 makes it real. ``power`` is the electrical annotation the
+# board and firmware IRs do not carry (one class per rail net for C06,
+# per-rail draw/capacity for C07); ``engine_checks`` is the C00 gate's
+# stored per-artifact engine-validate verdicts. Both stay optional: an
+# absent one is the checker's WARN cannot_verify, never an invented
+# default.
 REQUIRED_SECTIONS: tuple[str, ...] = (
     "pcb",
     "firmware",
@@ -53,10 +58,11 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
     "connectors",
     "enclosure",
 )
-OPTIONAL_SECTIONS: tuple[str, ...] = ("bom",)
+OPTIONAL_SECTIONS: tuple[str, ...] = ("bom", "power", "engine_checks")
 
-_DICT_SECTIONS: tuple[str, ...] = ("pcb", "firmware", "enclosure", "bom")
-_LIST_SECTIONS: tuple[str, ...] = ("holes", "connectors")
+_DICT_SECTIONS: tuple[str, ...] = ("pcb", "firmware", "enclosure", "bom",
+                                   "power")
+_LIST_SECTIONS: tuple[str, ...] = ("holes", "connectors", "engine_checks")
 
 _RECORD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -104,6 +110,8 @@ class DesignRecord:
     connectors: list[dict[str, Any]] | None = None
     enclosure: dict[str, Any] | None = None
     bom: dict[str, Any] | None = None
+    power: dict[str, Any] | None = None
+    engine_checks: list[dict[str, Any]] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     app_version: str | None = None
@@ -131,6 +139,8 @@ class DesignRecord:
             "connectors": self.connectors,
             "enclosure": self.enclosure,
             "bom": self.bom,
+            "power": self.power,
+            "engine_checks": self.engine_checks,
         }
 
     @classmethod
@@ -181,6 +191,8 @@ class DesignRecord:
             connectors=kwargs["connectors"],
             enclosure=kwargs["enclosure"],
             bom=kwargs["bom"],
+            power=kwargs["power"],
+            engine_checks=kwargs["engine_checks"],
             created_at=kwargs["created_at"],
             updated_at=kwargs["updated_at"],
             app_version=kwargs["app_version"],
@@ -227,6 +239,8 @@ def build_record(
     connectors: list[dict[str, Any]] | None = None,
     enclosure: dict[str, Any] | None = None,
     bom: dict[str, Any] | None = None,
+    power: dict[str, Any] | None = None,
+    engine_checks: list[dict[str, Any]] | None = None,
 ) -> DesignRecord:
     """Assemble a record from the answers the engines actually gave.
 
@@ -241,8 +255,10 @@ def build_record(
         ("firmware", firmware),
         ("enclosure", enclosure),
         ("bom", bom),
+        ("power", power),
         ("holes", holes),
         ("connectors", connectors),
+        ("engine_checks", engine_checks),
     ):
         if value is None or isinstance(value, _SECTION_SHAPES[name][0]):
             continue
@@ -258,6 +274,8 @@ def build_record(
         connectors=copy.deepcopy(connectors),
         enclosure=copy.deepcopy(enclosure),
         bom=copy.deepcopy(bom),
+        power=copy.deepcopy(power),
+        engine_checks=copy.deepcopy(engine_checks),
         record_schema_version=RECORD_SCHEMA_VERSION,
     )
 
