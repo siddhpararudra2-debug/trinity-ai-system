@@ -111,6 +111,17 @@ and a sync test makes committed-file drift a test failure naming the
 regen command. Lesson: fixture truth lives with a builder that is
 itself testable, not with hand-edited JSON. 14 tests; suite 610 passed
 / 26 skipped, ruff clean.
+**M20.e the eval prompt seeds + a decided format**: the seeds needed a
+format before they could land, so the decision went into decided.md
+first (JSONL `{id, domain, prompt, source}`, domain over the decided
+five) — and the honest part is what the format **leaves out**: no
+`expected` field anywhere, because expected-verdict grading belongs to
+the Phase 3 runner where the verified report grades record-property
+prompts itself; a seed with invented expectations would be grading
+before the grader exists. The tests enforce that absence like a
+capability claim: exactly the decided key set, nothing smuggled.
+10 prompts at eval-001..eval-010, domains 3 cad / 2 pcb / 2 firmware /
+2 math / 1 mixed. 14 tests; suite 624 passed / 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,

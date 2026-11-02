@@ -1,0 +1,10 @@
+{"id": "eval-001", "domain": "cad", "prompt": "Generate a 120x80x40 mm rectangular enclosure with 3 mm wall thickness and a removable lid.", "source": "M20.e seed"}
+{"id": "eval-002", "domain": "cad", "prompt": "Nest five L brackets (60x40x30 mm) on a 400x300 mm sheet and keep every part inside the sheet bounds.", "source": "M20.e seed"}
+{"id": "eval-003", "domain": "cad", "prompt": "Build a quadcopter frame with a 250 mm wheelbase and 16 mm motor-mount centers, then export a STEP file.", "source": "M20.e seed"}
+{"id": "eval-004", "domain": "pcb", "prompt": "Design a two-layer breakout for an ESP32-WROOM-32 on a 50x40 mm board with a USB-C connector at the bottom edge.", "source": "M20.e seed"}
+{"id": "eval-005", "domain": "pcb", "prompt": "Make a 70x50 mm sensor PCB that places a mounting hole in each corner and routes I2C (SDA/SCL) out to an edge connector.", "source": "M20.e seed"}
+{"id": "eval-006", "domain": "firmware", "prompt": "Generate firmware for an ESP32 project that reads an I2C sensor on GPIO21/GPIO22 at 400 kHz and blinks an LED on GPIO23 at 1 Hz.", "source": "M20.e seed"}
+{"id": "eval-007", "domain": "firmware", "prompt": "Write firmware for an ESP32-WROOM-32 that drives a single GPIO output pin with a two-second pulse, then validates the pin map.", "source": "M20.e seed"}
+{"id": "eval-008", "domain": "math", "prompt": "Solve the system 3x + 2y = 12, x - y = 1 and state x and y.", "source": "M20.e seed"}
+{"id": "eval-009", "domain": "math", "prompt": "Compute the resonant frequency of an LC tank with L = 10 uH and C = 100 nF.", "source": "M20.e seed"}
+{"id": "eval-010", "domain": "mixed", "prompt": "Design an ESP32 sensor box end to end: a 90x60x25 mm enclosure, a PCB with a USB-C connector, and firmware that reads one I2C peripheral — the final report must say VERIFIED.", "source": "M20.e seed"}

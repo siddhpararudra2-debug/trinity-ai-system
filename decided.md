@@ -196,8 +196,15 @@ Increments (one commit each, done-when per increment at the end):
   design targets one specific check (the wrong-pin fixture FAILs C04 and does
   not need to blanket-fail everything; cascades are diagnosed, not shipped).
 
-In parallel (per the plan): **M20.e — the first 10 eval prompts** seeded into
-`data/evals/` (see Phase 3 for the runner; the seeds land here).
+In parallel (per the plan): **M20.e — eval prompt format + the first 10
+eval prompts** seeded into `data/evals/prompts.jsonl`. The format is
+settled here now: JSONL, one prompt per line, `{id, domain, prompt,
+source}` — `domain` ∈ `cad|pcb|firmware|math|mixed`, `source` records
+authorship (the seeds carry `"M20.e seed"`). A prompt record carries no
+`expected` field: expected-verdict grading arrives with the Phase 3
+runner (`python tools/eval/run.py`), where record-property prompts are
+graded by the verified report itself — the seeds never invent
+expectations a grader does not yet own.
 
 Done when: a wrong pin gives FAILED with the correct reason.
 
