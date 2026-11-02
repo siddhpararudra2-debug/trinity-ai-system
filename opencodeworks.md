@@ -27,7 +27,15 @@ now carries evidence tags (IR-today / record-side / needs-extension) verified
 against the actual `PcbDesign.hpp` / `FirmwareProject.hpp` field inventories —
 the user confirmed the tolerances (0.5 mm / 0.2 mm / 80%), the tagging, and
 the docs-only landing. Every phase lands one concern per commit with
-done-when criteria written down before the work starts.
+done-when criteria written down before the work starts. First landed
+increment — **M20.1 design record** (`59a048d` was the Phase-0 docs commit;
+M20.1 one code commit): `src/engines/crosscheck/record.py` — sections
+stored as verbatim IR-shaped fragments (real natives' key sets confirmed
+from the serializers), the builder invents nothing (absence stays absence
+for C01 to FAIL with the section named), atomic write-then-replace at
+`TRINITY_STORAGE_ROOT/projects/<id>/record.json`, load refuses
+unknown/corrupt/future-schema records with the path named. 32 tests, suite
+534 passed / 26 skipped, ruff clean; no op advertised, no model consulted.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
