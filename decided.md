@@ -117,6 +117,20 @@ concrete:
    pin-layer WARN + C04's net-layer FAIL): C03 verifies pins exist and
    resolve, C04 verifies the nets those pins ride. Fixing the net clears
    both.
+6. **Enclosure geometry lives in one mm frame, stated not guessed**
+   (M20.3). The board corner is `pcb.board.origin_mm`;
+   `enclosure.cavity_mm` must carry its own `origin_mm` explicitly — an
+   absent origin is a WARN `cannot_verify`, never a default (0, 0).
+   Record-side enclosure/holes/connectors fields use `_mm`-suffixed
+   names (`cavity_mm`, `pos_mm`, `width_mm`, `height_mm`,
+   `diameter_mm`). Bands: C08/C10 clearances below 0.5 mm WARN
+   (`ENCLOSURE_CLEARANCE_MM`), any negative clearance FAIL (the inner
+   escapes the window); C09 pairs each standoff with its nearest board
+   hole — within 0.2 mm drift PASS (`HOLE_DRIFT_MM`), within 1.0 mm
+   WARN, beyond that the standoff simply has no hole (FAIL;
+   `HOLE_CAPTURE_MM = 1.0`). C10's exposing cutout must fully contain
+   the connector rect to count; a connector no cutout contains FAILs
+   with its closest window named.
 
 ---
 

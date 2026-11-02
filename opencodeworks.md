@@ -45,6 +45,18 @@ M20.1 fixture names were corrected the same commit — and connectivity
 has ONE source of truth (`Net.pins` refs; pad-level `net` strings that
 disagree are failures, per decided.md convention 4). 13 tests; suite
 547 passed / 26 skipped, ruff clean.
+**M20.3 enclosure checks C08-C10**: the record-side geometry — the
+sections Trinity owns end-to-end — now checked in ONE mm frame: board
+rect vs cavity rect (C08), standoffs vs board holes (C09), connectors
+vs cutouts (C10). Honesty rules that matter: `cavity_mm.origin_mm` is
+REQUIRED — absent means WARN cannot_verify, never a defaulted (0,0);
+and a cutout must *contain* a connector rect to expose it, so "covered
+by no cutout" names the closest window and the millimetres. Bands are
+named constants (0.5 / 0.2 / 1.0 mm) pinned as decided.md convention 6.
+The test writing itself caught fixture sloppiness before it shipped:
+dropping one hole turned an expected drift-WARN into an honest FAIL two
+standoffs over — the aggregate rule doing its job. 15 tests; suite
+562 passed / 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,

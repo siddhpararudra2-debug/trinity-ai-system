@@ -32,11 +32,12 @@ _HOLES = [{"ref": "H1", "pos_mm": {"x": 2.5, "y": 2.5},
 _CONNECTORS = [{"ref": "J1", "pos_mm": {"x": 30.0, "y": 40.0},
                 "width_mm": 10.0, "height_mm": 5.0, "kind": "usb_c"}]
 _ENCLOSURE = {
-    "cavity_mm": {"width_mm": 60.0, "height_mm": 50.0, "depth_mm": 20.0},
+    "cavity_mm": {"width_mm": 60.0, "height_mm": 50.0, "depth_mm": 20.0,
+                  "origin_mm": {"x": -3.0, "y": -4.0}},
     "standoffs": [{"id": "S1", "pos_mm": {"x": 2.5, "y": 2.5}}],
     "cutouts": [
-        {"id": "C1", "pos_mm": {"x": 30.0, "y": 40.0},
-         "width_mm": 10.0, "height_mm": 5.0}
+        {"id": "C1", "pos_mm": {"x": 29.0, "y": 39.0},
+         "width_mm": 12.0, "height_mm": 7.0}
     ],
 }
 

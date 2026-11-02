@@ -1,4 +1,16 @@
-"""Cross-checks C01-C05 (M20.2): the checker the verified report builds on.
+"""Cross-checks (M20.2-M20.3): the checker the verified report builds on.
+
+C01-C05 cover the firmware/board wiring (record completeness, MCU
+identity, pin existence, named nets, peripheral counterparts); C08-C10
+cover the enclosure geometry the design record owns itself — board
+inside the cavity, standoffs on board holes, connectors inside cutouts —
+in a single mm frame where `enclosure.cavity_mm` must carry its own
+`origin_mm` (an absent origin is `cannot_verify`; a position is stated,
+never guessed). Bands per decided.md: C08/C10 clearances below 0.5 mm
+WARN, negative means the inner escapes the window (FAIL); C09 pairs
+standoffs with board holes at ≤ 0.2 mm drift PASS, ≤ 1.0 mm WARN, beyond
+that the standoff simply has no hole (FAIL; `HOLE_CAPTURE_MM = 1.0`).
+C06/C07, the C00 gate and report assembly land in their own milestones.
 
 Each check reads the design record (`src.engines.crosscheck.record`) and
 returns exactly one verdict with a human-readable reason and a location:
@@ -597,18 +609,479 @@ def _check_c05(record: DesignRecord) -> CheckResult:
     )
 
 
-CHECK_ORDER: tuple[str, ...] = ("C01", "C02", "C03", "C04", "C05")
+# --- enclosure geometry (record-side; one mm frame, no invented origins) ---
+
+# C08/C10: an edge distance below this warns (decided tolerance, 0.5 mm).
+ENCLOSURE_CLEARANCE_MM = 0.5
+# C09: an aligned standoff/board-hole pair may drift this much.
+HOLE_DRIFT_MM = 0.2
+# C09: beyond this radius a standoff simply has no board hole (the FAIL
+# row; the drift WARN band is DRIFT..CAPTURE).
+HOLE_CAPTURE_MM = 1.0
+
+
+def _as_float(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _xy(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, dict):
+        return None
+    x = _as_float(value.get("x"))
+    y = _as_float(value.get("y"))
+    if x is None or y is None:
+        return None
+    return x, y
+
+
+def _edges(
+    inner: tuple[float, float, float, float],
+    outer: tuple[float, float, float, float],
+) -> dict[str, float]:
+    """Clearances of an inner rect inside an outer rect: negative means
+    the inner sticks out past that edge."""
+    ix0, iy0, ix1, iy1 = inner
+    ox0, oy0, ox1, oy1 = outer
+    return {
+        "left": ix0 - ox0,
+        "right": ox1 - ix1,
+        "bottom": iy0 - oy0,
+        "top": oy1 - iy1,
+    }
+
+
+def _distance(
+    a: tuple[float, float], b: tuple[float, float]
+) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
+def _check_c08(record: DesignRecord) -> CheckResult:
+    id_, name = "C08", "board_fits_enclosure"
+    if record.pcb is None:
+        return _cannot_verify(id_, name, "the record lacks a pcb section")
+    if not isinstance(record.enclosure, dict):
+        return _cannot_verify(
+            id_, name, "the record lacks an enclosure section"
+        )
+    board = record.pcb.get("board")
+    cavity = record.enclosure.get("cavity_mm")
+    if not isinstance(board, dict):
+        return _cannot_verify(id_, name, "pcb.board is absent", "pcb.board")
+    if not isinstance(cavity, dict):
+        return _cannot_verify(
+            id_, name, "enclosure.cavity_mm is absent",
+            "enclosure.cavity_mm",
+        )
+    bw = _as_float(board.get("width_mm"))
+    bh = _as_float(board.get("height_mm"))
+    board_origin = _xy(board.get("origin_mm"))
+    if bw is None or bh is None or bw <= 0 or bh <= 0:
+        return _cannot_verify(
+            id_, name,
+            "pcb.board lacks a usable width_mm/height_mm", "pcb.board",
+        )
+    if board_origin is None:
+        return _cannot_verify(
+            id_, name, "pcb.board.origin_mm is absent", "pcb.board"
+        )
+    cw = _as_float(cavity.get("width_mm"))
+    ch = _as_float(cavity.get("height_mm"))
+    cavity_origin = _xy(cavity.get("origin_mm"))
+    if cw is None or ch is None or cw <= 0 or ch <= 0:
+        return _cannot_verify(
+            id_, name,
+            "enclosure.cavity_mm lacks a usable width_mm/height_mm",
+            "enclosure.cavity_mm",
+        )
+    if cavity_origin is None:
+        # Origin is required: a default position would be an invented
+        # value, and C08's whole verdict depends on it.
+        return _cannot_verify(
+            id_, name,
+            "enclosure.cavity_mm.origin_mm is absent; the record states "
+            "where the cavity sits, it is not guessed",
+            "enclosure.cavity_mm.origin_mm",
+        )
+    bx0, by0 = board_origin
+    cx0, cy0 = cavity_origin
+    board_rect = (bx0, by0, bx0 + bw, by0 + bh)
+    cavity_rect = (cx0, cy0, cx0 + cw, cy0 + ch)
+    edges = _edges(board_rect, cavity_rect)
+    tightest = min(edges.values())
+    if tightest < 0:
+        edge = min(edges, key=edges.get)  # type: ignore[arg-type]
+        return CheckResult(
+            check_id=id_,
+            name=name,
+            status=FAIL,
+            reason=(
+                f"the board sticks out past the cavity's {edge} edge by "
+                f"{-tightest:.2f} mm ({bw:.1f}x{bh:.1f} mm board in a "
+                f"{cw:.1f}x{ch:.1f} mm cavity)"
+            ),
+            location=f"board.{edge}",
+            evidence={
+                "edge_clearances_mm": edges,
+                "board_rect_mm": board_rect,
+                "cavity_rect_mm": cavity_rect,
+            },
+        )
+    verdict_edge = min(edges, key=edges.get)  # type: ignore[arg-type]
+    if tightest >= ENCLOSURE_CLEARANCE_MM:
+        return CheckResult(
+            check_id=id_,
+            name=name,
+            status=PASS,
+            reason=(
+                f"the board sits inside the cavity; the tightest edge "
+                f"({verdict_edge}) holds {tightest:.2f} mm clearance"
+            ),
+            location=f"board.{verdict_edge}",
+            evidence={
+                "edge_clearances_mm": edges,
+                "board_rect_mm": board_rect,
+                "cavity_rect_mm": cavity_rect,
+            },
+        )
+    return CheckResult(
+        check_id=id_,
+        name=name,
+        status=WARN,
+        reason=(
+            f"the board is inside the cavity, but edge '{verdict_edge}' "
+            f"holds only {tightest:.2f} mm clearance "
+            f"(< {ENCLOSURE_CLEARANCE_MM} mm)"
+        ),
+        location=f"board.{verdict_edge}",
+        evidence={
+            "edge_clearances_mm": edges,
+            "board_rect_mm": board_rect,
+            "cavity_rect_mm": cavity_rect,
+        },
+    )
+
+
+def _check_c09(record: DesignRecord) -> CheckResult:
+    id_, name = "C09", "mounting_holes_line_up"
+    if record.holes is None:
+        return _cannot_verify(
+            id_, name, "the record lacks a holes section"
+        )
+    if not isinstance(record.enclosure, dict):
+        return _cannot_verify(
+            id_, name, "the record lacks an enclosure section"
+        )
+    standoffs = record.enclosure.get("standoffs")
+    if not isinstance(standoffs, list):
+        return _cannot_verify(
+            id_, name, "enclosure.standoffs is absent or malformed",
+            "enclosure.standoffs",
+        )
+    rows: list[tuple[str, str, str, str]] = []
+    malformed_holes = 0
+    usable_holes: list[tuple[str, tuple[float, float]]] = []
+    for hole in record.holes:
+        if not isinstance(hole, dict):
+            malformed_holes += 1
+            continue
+        pos = _xy(hole.get("pos_mm"))
+        if pos is None:
+            malformed_holes += 1
+            continue
+        usable_holes.append((str(hole.get("ref", "?hole")), pos))
+    posless_standoffs = malformed_standoffs = 0
+    for standoff in standoffs:
+        if not isinstance(standoff, dict):
+            malformed_standoffs += 1
+            continue
+        sid = str(standoff.get("id", "?standoff"))
+        pos = _xy(standoff.get("pos_mm"))
+        if pos is None:
+            posless_standoffs += 1
+            rows.append((
+                WARN,
+                (
+                    f"standoff '{sid}' has no usable pos_mm; it cannot "
+                    "be paired with a board hole"
+                ),
+                sid,
+                "",
+            ))
+            continue
+        nearest: tuple[str, float] | None = None
+        for href, hpos in usable_holes:
+            d = _distance(pos, hpos)
+            if nearest is None or d < nearest[1]:
+                nearest = (href, d)
+        if nearest is None:
+            rows.append((
+                FAIL,
+                (
+                    f"standoff '{sid}' has no board hole to pair with: "
+                    f"the holes section holds no usable position"
+                ),
+                sid,
+                "",
+            ))
+        elif nearest[1] <= HOLE_DRIFT_MM:
+            rows.append((
+                PASS,
+                (
+                    f"standoff '{sid}' pairs with hole '{nearest[0]}' "
+                    f"at {nearest[1]:.3f} mm drift"
+                ),
+                sid,
+                "",
+            ))
+        elif nearest[1] <= HOLE_CAPTURE_MM:
+            rows.append((
+                WARN,
+                (
+                    f"standoff '{sid}' pairs its nearest hole "
+                    f"'{nearest[0]}' only at {nearest[1]:.2f} mm drift "
+                    f"(> {HOLE_DRIFT_MM} mm)"
+                ),
+                sid,
+                "",
+            ))
+        else:
+            rows.append((
+                FAIL,
+                (
+                    f"standoff '{sid}' has no board hole within "
+                    f"{HOLE_CAPTURE_MM:.1f} mm (nearest "
+                    f"'{nearest[0]}' at {nearest[1]:.2f} mm)"
+                ),
+                sid,
+                "",
+            ))
+    if malformed_standoffs:
+        rows.append((
+            WARN,
+            (
+                f"{malformed_standoffs} standoff entrie(s) are not "
+                "objects; the enclosure section is malformed"
+            ),
+            "enclosure.standoffs",
+            "",
+        ))
+    if not rows:
+        return CheckResult(
+            check_id=id_,
+            name=name,
+            status=PASS,
+            reason=(
+                f"no standoff/hole pairs to check "
+                f"({len(standoffs)} standoffs, {len(usable_holes)} holes"
+                + (f", {malformed_holes} malformed hole(s)" if malformed_holes else "")
+                + ")"
+            ),
+            evidence={
+                "standoffs": [],
+                "counts": {
+                    "standoffs": len(standoffs),
+                    "paired_holes": len(usable_holes),
+                    "malformed_holes": malformed_holes,
+                    "posless_standoffs": posless_standoffs,
+                },
+            },
+        )
+    result = _aggregate(
+        id_,
+        name,
+        "every enclosure standoff finds a board hole",
+        rows,
+        "standoffs",
+    )
+    result.evidence["counts"] = {
+        "standoffs": len(standoffs),
+        "paired_holes": len(usable_holes),
+        "malformed_holes": malformed_holes,
+        "posless_standoffs": posless_standoffs,
+    }
+    return result
+
+
+def _check_c10(record: DesignRecord) -> CheckResult:
+    id_, name = "C10", "connectors_exposed"
+    if record.connectors is None:
+        return _cannot_verify(
+            id_, name, "the record lacks a connectors section"
+        )
+    if not isinstance(record.enclosure, dict):
+        return _cannot_verify(
+            id_, name, "the record lacks an enclosure section"
+        )
+    cutouts = record.enclosure.get("cutouts")
+    if not isinstance(cutouts, list):
+        return _cannot_verify(
+            id_, name, "enclosure.cutouts is absent or malformed",
+            "enclosure.cutouts",
+        )
+    usable_cutouts: list[tuple[str, tuple[float, float, float, float]]] = []
+    malformed_cutouts = 0
+    for cutout in cutouts:
+        if not isinstance(cutout, dict):
+            malformed_cutouts += 1
+            continue
+        cid = str(cutout.get("id", "?cutout"))
+        pos = _xy(cutout.get("pos_mm"))
+        w = _as_float(cutout.get("width_mm"))
+        h = _as_float(cutout.get("height_mm"))
+        if pos is None or w is None or h is None or w <= 0 or h <= 0:
+            malformed_cutouts += 1
+            continue
+        x, y = pos
+        usable_cutouts.append((cid, (x, y, x + w, y + h)))
+    rows: list[tuple[str, str, str, str]] = []
+    for connector in record.connectors:
+        if not isinstance(connector, dict):
+            rows.append((
+                WARN,
+                "the connectors section holds a non-object entry; it "
+                "cannot be checked",
+                "connectors",
+                "",
+            ))
+            continue
+        ref = str(connector.get("ref", "?connector"))
+        pos = _xy(connector.get("pos_mm"))
+        w = _as_float(connector.get("width_mm"))
+        h = _as_float(connector.get("height_mm"))
+        if pos is None or w is None or h is None or w <= 0 or h <= 0:
+            rows.append((
+                WARN,
+                (
+                    f"connector '{ref}' has no usable pos_mm/width_mm/"
+                    "height_mm; it cannot be checked against a cutout"
+                ),
+                ref,
+                "",
+            ))
+            continue
+        x, y = pos
+        conn_rect = (x, y, x + w, y + h)
+        containing = []
+        for cid, rect in usable_cutouts:
+            edges = _edges(conn_rect, rect)
+            worst = min(edges.values())
+            if worst >= 0:
+                containing.append((cid, worst, edges))
+        skip_note = (
+            f"{malformed_cutouts} malformed cutout(s) skipped"
+            if malformed_cutouts else ""
+        )
+        if containing:
+            cid, margin, edges = max(
+                containing, key=lambda item: (item[1], item[0])
+            )
+            if margin >= ENCLOSURE_CLEARANCE_MM:
+                rows.append((
+                    PASS,
+                    (
+                        f"connector '{ref}' sits within cutout '{cid}' "
+                        f"({margin:.2f} mm edge distance at the tightest "
+                        "edge)"
+                    ),
+                    ref,
+                    f"cutout '{cid}'",
+                ))
+            else:
+                rows.append((
+                    WARN,
+                    (
+                        f"connector '{ref}' is inside cutout '{cid}' but "
+                        f"its tightest edge holds only {margin:.2f} mm "
+                        f"(< {ENCLOSURE_CLEARANCE_MM} mm)"
+                    ),
+                    ref,
+                    f"cutout '{cid}'",
+                ))
+            continue
+        best: tuple[str, float, dict[str, float]] | None = None
+        for cid, rect in usable_cutouts:
+            edges = _edges(conn_rect, rect)
+            stickout = max(-v for v in edges.values())
+            if best is None or stickout < best[1]:
+                best = (cid, stickout, edges)
+        if best is None:
+            reason = (
+                f"connector '{ref}' has no cutout window: the enclosure "
+                "declares no usable cutout"
+            )
+            if skip_note:
+                reason += f" ({skip_note})"
+            rows.append((FAIL, reason, ref, ""))
+        else:
+            outside_edge = min(
+                best[2], key=best[2].get  # type: ignore[arg-type]
+            )
+            reason = (
+                f"connector '{ref}' is covered by no cutout; the closest "
+                f"window '{best[0]}' leaves it {best[1]:.2f} mm past its "
+                f"{outside_edge} edge"
+            )
+            if skip_note:
+                reason += f" ({skip_note})"
+            rows.append((
+                FAIL,
+                reason,
+                ref,
+                f"connector {w:.1f}x{h:.1f} mm at ({x:.1f}, {y:.1f})",
+            ))
+    if not rows:
+        return CheckResult(
+            check_id=id_,
+            name=name,
+            status=PASS,
+            reason=(
+                f"no external connectors to expose "
+                f"({len(record.connectors)} connectors, "
+                f"{len(usable_cutouts)} cutouts)"
+            ),
+            evidence={
+                "connectors": [],
+                "counts": {
+                    "connectors": len(record.connectors),
+                    "usable_cutouts": len(usable_cutouts),
+                    "malformed_cutouts": malformed_cutouts,
+                },
+            },
+        )
+    result = _aggregate(
+        id_,
+        name,
+        "every external connector sits inside a cutout window",
+        rows,
+        "connectors",
+    )
+    result.evidence["counts"] = {
+        "connectors": len(record.connectors),
+        "usable_cutouts": len(usable_cutouts),
+        "malformed_cutouts": malformed_cutouts,
+    }
+    return result
+
+
+CHECK_ORDER: tuple[str, ...] = ("C01", "C02", "C03", "C04", "C05",
+                                "C08", "C09", "C10")
 _CHECKS = {
     "C01": _check_c01,
     "C02": _check_c02,
     "C03": _check_c03,
     "C04": _check_c04,
     "C05": _check_c05,
+    "C08": _check_c08,
+    "C09": _check_c09,
+    "C10": _check_c10,
 }
 
 
 def run_checks(record: DesignRecord) -> list[CheckResult]:
     """Run the implemented cross-checks in the decided order (the C00 gate
-    and C06-C11 land in their own milestones; this list grows, never
+    and C06/C07/C11 land in their own milestones; this list grows, never
     reorders)."""
     return [_CHECKS[id_](record) for id_ in CHECK_ORDER]
