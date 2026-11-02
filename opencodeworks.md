@@ -36,6 +36,15 @@ for C01 to FAIL with the section named), atomic write-then-replace at
 `TRINITY_STORAGE_ROOT/projects/<id>/record.json`, load refuses
 unknown/corrupt/future-schema records with the path named. 32 tests, suite
 534 passed / 26 skipped, ruff clean; no op advertised, no model consulted.
+**M20.2 cross-check framework + C01-C05**: `check.py` with the
+CheckResult shape and the aggregate rule; the do-when fixture
+(wrong pin GPIO29) FAILs C03 with the correct reason at `U1.GPIO29`.
+Two lessons banked: the native serializers' nested keys are snake_case
+even where the C++ members are camelCase (`mcu_pin`, `pos_mm`) — the
+M20.1 fixture names were corrected the same commit — and connectivity
+has ONE source of truth (`Net.pins` refs; pad-level `net` strings that
+disagree are failures, per decided.md convention 4). 13 tests; suite
+547 passed / 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,

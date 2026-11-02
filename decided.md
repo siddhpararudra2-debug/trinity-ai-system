@@ -92,7 +92,9 @@ validate / build`).
 | **Record-side annotation** (M20.1) | C01 (sections), C06 classes, C07 draw, C09 standoffs, C10 cutouts, C11 BOM | no IR field exists; the record carries these as explicit supplied sections, and an absent one is the WARN `cannot_verify` with the section named — never an invented default |
 | **Needs an engine extension** | C09 (PCB NPTH mounting holes — the IR has `thru_hole` pads only), C08/C10 (enclosure cavity/cutout spec from CAD) | the only two seams where M20 may grow a field, decided per-milestone with the IR's round-trip-test convention, never silently |
 
-Two conventions pinned so M20.2 starts on the same page:
+Conventions pinned so M20 (and beyond) starts on the same page — items 1–2
+were decided before M20.2, items 3–5 were pinned *by* M20.2 as they became
+concrete:
 
 1. **Match key (C03/C04):** firmware `PinMapping.mcuPin` is an MCU *pin
    name* (`GPIO21`), and it matches the PCB MCU component's `Pin.name`.
@@ -100,6 +102,21 @@ Two conventions pinned so M20.2 starts on the same page:
 2. **Holes and enclosure stay record-side** until an M-milestone
    deliberately extends an engine; a missing section is always reported,
    never guessed.
+3. **C02 verdict keys.** PASS = the exact part name on both sides
+   (case-insensitive). WARN = one name is a *prefix* of the other — same
+   part line at different package granularity (`ESP32` vs
+   `ESP32-WROOM-32`). FAIL = a different member of the family
+   (`ESP32-C6` vs `ESP32-WROOM-32`), which is a different part, not a
+   package difference.
+4. **Netlist refs are the single source of truth for connectivity.**
+   C05's counterpart test reads who is on a net from `Net.pins`, never
+   from pad-level `net` strings; C04 verifies each driven pad is itself
+   listed by the net its pad claims. When those two views disagree, that
+   is a reported failure, not a truth to pick from.
+5. **Driven floating pins are double-reported on purpose** (C03's
+   pin-layer WARN + C04's net-layer FAIL): C03 verifies pins exist and
+   resolve, C04 verifies the nets those pins ride. Fixing the net clears
+   both.
 
 ---
 

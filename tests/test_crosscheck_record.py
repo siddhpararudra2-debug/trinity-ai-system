@@ -7,10 +7,12 @@ named), storage is atomic write-then-replace under
 ``TRINITY_STORAGE_ROOT/projects/<id>/record.json``, and a stored record
 this build cannot read is refused with the path named — never guessed.
 
-The fragments here are IR-shaped with the native serializers' real key
-sets (``PcbDesign``: board/components/nets/tracks/footprints/placements/
-rules/metadata; ``FirmwareProject``: name/mcu/has_mcu/clock_hz/
-pin_mappings/requirements/sources/build/metadata) — the builder's
+The fragments here are IR-shaped with the native serializers' real wire
+names (``PcbDesign``: board/components/nets/tracks/footprints/placements/
+rules/metadata, nested struct fields snake_case — ``rotation_deg``,
+``pos_mm``; ``FirmwareProject``: name/mcu/has_mcu/clock_hz/pin_mappings/
+requirements/sources/build/metadata, ``mcu_pin``, ``electrical_mode``,
+directions ``in``/``out``/``inout``) — the builder's
 contract is "store what the engines answered", so the tests feed it
 exactly that shape.
 """
@@ -35,10 +37,10 @@ from src.engines.crosscheck.record import (
 
 PCB_FRAGMENT: dict = {
     "board": {
-        "widthMm": 50.0,
-        "heightMm": 40.0,
-        "thicknessMm": 1.6,
-        "originMm": {"x": 0.0, "y": 0.0},
+        "width_mm": 50.0,
+        "height_mm": 40.0,
+        "thickness_mm": 1.6,
+        "origin_mm": {"x": 0.0, "y": 0.0},
         "layers": ["F.Cu", "B.Cu"],
     },
     "components": [
@@ -47,21 +49,21 @@ PCB_FRAGMENT: dict = {
             "value": "ESP32-WROOM-32",
             "footprint": "ESP32-WROOM-32",
             "type": "mcu",
-            "rotationDeg": 0.0,
+            "rotation_deg": 0.0,
             "layer": "F.Cu",
             "pins": [
                 {
                     "number": "1",
                     "name": "3V3",
                     "electrical": "power_in",
-                    "posMm": {"x": 0.0, "y": 0.0},
+                    "pos_mm": {"x": 0.0, "y": 0.0},
                     "net": "VCC",
                 },
                 {
                     "number": "2",
                     "name": "GND",
                     "electrical": "power_in",
-                    "posMm": {"x": 1.0, "y": 0.0},
+                    "pos_mm": {"x": 1.0, "y": 0.0},
                     "net": "GND",
                 },
             ],
@@ -74,7 +76,7 @@ PCB_FRAGMENT: dict = {
     "tracks": [],
     "footprints": {},
     "placements": [
-        {"ref": "U1", "xMm": 25.0, "yMm": 20.0, "rotationDeg": 0.0,
+        {"ref": "U1", "x_mm": 25.0, "y_mm": 20.0, "rotation_deg": 0.0,
          "layer": "F.Cu"}
     ],
     "rules": [{"name": "default", "minClearanceMm": 0.2, "minTrackMm": 0.2}],
@@ -88,7 +90,7 @@ FIRMWARE_FRAGMENT: dict = {
         "manufacturer": "Espressif",
         "model": "ESP32",
         "architecture": "xtensa-lx6",
-        "clockHzMax": 240000000,
+        "clock_hz_max": 240000000,
         "pins": [{"name": "GPIO21", "digital": True, "adc": False,
                   "pwm": False}],
         "peripherals": [{"name": "I2C0", "kind": "i2c", "instances": 1}],
@@ -98,13 +100,13 @@ FIRMWARE_FRAGMENT: dict = {
     "clock_hz": 240000000,
     "pin_mappings": [
         {
-            "mcuPin": "GPIO21",
+            "mcu_pin": "GPIO21",
             "function": "i2c_sda",
             "peripheral": "I2C0",
-            "direction": "bidirectional",
-            "electricalMode": "digital",
+            "direction": "inout",
+            "electrical_mode": "digital",
             "pull": "",
-            "altFunction": "",
+            "alt_function": "",
         }
     ],
     "requirements": [
@@ -123,17 +125,17 @@ FIRMWARE_FRAGMENT: dict = {
 }
 
 ENCLOSURE: dict = {
-    "cavityMm": {"widthMm": 60.0, "heightMm": 50.0, "depthMm": 20.0},
-    "standoffs": [{"id": "S1", "posMm": {"x": 5.0, "y": 5.0}}],
+    "cavity_mm": {"width_mm": 60.0, "height_mm": 50.0, "depth_mm": 20.0},
+    "standoffs": [{"id": "S1", "pos_mm": {"x": 5.0, "y": 5.0}}],
     "cutouts": [
-        {"id": "C1", "posMm": {"x": 30.0, "y": 40.0},
-         "widthMm": 10.0, "heightMm": 5.0}
+        {"id": "C1", "pos_mm": {"x": 30.0, "y": 40.0},
+         "width_mm": 10.0, "height_mm": 5.0}
     ],
 }
-HOLES: list = [{"ref": "H1", "posMm": {"x": 5.0, "y": 5.0},
-                "diameterMm": 3.0}]
-CONNECTORS: list = [{"ref": "J1", "posMm": {"x": 30.0, "y": 40.0},
-                     "widthMm": 10.0, "heightMm": 5.0, "kind": "usb_c"}]
+HOLES: list = [{"ref": "H1", "pos_mm": {"x": 5.0, "y": 5.0},
+                "diameter_mm": 3.0}]
+CONNECTORS: list = [{"ref": "J1", "pos_mm": {"x": 30.0, "y": 40.0},
+                     "width_mm": 10.0, "height_mm": 5.0, "kind": "usb_c"}]
 BOM: dict = {"lines": [{"ref": "U1", "part": "ESP32-WROOM-32",
                         "value": "ESP32", "quantity": 1,
                         "package": "WROOM"}]}
@@ -204,7 +206,7 @@ def test_save_load_roundtrip(tmp_path: Path) -> None:
     assert loaded == record
     assert loaded.absent_required_sections() == []
     assert loaded.pcb["components"][0]["ref"] == "U1"
-    assert loaded.firmware["pin_mappings"][0]["mcuPin"] == "GPIO21"
+    assert loaded.firmware["pin_mappings"][0]["mcu_pin"] == "GPIO21"
     assert loaded.bom["lines"][0]["part"] == "ESP32-WROOM-32"
 
 
