@@ -95,6 +95,22 @@ builder; asserting bare class names against a page whose stylesheet
 legitimately contains every rule (assert the attribute); hint text
 compared pre-escaping (assert the escaped form). 12 tests; suite 596
 passed / 26 skipped, ruff clean.
+**M20.6 the fixture designs**: 3 good + 5 broken records, the broken
+ones engineered the hard way — every poison aims at exactly one check
+with zero cascades, which took real grammar study. The GPIO poison went
+to a *peripheral-less* mapping (GPIO39 plain gpio_out): the decided
+GPIO29 flavor also WARNs C05 ("unresolved pins"), which is a genuine
+cascade, not this fixture's subject — that said-flavor stays in the
+M20.2 tests. The C06 poison mirrors the original draws on its duplicate
+rail so C07 weighs both independently and keeps its PASS (a
+capacity-less duplicate would WARN — again a family other than the
+goods). The module is the artifact source of truth: the CLI writes
+`data/fixtures/<name>/record.json` (pure data — stamps deliberately
+unset so regenerations are byte-stable) and prints the verdict table,
+and a sync test makes committed-file drift a test failure naming the
+regen command. Lesson: fixture truth lives with a builder that is
+itself testable, not with hand-edited JSON. 14 tests; suite 610 passed
+/ 26 skipped, ruff clean.
 
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
