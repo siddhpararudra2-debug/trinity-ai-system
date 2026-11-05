@@ -8,3 +8,23 @@
 {"id": "eval-008", "domain": "math", "prompt": "Solve the system 3x + 2y = 12, x - y = 1 and state x and y.", "source": "M20.e seed"}
 {"id": "eval-009", "domain": "math", "prompt": "Compute the resonant frequency of an LC tank with L = 10 uH and C = 100 nF.", "source": "M20.e seed"}
 {"id": "eval-010", "domain": "mixed", "prompt": "Design an ESP32 sensor box end to end: a 90x60x25 mm enclosure, a PCB with a USB-C connector, and firmware that reads one I2C peripheral — the final report must say VERIFIED.", "source": "M20.e seed"}
+{"id": "eval-011", "domain": "cad", "prompt": "Show me the exact outer bounding box of a 200x150x60 mm enclosure built with 4 mm walls.", "source": "M22 growth"}
+{"id": "eval-012", "domain": "cad", "prompt": "Nest two mounting plates and three standoffs on a 200x200 mm sheet with 5 mm spacing; nothing may fall off the sheet.", "source": "M22 growth"}
+{"id": "eval-013", "domain": "cad", "prompt": "Validate a quadcopter frame with a 130 mm overall size and a 30 mm center plate; the checks must come back VALIDATED.", "source": "M22 growth"}
+{"id": "eval-014", "domain": "cad", "prompt": "Produce a DXF drawing for an L bracket that is 80 mm tall.", "source": "M22 growth"}
+{"id": "eval-015", "domain": "cad", "prompt": "The enclosure builder must refuse 60 mm walls on a 100x60x30 shell and say why; an honest refusal, not a crash.", "source": "M22 growth"}
+{"id": "eval-016", "domain": "math", "prompt": "Differentiate sin(t) times t squared with respect to t.", "source": "M22 growth"}
+{"id": "eval-017", "domain": "math", "prompt": "Solve 2x + 4 = 0 and confirm the root satisfies the equation.", "source": "M22 growth"}
+{"id": "eval-018", "domain": "math", "prompt": "Integrate sin(t) from t = 0 to t = pi.", "source": "M22 growth"}
+{"id": "eval-019", "domain": "math", "prompt": "Solve the cubic x**3 - 6*x**2 + 11*x - 6 = 0 and confirm every root satisfies it.", "source": "M22 growth"}
+{"id": "eval-020", "domain": "pcb", "prompt": "Export the ESP32 I2C sensor board's BOM as CSV and read it back; the lines must survive the round trip.", "source": "M22 growth"}
+{"id": "eval-021", "domain": "pcb", "prompt": "The bench board carries a net with two power classes; the report must say FAILED and point at the net.", "source": "M22 growth"}
+{"id": "eval-022", "domain": "pcb", "prompt": "A rail budget board draws more than its rail allows; the report must name the over-budget numbers.", "source": "M22 growth"}
+{"id": "eval-023", "domain": "pcb", "prompt": "A board that no longer fits its enclosure must FAIL in the report, naming the edge and the overshoot.", "source": "M22 growth"}
+{"id": "eval-024", "domain": "pcb", "prompt": "If a BOM line lists the wrong component value, the report must WARN and name the mismatch.", "source": "M22 growth"}
+{"id": "eval-025", "domain": "firmware", "prompt": "Firmware that names a pin the MCU does not have must be refused with the pin and the part named.", "source": "M22 growth"}
+{"id": "eval-026", "domain": "firmware", "prompt": "Create the firmware sources for the ESP32 I2C project and build them.", "source": "M22 growth"}
+{"id": "eval-027", "domain": "mixed", "prompt": "Verify the roomy ESP32 I2C variant as one design: box, board, firmware and BOM together; the report must say VERIFIED.", "source": "M22 growth"}
+{"id": "eval-028", "domain": "mixed", "prompt": "Change a generated design, then restore it; nothing may be lost and the restored BOM must match the original.", "source": "M22 growth"}
+{"id": "eval-029", "domain": "mixed", "prompt": "The firmware drives LED_OUT, but the board declares no such net; the report must say FAILED with the net named.", "source": "M22 growth"}
+{"id": "eval-030", "domain": "mixed", "prompt": "The project menu must list every locally stored design, including any record it cannot read, with the reason said out loud.", "source": "M22 growth"}

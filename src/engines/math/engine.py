@@ -144,19 +144,35 @@ class MathEngine(BaseEngine):
         numeric = float(value) if value.is_real else str(value)
         result = {"expression": expression, "variables": variables, "result": numeric}
 
+        # The stamp states what was actually verified: a float when the
+        # value came out real-numeric, and not numeric for a symbolic
+        # result (``diff(sin(t)*t**2, t)`` strays symbolic) — never
+        # "numeric: True" under a string result.
         return EngineResult(
             success=True,
             engine=self.name,
             operation="evaluate",
             result=result,
-            validation=ValidationResult(status="VERIFIED", checks={"numeric": True}),
+            validation=ValidationResult(
+                status="VERIFIED",
+                checks={"numeric": isinstance(numeric, float)},
+            ),
         )
 
 
 def _extract_symbol_names(expression: str) -> set[str]:
-    """Cheap symbol-name extraction so sympify doesn't collide with builtins."""
+    """Cheap symbol-name extraction so sympify doesn't collide with builtins.
+
+    ``diff`` and ``integrate`` are sympy *functions* and join the
+    reserved set: left out, sympify receives a shadowing ``Symbol('diff')``
+    and ``evaluate("diff(sin(t)*t**2, t)")`` dies with ``'Symbol' object
+    is not callable`` instead of returning the derivative.
+    """
     import re
 
     tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expression)
-    reserved = {"sin", "cos", "tan", "exp", "log", "sqrt", "pi", "E", "I", "Abs"}
+    reserved = {
+        "sin", "cos", "tan", "exp", "log", "sqrt", "pi", "E", "I", "Abs",
+        "diff", "integrate",
+    }
     return {t for t in tokens if t not in reserved}

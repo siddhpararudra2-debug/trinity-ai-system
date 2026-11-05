@@ -282,6 +282,21 @@ matches.
   table.
 - **Ongoing rule:** run before every change; **add a prompt for every bug you
   fix** — the eval set is the regression suite the report sits on top of.
+- **M22 landed (the runner contract, in force):** every prompt in
+  `data/evals/prompts.jsonl` (the ten M20.e seeds verbatim + growth,
+  source-declared) owns exactly one deterministic plan in
+  `tools/eval/plans.py`. Engine-level truths run the real registry
+  engines; record-property truths build their record with the M20
+  fixture builders and are graded by the verified report itself;
+  storage truths run against temporary records roots via
+  ``records_root_param`` and never touch repo data. A prompt truth
+  this build cannot honestly verify is a **SKIP with the reason in the
+  table** — native-only seeds name the absent native binary, and a
+  clause the V1 engine does not express (eval-001's removable lid: the
+  enclosure has no lid parameter) is skipped, never silently graded
+  around. `python tools/eval/run.py` loads the JSONL strictly (an
+  `expected` field is refused: verdicts belong to the plans), prints
+  the table by id, exits 0 iff no FAIL.
 
 ---
 

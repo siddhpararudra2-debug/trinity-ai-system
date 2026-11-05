@@ -47,7 +47,9 @@ def test_seed_file_exists_and_parses_line_by_line() -> None:
 def test_seed_ids_are_unique_and_sequential() -> None:
     ids = [record["id"] for record in _load()]
     assert len(ids) == len(set(ids)), "duplicate prompt id"
-    assert ids == [f"eval-{number:03d}" for number in range(1, 11)]
+    # M20.e seeded ten; M22 grew the set to thirty — the ids stay
+    # unique and sequential with no gaps.
+    assert ids == [f"eval-{number:03d}" for number in range(1, 31)]
 
 
 def test_every_seed_carries_exactly_the_decided_keys() -> None:
@@ -58,13 +60,18 @@ def test_every_seed_carries_exactly_the_decided_keys() -> None:
         assert "expected" not in record, record["id"]
 
 
-@pytest.mark.parametrize("record_index", range(10))
+@pytest.mark.parametrize("record_index", range(30))
 def test_seed_shape_and_domains(record_index: int) -> None:
     record = _load()[record_index]
     assert record["domain"] in DOMAINS, record["domain"]
     prompt = record["prompt"]
     assert isinstance(prompt, str) and len(prompt.strip()) >= 20
-    assert record["source"] == "M20.e seed"
+    # Authorship is declared per seed: the original ten are M20.e's;
+    # M22's growth rows say so rather than inheriting the old source.
+    if record_index < 10:
+        assert record["source"] == "M20.e seed"
+    else:
+        assert record["source"] == "M22 growth"
 
 
 def test_domain_coverage_matches_the_decided_spread() -> None:

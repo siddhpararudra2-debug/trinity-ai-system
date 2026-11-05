@@ -195,6 +195,42 @@ Routes: history list, restore (404 with the refusal verbatim on
 unknown ids), compare (`?first=&second=`). 30 tests; suite 673 passed
 / 26 skipped, ruff clean — **M21 is done (item 50 ticked).**
 
+**M22 the eval set and its runner**: the plan-of-record (Phase 3) is
+now executable. `data/evals/prompts.jsonl` grew ten seeds → thirty
+prompts (cad 8, pcb 7, firmware 4, math 6, mixed 5), the original ten
+word-for-word untouched and the growth rows declaring `M22 growth` as
+their source. Each prompt owns exactly one deterministic plan in
+`tools/eval/plans.py`, and the ownership split matters: engine-level
+truths run the real registry engines (nest recomputes the pairwise
+overlap and sheet-bounds proof itself, STEP/DXF plans verify a file
+actually landed on disk with the right extension, the derivative plan
+says PASS only after sympy independently re-derives the formula), and
+record-property truths are graded by the verified report itself — the
+break fixtures replay their single-FAIL contracts at the pinned
+fragments and locations, a mistyped BOM value must WARN by naming the
+mismatch, and the good fixtures must come out clean VERIFIED at 12/12.
+Storage-flavored plans (BOM round-trip, the generate → change →
+restore done-when, the honest project menu) run against `records_root
+_param` temp roots — nothing they do can dirty the repo. The runner
+`tools/eval/run.py` is the one command: it loads the JSONL strictly
+(refusing an `expected` field outright — verdicts belong to the plans,
+models never grade), executes one plan per prompt, prints the table
+by id, and exits 0 iff no plan FAILs. Honesty is the table's subject:
+today it reads **24 PASS / 0 FAIL / 6 SKIP of 30** — the native-only
+seeds (004, 005, 006, 007, 026) SKIP naming the absent binary, and
+eval-001 SKIPs because its "removable lid" clause cannot be graded
+around (V1's enclosure has no lid parameter). Two engine truths got
+fixed to make the set gradeable: `diff`/`integrate` joined the math
+engine's reserved symbol names (evaluate of `diff(sin(t)*t**2, t)`
+previously died on `'Symbol' object is not callable`), and a symbolic
+evaluate result now stamps `numeric: False` — a string under a
+"numeric: True" stamp was a lie. One dead end closed on the way: the
+planned "unresolved pin WARN" firmware story was dead — appending an
+unknown `GPIO99` mapping leaves C05 PASS, so the firmware plans grade
+the pinned C03 refusal (decided seed 6) and an honest scaffold SKIP
+instead. Suite 704 passed / 26 skipped, ruff clean — **M22 is done
+(item 51 ticked).**
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**
