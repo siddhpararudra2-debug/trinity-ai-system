@@ -27,8 +27,10 @@ from src.engines.crosscheck.record import (
 
 __all__ = [
     "BOM_COLUMNS",
+    "PRICED_BOM_COLUMNS",
     "bom_from_pcb",
     "export_bom_csv",
+    "export_priced_bom_csv",
     "load_bom_csv",
 ]
 
@@ -39,6 +41,18 @@ BOM_COLUMNS: tuple[str, ...] = (
     "value",
     "quantity",
     "package",
+)
+
+# M24 (Phase 5): the quote-shaped extension. It carries every decided
+# column plus the price provenance — but only from the parts catalog.
+PRICED_BOM_COLUMNS: tuple[str, ...] = (
+    "ref",
+    "part",
+    "value",
+    "quantity",
+    "package",
+    "price_inr",
+    "price_updated_on",
 )
 
 BOM_LINES_KEY = "lines"
@@ -159,6 +173,57 @@ def export_bom_csv(record: DesignRecord, target: Path) -> Path:
                         "scalar"
                     )
                 row.append(value)
+            writer.writerow(row)
+    return target
+
+
+def export_priced_bom_csv(record: DesignRecord, target: Path) -> Path:
+    """Write the record's priced BOM as CSV and return the path.
+
+    Header row = PRICED_BOM_COLUMNS exactly; one row per ``bom.lines``
+    entry.  If a catalog price exists for the line (matched by ``part``,
+    ``value``, or ``ref`` in that order, first match wins, case-insensitive),
+    the row states the price (INR) and the date it was last stated;
+    otherwise both cells are left blank (\"absent elsewhere\") — never
+    presumed or invented.
+
+    Uses the same ``PriceBook`` lookup as the catalog module, so priced
+    and unpriced lines are handled consistently and the exact-columns
+    BOM export contract is untouched.
+    """
+    from src.engines.parts.catalog import PriceBook, load_parts
+
+    lines = _load_bom_section(record)
+    target = Path(target)
+    if target.parent != Path("."):
+        target.parent.mkdir(parents=True, exist_ok=True)
+    parts_catalog = load_parts()
+    price_book = PriceBook(parts_catalog)
+    with target.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(PRICED_BOM_COLUMNS)
+        for index, line in enumerate(lines):
+            row = []
+            for column in BOM_COLUMNS:
+                value = line.get(column)
+                if value is None:
+                    row.append("")
+                    continue
+                if isinstance(value, (dict, list, tuple, set)):
+                    raise DesignRecordError(
+                        f"bom.lines[{index}].{column} is "
+                        f"{type(value).__name__}; a CSV cell must be a "
+                        "scalar"
+                    )
+                row.append(value)
+            # Add price columns: matched price or blank
+            price_info = price_book.lookup(line)
+            if price_info is not None:
+                row.append(price_info[0])  # price_inr as float
+                row.append(price_info[1])  # price_updated_on as string
+            else:
+                row.append("")  # price_inr absent
+                row.append("")  # price_updated_on absent
             writer.writerow(row)
     return target
 

@@ -388,6 +388,34 @@ Seeded in Phase 1, grown in Phase 3. Each seed names its expected truth:
 8. **Candidates, not auto-promotion** (Phase 5): machine-suggested fixes
    queue for human review; the reference library only admits reviewed
    designs that pass the verified report.
+9. **The India data layer (M24).** Parts are catalogued, never invented:
+    `src/engines/parts/parts.json` holds 100–200 Indian common parts
+    `{id, name, category, price_inr, last_updated_on}` and
+    `src/engines/parts/fabs.json` 10–15 `{id, name, city, capabilities}`.
+    Prices carry explicit provenance — an entry either states a real
+    catalog price (INR, with its `last_updated_on` named) or prices
+    as `null` with a reason; **never a guess**. `src/engines/parts/
+    catalog.py` loads them strictly (refusing unknown keys, negative
+    prices, non-ISO dates, duplicate ids) and is the only
+    path anything may read them through. `export_priced_bom_csv()`
+    writes a quote-shaped extension of the BOM export — the decided
+    columns plus `price_inr, price_updated_on` — drawing prices from a
+    `PriceBook` keyed by any trusted parts-catalog value (`part`,
+    `value`, or `ref` in that order — first match wins): a matched
+    line states price and date; an unmatched line leaves both cells
+    **blank** ("absent elsewhere"). The priced export stays separate
+    from the exact-columns one — `load_bom_csv`'s contract is untouched.
+    Fabs stay a directory listing with a capabilities array; nothing
+    in the system books or emails one. Reference designs are stored at
+    `data/reference/library/<id>/record.json` with their tag set at
+    `data/reference/library/<id>/meta.json`
+    (`{design_id, tags[], added_on, verified, notes}`); retrieval is a
+    tag-containment rank over the verified ones; and the candidate
+    queue at `data/reference/candidates/<id>/record.json` (meta adds
+    `probes`, `proposed_on`, `queue`) moves into the library only
+    through `promote_candidate()`, which re-runs the verified report
+    in the same call and refuses unless the candidate comes back
+    VERIFIED — no auto-promotion, ever.
 
 ## Open questions (decide before the increment that hits them)
 

@@ -1,0 +1,54 @@
+{
+  "record_id": "ref-power-supply",
+  "record_schema_version": 1,
+  "created_at": "2026-11-05T08:03:14.583446+00:00",
+  "updated_at": "2026-11-05T08:03:14.583446+00:00",
+  "app_version": "1.0.0",
+  "pcb": {
+    "components": [
+      {
+        "ref": "C1",
+        "value": "10uF",
+        "footprint": "C1206"
+      },
+      {
+        "ref": "U1",
+        "value": "MP1584",
+        "footprint": "DFN"
+      }
+    ]
+  },
+  "firmware": {},
+  "holes": [],
+  "connectors": [],
+  "enclosure": {},
+  "bom": {
+    "lines": [
+      {
+        "ref": "C1",
+        "part": "",
+        "value": "10uF",
+        "quantity": 1,
+        "package": "C1206"
+      },
+      {
+        "ref": "U1",
+        "part": "",
+        "value": "MP1584",
+        "quantity": 1,
+        "package": "DFN"
+      }
+    ]
+  },
+  "power": {},
+  "engine_checks": [
+    {
+      "check_id": "c001",
+      "name": "BOM completeness",
+      "status": "pass",
+      "reason": "",
+      "location": "",
+      "evidence": "All refs populated"
+    }
+  ]
+}

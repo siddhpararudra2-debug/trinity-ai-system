@@ -1,0 +1,7 @@
+{
+  "design_id": "ref-stm32-spi",
+  "added_on": "2026-11-05T08:03:14.585823+00:00",
+  "verified": true,
+  "notes": "STM32 development board with SPI flash",
+  "probes": []
+}
