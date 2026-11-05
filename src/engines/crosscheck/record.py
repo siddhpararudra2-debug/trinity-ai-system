@@ -280,14 +280,37 @@ def build_record(
     )
 
 
+def write_record_json(record: DesignRecord, path: Path) -> Path:
+    """Atomic record write (tmp file, then replace): a crash mid-write
+    cannot leave a record half-written — the replaced state is either
+    absent or complete, the same guarantee load assumes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(record.to_dict(), indent=2) + "\n", encoding="utf-8"
+    )
+    os.replace(tmp, path)
+    return path
+
+
 def save_record(
-    record: DesignRecord, records_root_param: Path | None = None
+    record: DesignRecord,
+    records_root_param: Path | None = None,
+    snapshot: bool = True,
 ) -> Path:
     """Stamp and write one record atomically (write-then-replace).
 
     ``created_at`` is set on the first save and never moved;
     ``updated_at`` is refreshed on every save. The record object passed
     in carries the final stamps so the caller observes the stored state.
+
+    Every save that displaces a stored record first snapshots the
+    displaced state (decided.md convention 10 — the history is every
+    state a save displaced), and refuses to displace one it cannot
+    load back: the stored file is the only readable copy, and never
+    overwriting a record you cannot read is the same refusal load
+    already makes. ``snapshot=False`` opts out — the fixture
+    regenerator is a build tool over pure data, not a generate.
     """
     now = _utc_now_iso()
     if record.created_at is None:
@@ -296,12 +319,18 @@ def save_record(
     record.app_version = settings.api_version
     _validate_record_id(record.record_id)
     path = record_path(record.record_id, records_root_param)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(record.to_dict(), indent=2) + "\n", encoding="utf-8"
-    )
-    os.replace(tmp, path)
+    if snapshot and path.exists():
+        # Deferred import: record.py stays import-first; snapshots.py
+        # imports this module at load time.
+        from src.engines.crosscheck.snapshots import take_snapshot
+
+        displaced = load_record(record.record_id, records_root_param)
+        take_snapshot(
+            displaced,
+            reason="save",
+            records_root_param=records_root_param,
+        )
+    write_record_json(record, path)
     return path
 
 

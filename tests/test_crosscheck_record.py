@@ -248,9 +248,14 @@ def test_save_is_atomic_and_creates_dirs(tmp_path: Path) -> None:
     record = build_record("demo", pcb=PCB_FRAGMENT)
     save_record(record, root)
     assert sorted(p.name for p in root.glob("demo/*")) == ["record.json"]
-    # A re-save replaces the file in place and still leaves no tmp flotsam.
+    # A re-save replaces the file in place and still leaves no tmp
+    # flotsam — and since M21.3 it first snapshots the displaced state,
+    # so the record dir also gains its snapshots directory.
     save_record(record, root)
-    assert sorted(p.name for p in root.glob("demo/*")) == ["record.json"]
+    assert sorted(p.name for p in root.glob("demo/*")) == [
+        "record.json",
+        "snapshots",
+    ]
     assert load_record("demo", root).record_id == "demo"
 
 

@@ -300,3 +300,22 @@ class ProjectSummary(BaseModel):
 
 class ProjectsOut(BaseModel):
     projects: list[ProjectSummary] = Field(default_factory=list)
+
+
+class SnapshotSummary(BaseModel):
+    """One row of a record's snapshot history (M21.3) — a state one of
+    its saves displaced. A slot that cannot be read back is listed with
+    its refusal; an unreadable history entry is never silently hidden."""
+
+    snapshot_id: int | None = None
+    taken_at: str | None = None
+    reason: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    app_version: str | None = None
+    error: str | None = None
+
+
+class SnapshotsOut(BaseModel):
+    record_id: str
+    snapshots: list[SnapshotSummary] = Field(default_factory=list)

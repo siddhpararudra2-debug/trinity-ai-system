@@ -177,6 +177,29 @@ concrete:
    parse-back. XLSX ships only behind a real reader/writer library,
    verified by reading the file back — never hand-rolled bytes called
    an xlsx.
+10. **Snapshots: the history is every state a save displaced
+   (M21.3).** A save to a record that already exists on disk first
+   snapshots the displaced state to
+   `projects/<id>/snapshots/<n>.json` — `{snapshot_id, taken_at,
+   reason, record}` with the record's stamps verbatim — and the save
+   is refused when the displaced state cannot be loaded back (never
+   overwrite the only readable copy). "Change" and "restore" both
+   displace, so after generate → change → restore the history holds
+   every left-behind state and nothing is destroyed: a restore
+   snapshots the displaced current state (reason `restore`), then
+   writes the chosen snapshot's record **verbatim — stamps included**.
+   The live record is never in the history; the history is the states
+   it displaced, so the first (generate) save leaves no snapshot —
+   there was nothing to displace. `list_snapshots` states what it
+   cannot read (a row with `error`, the menu convention). Compare of
+   two snapshots diffs section-level canonical JSON across the decided
+   dimensions — `geometry` (board rect + record holes + connectors +
+   enclosure), `nets` (pcb.nets), `pins` (each populated component's
+   pins, keyed by ref in board order), `firmware` (the whole firmware
+   fragment, map included) — a changed dimension names **which part**
+   changed and quotes both values (serialized, truncated for the
+   report), never guessing a cause; snapshots load through the same
+   refusal rules as records.
 
 ---
 
@@ -239,7 +262,10 @@ Done when: a wrong pin gives FAILED with the correct reason.
   locally (the Phase 1 storage layout gains its user entry points).
 - **M21.3 snapshots** — every generate snapshots the record, with a history
   list, restore, and a compare view (diff of two snapshots: geometry, nets,
-  pins, firmware map).
+  pins, firmware map). Semantics in convention 10: the history is every
+  state a save displaced (a restore itself snapshots what it displaces),
+  overwrite refusals guard the only readable copy, and the compare is
+  section-level canonical JSON.
 
 Done when: you can generate, change, restore an old version, and the BOM
 matches.

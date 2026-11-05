@@ -265,3 +265,123 @@ def test_save_refuses_a_nonobject_body(_record_storage: Path) -> None:
         response.json()["errors"][0]["code"] == "request_validation_error"
     )
     assert not record_module.record_path("x-design").exists()
+
+
+# --- snapshots (M21.3): history, restore, compare ---------------------------
+
+
+def test_history_route_lists_the_displaced_states(
+    _record_storage: Path,
+) -> None:
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": []})
+    )
+    record_module.save_record(
+        build_record(
+            "snap-design", pcb={"components": [{"ref": "R1"}]}
+        )
+    )
+    with _client() as client:
+        response = client.get("/api/projects/snap-design/snapshots")
+        invalid = client.get("/api/projects/.hidden/snapshots")
+        unknown = client.get("/api/projects/nowhere-design/snapshots")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["record_id"] == "snap-design"
+    rows = body["snapshots"]
+    assert [row["snapshot_id"] for row in rows] == [1]
+    assert rows[0]["reason"] == "save"
+    assert rows[0]["error"] is None
+    assert invalid.status_code == 404
+    assert "invalid design record id" in invalid.json()["errors"][0][
+        "message"
+    ]
+    # A record with no snapshot directory has an empty history, not a
+    # 404 — the layout simply has nothing displaced yet.
+    assert unknown.status_code == 200
+    assert unknown.json()["snapshots"] == []
+
+
+def test_restore_route_restores_and_returns_the_record_verbatim(
+    _record_storage: Path,
+) -> None:
+    v1 = build_record(
+        "snap-design", pcb={"components": [{"ref": "R1"}]}
+    )
+    record_module.save_record(v1)
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "R9"}]})
+    )
+    with _client() as client:
+        response = client.post("/api/projects/snap-design/snapshots/1/restore")
+        reopened = client.get("/api/projects/snap-design")
+        missing = client.post("/api/projects/snap-design/snapshots/9/restore")
+        invalid = client.post("/api/projects/snap-design/snapshots/0/restore")
+    assert response.status_code == 200
+    assert response.json()["pcb"] == v1.pcb
+    assert response.json()["created_at"] == v1.created_at
+    assert reopened.json()["pcb"] == v1.pcb  # the restore took effect
+    assert missing.status_code == 404
+    assert "no snapshot 9" in missing.json()["errors"][0]["message"]
+    assert invalid.status_code == 404
+    assert "invalid snapshot id 0" in invalid.json()["errors"][0]["message"]
+
+
+def test_compare_route_diffs_two_snapshots(
+    _record_storage: Path,
+) -> None:
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "R1"}]})
+    )
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "R9"}]})
+    )
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "C1"}]})
+    )
+    with _client() as client:
+        response = client.get(
+            "/api/projects/snap-design/snapshots/compare?first=1&second=2"
+        )
+        no_params = client.get(
+            "/api/projects/snap-design/snapshots/compare"
+        )
+        unknown = client.get(
+            "/api/projects/snap-design/snapshots/compare?first=1&second=42"
+        )
+    assert response.status_code == 200
+    diff = response.json()
+    assert diff["first"]["snapshot_id"] == 1
+    assert diff["second"]["snapshot_id"] == 2
+    pins = diff["dimensions"]["pins"]
+    assert pins["status"] == "changed"
+    assert pins["parts"][0]["part"] == "R1"
+    assert no_params.status_code == 422
+    assert unknown.status_code == 404
+    assert "no snapshot 42" in unknown.json()["errors"][0]["message"]
+
+
+def test_save_route_refuses_to_displace_an_unreadable_record(
+    _record_storage: Path,
+) -> None:
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": []})
+    )
+    record_path = record_module.record_path("snap-design")
+    record_path.write_text("{corrupt", encoding="utf-8")
+    with _client() as client:
+        response = client.put(
+            "/api/projects/snap-design",
+            json={
+                "record_id": "snap-design",
+                "record_schema_version": RECORD_SCHEMA_VERSION,
+                "pcb": {"components": [{"ref": "R1"}]},
+            },
+        )
+    assert response.status_code == 400
+    assert "unreadable or not valid JSON" in response.json()["errors"][0][
+        "message"
+    ]
+    # The corruption is still exactly as it was — untouched by the
+    # refused save.
+    assert "corrupt" in record_path.read_text(encoding="utf-8")

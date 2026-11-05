@@ -170,6 +170,31 @@ save sets `created_at`, never moves it; every save refreshes
 only — statuses are computed per request by the report, never carried
 in a menu. 11 tests; suite 654 passed / 26 skipped, ruff clean.
 
+**M21.3 snapshots and the M21 done-when**: convention 10 decided one
+shape first — *the history is every state a save displaced*. A save
+that overwrites an existing record first snapshots the displaced state
+(reason `save`), refusing to displace one it cannot load back (never
+overwrite the only readable copy — the same refusal load makes). A
+restore then snapshots what it displaces (reason `restore`) and writes
+the chosen snapshot's record **verbatim, stamps included** — a
+restored record is that version, not a re-stamped cousin. So the
+first (generate) save leaves no snapshot — the live record is never
+inside its own history — and after generate, change, restore the
+history is [v1-save, v2-restore] with nothing destroyed. The
+one-surprise-lesson from the tests: a bucket that compares "each
+component's pins" must mark a ref **absent from one side as absent** —
+`.get()` returns None both for "missing ref" and "ref with no pins
+key", which silently collapsed a removed component into
+"no pins, all fine"; a dedicated absence marker (`ABSENT_PIN_REF`)
+fixed it. The compare diffs section-level canonical JSON across
+geometry / nets / pins / firmware, names changed parts and quotes both
+values capped at 240 chars. The done-while is now a test:
+generate v1 with a BOM, change to v2 with another, restore v1 — the
+exported BOM parse-back equals the generated lines word for word.
+Routes: history list, restore (404 with the refusal verbatim on
+unknown ids), compare (`?first=&second=`). 30 tests; suite 673 passed
+/ 26 skipped, ruff clean — **M21 is done (item 50 ticked).**
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**

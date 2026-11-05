@@ -39,6 +39,11 @@ from src.engines.crosscheck.record import (
     save_record,
 )
 from src.engines.crosscheck.report import assemble_report, render_html
+from src.engines.crosscheck.snapshots import (
+    compare_snapshots,
+    list_snapshots,
+    restore_snapshot,
+)
 from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
 from src.jobs.manager import job_manager
@@ -64,6 +69,8 @@ from src.models.schemas import (
     WorkflowNodeResult,
     ProjectsOut,
     ProjectSummary,
+    SnapshotsOut,
+    SnapshotSummary,
 )
 from src.core.updater import UpdateInfo, apply_update, check_updates
 from src.intelligence.plan import (
@@ -179,7 +186,10 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
     refusal verbatim. Stamps follow the Phase 1 contract: the first
     save sets ``created_at`` and never moves it, every save refreshes
     ``updated_at`` — a body without stamps is treated as a newly
-    created record.
+    created record. Overwriting a stored record first snapshots the
+    displaced state (M21.3); an overwrite of a stored record that
+    cannot be loaded back is refused — never displace the only
+    readable copy.
     """
     try:
         candidate = DesignRecord.from_dict(record)
@@ -194,8 +204,70 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
                 "one to trust"
             ),
         )
-    save_record(candidate)
+    try:
+        save_record(candidate)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return candidate.to_dict()
+
+
+@router.get("/projects/{record_id}/snapshots", response_model=SnapshotsOut)
+def list_project_snapshots(record_id: str) -> SnapshotsOut:
+    """The record's snapshot history (M21.3): every state one of its
+    saves displaced, oldest first.
+
+    A slot that cannot be read back is listed with its refusal, never
+    hidden; an empty history means nothing was ever displaced (a first
+    generate displaces nothing — the live record is never inside the
+    history).
+    """
+    try:
+        rows = list_snapshots(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return SnapshotsOut(
+        record_id=record_id,
+        snapshots=[SnapshotSummary.model_validate(row) for row in rows],
+    )
+
+
+@router.get("/projects/{record_id}/snapshots/compare")
+def compare_project_snapshots(
+    record_id: str,
+    first: int = Query(...),
+    second: int = Query(...),
+) -> dict[str, Any]:
+    """The compare view (M21.3): two snapshots diffed across the
+    decided dimensions — geometry, nets, pins, firmware.
+
+    Every dimension is stated: ``identical`` or ``changed`` with the
+    changed parts quoted on both sides. Unknown snapshots or an
+    invalid record id are 404 with the refusal verbatim.
+    """
+    try:
+        return compare_snapshots(record_id, first, second)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/projects/{record_id}/snapshots/{snapshot_id}/restore")
+def restore_project_snapshot(
+    record_id: str, snapshot_id: int
+) -> dict[str, Any]:
+    """Restore (M21.3): the chosen snapshot becomes the live record.
+
+    What the restore displaces is snapshotted first (reason
+    ``restore``), and the restored record is written verbatim — stamps
+    included, so the result really is that version. An unknown record
+    or snapshot is 404 with the refusal verbatim; a current state that
+    cannot be read back refuses the restore (never displace the only
+    readable copy).
+    """
+    try:
+        record = restore_snapshot(record_id, snapshot_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record.to_dict()
 
 
 # Extensions the native vision engine can actually decode. Kept in step with
