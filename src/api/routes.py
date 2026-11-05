@@ -31,7 +31,13 @@ from src.core.errors import (
 from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
 from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
-from src.engines.crosscheck.record import DesignRecordError, load_record
+from src.engines.crosscheck.record import (
+    DesignRecord,
+    DesignRecordError,
+    list_records,
+    load_record,
+    save_record,
+)
 from src.engines.crosscheck.report import assemble_report, render_html
 from src.engines.registry import registry
 from src.intelligence.router import parse_requirement
@@ -56,6 +62,8 @@ from src.models.schemas import (
     WorkflowExecuteRequest,
     WorkflowExecuteResponse,
     WorkflowNodeResult,
+    ProjectsOut,
+    ProjectSummary,
 )
 from src.core.updater import UpdateInfo, apply_update, check_updates
 from src.intelligence.plan import (
@@ -126,6 +134,68 @@ def get_verified_report(record_id: str) -> HTMLResponse:
     except DesignRecordError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return HTMLResponse(render_html(assemble_report(record)))
+
+
+@router.get("/projects", response_model=ProjectsOut)
+def list_projects() -> ProjectsOut:
+    """List the locally stored design records — the open menu (M21.2).
+
+    A record that cannot be read back appears with its load refusal
+    spelled out, never hidden: Hiding it would fake an honest menu into
+    an empty one.
+    """
+    return ProjectsOut(
+        projects=[
+            ProjectSummary.model_validate(row) for row in list_records()
+        ]
+    )
+
+
+@router.get("/projects/{record_id}")
+def open_project(record_id: str) -> dict[str, Any]:
+    """Open the stored design record verbatim (M21.2).
+
+    The stored shape is returned as stored — the sections are the
+    engines' own fragments and this rewrite invents nothing. Unknown,
+    invalid or unreadable ids are 404: DesignRecordError is not a
+    TrinityError, so the route owns the translation (same as the
+    report route above).
+    """
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record.to_dict()
+
+
+@router.put("/projects/{record_id}")
+def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
+    """Save (create or replace) the record the path names (M21.2).
+
+    The body is the record's stored shape, validated with the same
+    ``from_dict`` load uses — a record this build cannot later read
+    back cannot be saved here. The body's ``record_id`` must agree with
+    the path id, and a corrupt or future-schema body is 400 with the
+    refusal verbatim. Stamps follow the Phase 1 contract: the first
+    save sets ``created_at`` and never moves it, every save refreshes
+    ``updated_at`` — a body without stamps is treated as a newly
+    created record.
+    """
+    try:
+        candidate = DesignRecord.from_dict(record)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if candidate.record_id != record_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"body record_id '{candidate.record_id}' does not match "
+                f"the path id '{record_id}'; refusing to guess which "
+                "one to trust"
+            ),
+        )
+    save_record(candidate)
+    return candidate.to_dict()
 
 
 # Extensions the native vision engine can actually decode. Kept in step with

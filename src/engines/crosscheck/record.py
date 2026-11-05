@@ -326,3 +326,47 @@ def load_record(
         return DesignRecord.from_dict(raw)
     except DesignRecordError as exc:
         raise DesignRecordError(f"{path}: {exc}") from exc
+
+
+def list_records(
+    records_root_param: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Summaries of every locally stored design record, sorted by id.
+
+    The open menu must state what it cannot read, never hide it: a
+    record that cannot be loaded back (corrupt file, unknown keys,
+    future schema, invalid id) yields a row with ``error`` carrying the
+    load refusal verbatim — silently skipping it would fake an honest
+    menu into an empty one. Readable rows carry the save stamps
+    verbatim; nothing is computed here (statuses are generated per
+    request by the report), nothing guessed.
+    """
+    root = records_root(records_root_param)
+    if not root.is_dir():
+        return []
+    summaries: list[dict[str, Any]] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir():
+            continue  # the layout stores one project per directory
+        try:
+            record = load_record(entry.name, records_root_param)
+        except DesignRecordError as exc:
+            summaries.append(
+                {
+                    "record_id": entry.name,
+                    "created_at": None,
+                    "updated_at": None,
+                    "app_version": None,
+                    "error": str(exc),
+                }
+            )
+            continue
+        summaries.append(
+            {
+                "record_id": record.record_id,
+                "created_at": record.created_at,
+                "updated_at": record.updated_at,
+                "app_version": record.app_version,
+            }
+        )
+    return summaries

@@ -151,6 +151,25 @@ with bom sections: goods VERIFIED at 12 PASS, the five breaks keep
 their single-FAIL contract. 19 tests; suite 643 passed / 26 skipped,
 ruff clean.
 
+**M21.2 the local project entry points**: the Phase 1 storage layout
+gains its user-facing seams — `GET /api/projects` (the open menu),
+`GET /api/projects/{record_id}` (open), `PUT /api/projects/{record_id}`
+(save). The honesty detail that shaped the menu: a record that cannot
+be read back (corrupt file, unknown keys, future schema) is *listed
+with its load refusal verbatim* — silently skipping it would fake an
+honest menu into an empty one, the same phantom-visibility trap as a
+check that passes by default. Open returns the record as stored
+(sections are the engines' fragments; the route invents nothing). Save
+validates the body with the same `from_dict` load uses — so a record
+this build cannot later open is impossible to save — and refuses a
+body whose `record_id` disagrees with the path id rather than guessing
+which to trust. Stamps follow the Phase 1 contract unchanged: first
+save sets `created_at`, never moves it; every save refreshes
+`updated_at`; a stampless body counts as a newly created record.
+`list_records()` itself lives in record.py and hands back summaries
+only — statuses are computed per request by the report, never carried
+in a menu. 11 tests; suite 654 passed / 26 skipped, ruff clean.
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**

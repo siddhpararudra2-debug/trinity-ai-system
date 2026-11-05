@@ -277,3 +277,26 @@ class WorkflowExecuteResponse(BaseModel):
 class UpdateApplyRequest(BaseModel):
     # Explicit opt-in: the updater never applies without this flag.
     confirm: bool = False
+
+
+# ------------------------------------------------------ design records ---
+
+
+class ProjectSummary(BaseModel):
+    """One row of the local projects menu (M21.2).
+
+    A row that could not be read back carries its load refusal verbatim
+    in ``error`` and no stamps — listed, never silently hidden. A
+    readable row carries the save stamps verbatim; statuses are never
+    here (the report generates them per request).
+    """
+
+    record_id: str
+    created_at: str | None = None
+    updated_at: str | None = None
+    app_version: str | None = None
+    error: str | None = None
+
+
+class ProjectsOut(BaseModel):
+    projects: list[ProjectSummary] = Field(default_factory=list)

@@ -6,9 +6,12 @@ deterministic, repo-owned fix hint. The HTML route serves a
 self-contained page: no scripts, no external references, and every
 record-derived value escaped, so a poisoned record renders as text.
 
-``decided.md`` coverage rule the tests here pin: a record is VERIFIED
-only when every *implemented* check PASSes — C11 (BOM match) is named
-as inactive in the footer and never counted.
+``decided.md`` coverage rule the tests here pin (convention 8): a
+record is VERIFIED only when every *implemented* check PASSes. A
+named-but-inactive check would be listed in the footer and never
+counted — none is inactive since C11 shipped (M21.1), and the
+monkeypatch test pins the honesty clause for whatever goes inactive
+next.
 """
 
 from __future__ import annotations
