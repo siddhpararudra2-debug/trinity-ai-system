@@ -311,6 +311,17 @@ matches.
     the checks module reads no model output.
 - **Inspect mode**: read-only — loads an existing record, runs the checks,
   shows the report, mutates nothing.
+- **M23 landed (the seam rule in code):** the rule (propose edits,
+  prose, plans — never verdicts, `location`/`reason`, or VERIFIED) is
+  marked in code at four spots —
+  `check.py` (the never-side), `report.py` (the prose seam),
+  `routes.py`'s save route (propose-your-edit), `intelligence/plan.py`
+  (propose-a-plan) — and restated for the other developer in
+  `docs/llm-seams.md`. Inspect mode ships as
+  `GET /api/projects/{id}/inspect` returning `assemble_report()`'s
+  JSON dict: read-only, no write, no snapshot, no restamp, refusals
+  404 with the reason verbatim; proven by byte-identity, stamp-
+  identity, and no-debris tests across repeated inspections.
 
 ---
 

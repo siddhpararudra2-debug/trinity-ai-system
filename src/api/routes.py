@@ -190,6 +190,14 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
     displaced state (M21.3); an overwrite of a stored record that
     cannot be loaded back is refused — never displace the only
     readable copy.
+
+    The LLM seam (M23, `decided.md` Phase 4, restated in
+    docs/llm-seams.md): a model may propose a record edit and push it
+    through this route — the edit then meets exactly the validation it
+    meets here anyway (the same ``from_dict`` load uses), and the
+    report re-checks the stored record fresh. A model may never set a
+    check verdict, alter ``location``/``reason`` evidence, or mark a
+    record VERIFIED; proposing is the whole of its reach at this seam.
     """
     try:
         candidate = DesignRecord.from_dict(record)
@@ -209,6 +217,24 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
     except DesignRecordError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return candidate.to_dict()
+
+
+@router.get("/projects/{record_id}/inspect")
+def inspect_project(record_id: str) -> dict[str, Any]:
+    """Inspect mode (M23): read-only record checks and report.
+
+    The record is loaded, the checks run fresh, and the report dict is
+    returned — the stored file is never written, snapshotted, or
+    restamped: inspecting a design changes nothing about it, so any
+    number of inspections leave the record byte-identical. Unknown,
+    invalid or unreadable ids are 404 with the refusal verbatim (the
+    report route owns the same translation).
+    """
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return assemble_report(record)
 
 
 @router.get("/projects/{record_id}/snapshots", response_model=SnapshotsOut)

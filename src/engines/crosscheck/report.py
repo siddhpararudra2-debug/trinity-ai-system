@@ -10,6 +10,14 @@ that the hint table covers exactly the implemented checks, so a future
 check cannot ship hintless and a retired one cannot leave a dangling
 hint.
 
+The model-plug-in rule (M23, `decided.md` Phase 4, restated in
+docs/llm-seams.md): text a model writes or rephrases may go in the
+report's prose/notes and in a *proposed* record edit (re-validated on
+save); it may never set a check verdict, alter ``location``/``reason``
+evidence, or mark a record VERIFIED. The ``hint`` column is repo-owned
+prose by that rule, and no model output ever reaches the verdicts this
+module folds.
+
 HTML is the export format (Phase 1): ``render_html`` produces one
 self-contained page — the CSS is an inline module constant (kept out of
 f-strings so the braces survive), every record-derived value goes

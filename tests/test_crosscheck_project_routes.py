@@ -385,3 +385,82 @@ def test_save_route_refuses_to_displace_an_unreadable_record(
     # The corruption is still exactly as it was — untouched by the
     # refused save.
     assert "corrupt" in record_path.read_text(encoding="utf-8")
+
+
+# --- inspect mode (M23): read-only record checks and report -----------------
+
+
+def test_inspect_returns_the_report_dict_for_a_saved_record(
+    _record_storage: Path,
+) -> None:
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "R1"}]})
+    )
+    from src.engines.crosscheck.report import assemble_report
+
+    with _client() as client:
+        response = client.get("/api/projects/snap-design/inspect")
+    assert response.status_code == 200
+    body = response.json()
+    # The inspect payload is the report dict itself (the JSON route to
+    # the shape the report HTML route renders), not a re-derivation.
+    assert body == assemble_report(
+        record_module.load_record("snap-design")
+    )
+    assert body["record_id"] == "snap-design"
+    assert body["overall_status"] == "FAILED"  # a bare record: checks say so
+
+
+def test_inspect_mutates_nothing(_record_storage: Path) -> None:
+    """The read-only contract: the file bytes, the stamps, and the
+    snapshot history are all unchanged by any number of inspections."""
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": [{"ref": "R1"}]})
+    )
+    record_path = record_module.record_path("snap-design")
+    before = record_path.read_bytes()
+    loaded = record_module.load_record("snap-design")
+    stamps = (loaded.created_at, loaded.updated_at)
+    with _client() as client:
+        first = client.get("/api/projects/snap-design/inspect")
+        second = client.get("/api/projects/snap-design/inspect")
+    assert first.status_code == second.status_code == 200
+    assert first.json()["overall_status"] == second.json()["overall_status"]
+
+    assert record_path.read_bytes() == before, (
+        "inspect replaced the record file"
+    )
+    reloaded = record_module.load_record("snap-design")
+    assert (reloaded.created_at, reloaded.updated_at) == stamps, (
+        "inspect restamped the record"
+    )
+    from src.engines.crosscheck.snapshots import list_snapshots
+
+    assert list_snapshots("snap-design") == [], (
+        "an inspect run created a snapshot (a run is not a save)"
+    )
+    assert sorted(p.name for p in record_path.parent.iterdir()) == [
+        "record.json"
+    ], "inspect left debris in the record directory"
+
+
+def test_inspect_refuses_unknown_invalid_and_unreadable_ids(
+    _record_storage: Path,
+) -> None:
+    record_module.save_record(
+        build_record("snap-design", pcb={"components": []})
+    )
+    corrupt = _record_storage / "projects" / ".hidden" / "record.json"
+    corrupt.parent.mkdir(parents=True, exist_ok=True)
+    corrupt.write_text("{corrupt", encoding="utf-8")
+    with _client() as client:
+        invalid = client.get("/api/projects/.hidden/inspect")
+        unknown = client.get("/api/projects/nowhere-design/inspect")
+    assert invalid.status_code == 404
+    assert "invalid design record id" in invalid.json()["errors"][0][
+        "message"
+    ]
+    assert unknown.status_code == 404
+    assert "no design record named 'nowhere-design'" in unknown.json()[
+        "errors"
+    ][0]["message"]

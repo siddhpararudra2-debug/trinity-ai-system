@@ -1,5 +1,16 @@
 """Cross-checks (M20.2-M20.4): the checker the verified report builds on.
 
+Repair-and-re-proposal (M23): the seams a model may sit at are the ones
+at the edges, never inside this module — prose around a verdict the
+checker itself produced, proposed record edits pushed through
+``PUT /api/projects/{id}`` (whose saver validates exactly like load),
+and multi-step plans through the workflow executor (whose engine
+results land as new ``engine_checks``). A model may never set a check
+verdict, alter ``location``/``reason`` evidence, or mark a record
+VERIFIED: this module reads only the deterministic record, never any
+model output, and verification stays deterministic-only
+(`decided.md`, Phase 4, restated in docs/llm-seams.md).
+
 C00 is the engine gate: the record's ``engine_checks`` entries must all
 be VALIDATED/VERIFIED (the status chain ``src/models/schemas.py`` owns).
 A FAILED engine check fails the gate with the engine's reason verbatim;

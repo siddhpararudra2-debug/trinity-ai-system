@@ -7,6 +7,15 @@ Shape, dependency and DAG-semantics failures degrade to an honest
 `plan_invalid` error event — never to a plan the UI has to interpret and
 never to exec-ed prose. Dependency threading follows the workflow
 executor's `{node:<id>}.<dotted.path>` convention.
+
+The model-plug-in rule (M23, `decided.md` Phase 4, restated in
+docs/llm-seams.md): a model may *propose* a plan (this module's
+postcondition) and, around the plan, propose record edits (edits get
+re-validated on save by the same from_dict load uses) and rephrase
+report prose. It may never set a check verdict, alter `location` /
+`reason` evidence, or mark a record VERIFIED — this module validates
+the plan's shape; the workflow executor and the crosscheck module own
+the verdicts, after the plan.
 """
 
 from __future__ import annotations

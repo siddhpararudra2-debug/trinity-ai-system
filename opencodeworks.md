@@ -231,6 +231,27 @@ the pinned C03 refusal (decided seed 6) and an honest scaffold SKIP
 instead. Suite 704 passed / 26 skipped, ruff clean — **M22 is done
 (item 51 ticked).**
 
+**M23 the link-up seams and Inspect mode**: the Phase 4 rule stopped
+being folklore and became a marked part of the code. Four seam
+comments — `check.py` names the never-side (verdicts computed from
+the record, never read from model output), `report.py` names the
+prose seam (the `hint` column is repo-owned text precisely because a
+model-generated hint would be a capability lie), `routes.py`'s save
+names the propose-your-edit seam (proposed edits pass the same
+from_dict validation load uses, so proposing is the model's whole
+reach), and `intelligence/plan.py` names the propose-a-plan seam (the
+workflow executor and the crosscheck module own the verdicts, after
+the plan) — plus `docs/llm-seams.md` restating one row per seam with
+whichever layer enforces the never-side. Inspect mode is
+`GET /api/projects/{id}/inspect`: it returns `assemble_report()`'s
+JSON dict (the shape the HTML report route renders), and the
+read-only contract is tested hard — record bytes, stamps, and the
+snapshot history are byte-identical after repeated inspections, and
+an inspect never leaves debris or manufactures a snapshot (a run is
+not a save). Unknown, invalid, and unreadable ids 404 with the
+refusal verbatim. Suite 707 passed / 26 skipped, ruff clean —
+**M23 is done (item 52 ticked).**
+
 **Stage 8 — M14 CAD depth closed (one commit per op: `ca61424` families,
 `07e1d69` nesting, `fe3e58f` drawings; suite 375 passed / 40 skipped,
 ruff clean).**
