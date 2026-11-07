@@ -1,6 +1,6 @@
 import React from 'react';
 
-type ButtonProps = {
+export type ButtonProps = {
   children: React.ReactNode;
   variant?: 'default' | 'destructive' | 'secondary' | 'outline';
   size?: 'sm' | 'lg' | 'icon';
@@ -17,6 +17,8 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      data-variant={variant}
+      data-size={size}
       className={className}
       onClick={onClick}
     >

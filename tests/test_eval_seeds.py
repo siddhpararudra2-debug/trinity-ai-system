@@ -47,9 +47,9 @@ def test_seed_file_exists_and_parses_line_by_line() -> None:
 def test_seed_ids_are_unique_and_sequential() -> None:
     ids = [record["id"] for record in _load()]
     assert len(ids) == len(set(ids)), "duplicate prompt id"
-    # M20.e seeded ten; M22 grew the set to thirty — the ids stay
+    # M20.e seeded ten; M22 grew the set to thirty-eight — the ids stay
     # unique and sequential with no gaps.
-    assert ids == [f"eval-{number:03d}" for number in range(1, 31)]
+    assert ids == [f"eval-{number:03d}" for number in range(1, 39)]
 
 
 def test_every_seed_carries_exactly_the_decided_keys() -> None:

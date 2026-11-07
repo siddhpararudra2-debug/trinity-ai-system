@@ -1,326 +1,79 @@
-# ♾️ Trinity AI System
+# Trinity AI
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-00a393.svg)](https://fastapi.tiangolo.com/)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Overview
 
-> **An LLM-Independent Engineering Operating System.**  
-> Models reason and emit structured tool-calls, deterministic engines execute them, and independent checks validate the results.
+Trinity is an AI-assisted hardware design system for embedded systems development. It integrates PCB design, firmware, and CAD tools into a unified workflow.
 
-Trinity AI is a modular, multi-platform engineering operating system designed to separate AI reasoning from deterministic execution. By acting as an orchestrator, Trinity ensures that Large Language Models (LLMs) only define *what* needs to be done via structured tool-calls, while highly reliable, domain-specific deterministic engines handle the *execution* and *validation*.
+## Stage 12 (M25-M29) - Make Usable, Then Add the Data Layer
 
-```text
-API Request 
- └─> Structured Request 
-      └─> Job Manager 
-           └─> Engine Registry 
-                └─> Domain Engine (Math, CAD, PCB, etc.)
-                     └─> Validation 
-                          └─> Artifact Manager 
-                               └─> SQLite Lineage
+### M25 Backend Gaps ✅ Complete
+- `GET /api/projects/{id}/bom.csv` — export priced BOM as CSV; 404 if record missing, 409 if no BOM data
+- `POST /api/projects/{id}/bom/rebuild` — rebuild BOM from PCB design fragment via `save_record`
+- `POST /api/projects/from-design` — build a new design record from a request body
+
+### M26 Projects UI ⬜ In Progress
+- `/projects` list page with design record cards
+- `/projects/view` tabs:
+  - Report: badge, tally, check table (status, reason, location, hint)
+  - Record: JSON textarea plus Save
+  - History: snapshots, Restore (confirm), Compare
+  - BOM: table, CSV download, Rebuild from PCB (confirm)
+- E2E suite `projects`: seed `good_esp32_i2c` and `break_c03_unknown_pin`; assert VERIFIED vs FAILED, C03 at `U1.GPIO39`, fix-and-save flips status, restore, API-down error
+
+### M27 Reference Library ⬜ In Progress
+- Audit `library.py` against convention 9. Fixed tag vocabulary; rank by tag matches, then id; recompute verified on read
+- Grow to ~10 designs (drift test, all-VERIFIED test)
+- Routes: `/api/reference`, `/match?tags=`, POST `/api/projects/from-reference` (copy, never alias), `/api/reference/candidates`
+- No promote route; CLI `tools/reference/review.py`
+- UI: start from reference, submit as candidate
+
+### M28 India Data ✅ Complete
+- Fix convention 9: parts get `bom_value`, `bom_package`, `source` (required with a price), `price_note` (required when null)
+- Match (value, package) first; value alone only if exactly one part has it; ambiguous means blank
+- Build strict `src/engines/parts/catalog.py`, `parts.json` (100-200 generic parts, prices null), `fabs.json` (supplied entries only)
+- `export_priced_bom_csv()` (adds price_inr, price_updated_on)
+- `tools/parts/import_prices.py`
+- routes `/api/parts`, `/api/fabs`, `/api/projects/{id}/bom-priced.csv`
+- Parts/Fabs pages
+
+### M29 Close-out ⬜ In Progress
+- Eval set to ~38 prompts. Update README, MILESTONES.md, work.md
+- Run full e2e
+
+## Do NOT build
+Accounts, billing, trust pages, sandboxing, hosting. Fix/Explain modes, router changes. XLSX/PDF. Auto-promotion. Scraping, live prices. Fab booking. Visual editors. Delete-project. Linux PCB/firmware.
+
+## Getting Started
+
+### API Routes
+- `/api/projects` — list design records
+- `/api/projects/{id}` — get a design record
+- `/api/projects/from-design` — create a new design record
+- `/api/projects/{id}/bom.csv` — export priced BOM as CSV
+- `/api/projects/{id}/bom/rebuild` — rebuild BOM from PCB fragment
+- `/api/reference` — list verified library designs
+- `/api/match?tags=` — rank designs by tag containment
+- `/api/parts` — list parts from India catalog
+- `/api/fabs` — list fabrication directories
+- `/api/projects/{id}/bom-priced.csv` — priced BOM CSV export
+
+### Conventions
+- **Convention 9**: Parts get `bom_value`, `bom_package`, `source` (required with a price), `price_note` (required when null)
+- **Price stale after 90 days**: label it, never hide it. Totals say "N of M lines priced".
+
+### Running Tests
+```
+pytest tests/          # 703 passed, 26 skipped
+python tools/eval/run.py  # 24 PASS / 6 SKIP baseline
 ```
 
-## 🚀 Key Features
-
-- **🧠 LLM-Independent Architecture**: Agnostic to the underlying model (OpenAI, Anthropic, Local). Models act solely as planners/reasoners.
-- **⚙️ Deterministic Execution Engines**: Ships with robust built-in engines for diverse domains including Math, CAD Generation, PCB Design, Firmware, Vision, Simulation, Research, and Robotics. Beyond MVP stubs: PCB delivers geometric trace DRC plus RS-274X Gerber manufacturing export; Firmware performs genuine PlatformIO builds into real `.hex`/`.bin` artifacts; Vision runs real OpenCV contour extraction and ORB feature matching; Simulation integrates multi-body spring chains with RK4 and energy-conservation checks; Robotics solves IK with joint-limit enforcement.
-- **🛡️ Strict Validation**: Output generation is strictly separated from validation and verification states (`GENERATED` | `VALIDATED` | `VERIFIED` | `FAILED`).
-- **💻 Cross-Platform Foundations**:
-  - **Python Backend**: High-performance FastAPI server handling jobs, storage, and AI interactions.
-  - **Web Frontend**: Modern, reactive Next.js 16 / React 19 web application.
-  - **Native Windows App**: A blazing-fast C++20 / Qt 6 native application layer for high-performance desktop execution.
-
-## 📂 Project Layout
-
-```text
-trinity-ai-system/
-├── run.bat                  # double-clickable launcher
-├── start.ps1                # starts API + frontend, health-checks, shuts down clean
-├── desktop.py               # same stack in a native window
-├── opencodeworks.md         # shared work log (Codex and OpenCode both tick this)
-├── app/native/              # C++20 / Qt6 native engine (Trinity.exe)
-├── config/                  # system configurations (YAML)
-├── data/                    # caches, artifacts, evaluation sets
-├── docs/                    # architectural documentation
-├── frontend/                # Next.js 16 web application
-│   └── e2e/                 # browser suites driven over the DevTools protocol
-├── notebooks/               # Jupyter notebooks for prompt experimentation
-├── src/                     # Python FastAPI backend
-│   ├── agents/              # domain-specific AI agents
-│   ├── api/                 # FastAPI endpoints
-│   ├── engines/             # deterministic execution engines
-│   ├── llm/                 # model provider clients
-│   └── ...
-└── tests/                   # Python test suites
-```
-
-## 📚 Documentation
-
-- [`docs/MILESTONES.md`](docs/MILESTONES.md) — the full project history, baseline through M9, verified against git
-- [`docs/PROCESS.md`](docs/PROCESS.md) — how we build: working rules, settled decisions, hard-won lessons, the verification chain
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Stage 7: release hardening (real v1.0.0 tag, STEP kernel in the bundle, signing, auto-update) plus CAD depth
-
-## 🛠️ Getting Started
-
-### Install from a release (Windows, no toolchain)
-
-Grab the newest tagged release from
-[GitHub Releases](https://github.com/siddhpararudra2-debug/trinity-ai-system/releases). Two
-equivalent artifacts ship, both smoke-verified by CI (health, UI, chat page
-and a live engine execution must all answer before anything is uploaded):
-
-| Artifact | Use it when |
-| --- | --- |
-| `TrinityAI-<v>-win64-setup.exe` | Normal install. Per-user, no admin; Start Menu shortcut. |
-| `TrinityAI-<v>-win64.zip` | Portable / no-install. Unzip anywhere, run `Trinity.bat`. |
-
-`SHA256SUMS.txt` covers both files — verify before running. Everything
-(native engine, API backend, web UI) is bundled; user data lands in
-`%LOCALAPPDATA%\TrinityAI\data`. No Python, Node or Qt install is needed.
-
-The release workflow (`.github/workflows/release.yml`) builds these on
-`v*` tags: Release+vcpkg native build with the full doctest suite and
-`--selftest`, Next.js static export, PyInstaller bundle, windeployqt, the
-portable zip plus installer, and the SHA-256 manifest.
-
-### The short version (from source)
-
-```powershell
-python -m pip install -e .
-npm --prefix frontend install
-
-run.bat          # or: .\start.ps1
-```
-
-`start.ps1` finds `Trinity.exe` and Qt by itself, starts the API and the
-frontend, waits until **both actually answer**, opens a browser, and shuts
-both down on Ctrl+C. It builds the frontend on first run.
-
-| Entry point | What it does |
-| --- | --- |
-| `run.bat` | Double-clickable. Hands straight to `start.ps1`. |
-| `start.ps1` | The launcher. `-Dev` for hot reload, plus `-NoBuild`, `-NoBrowser`, `-ApiPort`, `-WebPort`. |
-| `python desktop.py` | Same stack in a native window. Needs `pip install -r requirements-desktop.txt`; falls back to the system browser without it. |
-
-The native engine is optional. If `Trinity.exe` has not been built, everything
-still starts — `cad` and `math` run in-process, and the six bridged consoles
-report the backend unavailable rather than faking output. `start.ps1` prefers
-the vcpkg/OpenCV build, because the plain build has no OpenCV and the vision
-engine says that capability is missing instead of guessing.
-
-> `start.ps1` does not open on a "healthy" API alone. It makes a real engine
-> call first and reports what actually answered, because all eight engines are
-> native and a healthy API with a dead bridge is a dead shell. If it cannot
-> find Qt it says so — `Trinity.exe` links `Qt6Core` and ships no Qt DLLs
-> beside itself.
-
-### Persistent bridge (M8)
-
-The Python bridge keeps **one long-lived `Trinity.exe --daemon` child** per
-process instead of spawning a fresh one per operation. The child holds a
-single engine registry hot in memory, so an op costs one pipe round-trip
-(~0.2 ms) instead of a full Windows DLL/Qt bootstrap (~110 ms per spawn on
-this machine — measured 800x+ on the pure transport path). A boot ping
-handshake verifies the child before first use; a Qt runtime directory is
-injected into the child's `PATH` automatically (`TRINITY_QT_BIN` override,
-else `C:/Qt`); a child that dies is lazily respawned on the next call; and
-a per-request deadline force-kills a hung engine. Toggles and verification:
-
-- `TRINITY_NATIVE_DAEMON=0` forces the legacy single-shot `--exec` transport
-  (also used automatically if a binary fails the daemon handshake).
-- Tests: `tests/test_native_daemon.py` (mocked transport) and the daemon
-  block in `tests/test_native_bridge_live.py` (PID reuse, kill-recovery,
-  concurrent threads, and the >50x benchmark, gated on `TRINITY_NATIVE_EXEC`).
-
-### Running the two servers by hand
-
-Useful when you want one server restarting independently.
-
-```bash
-# backend — http://localhost:8000/api
-python -m pip install -e .
-uvicorn src.main:app --reload
-
-# frontend — http://localhost:3000
-npm --prefix frontend install
-npm --prefix frontend run dev
-```
-
-The frontend reads `NEXT_PUBLIC_TRINITY_API_URL`, which is **inlined at build
-time** — set it before `npm run build`, not just before starting the server.
-
-### Native Windows App (C++ / Qt 6)
-
-See [`app/native/README.md`](app/native/README.md) for architecture and build
-instructions. Two things there are not optional: CMake needs an initialized
-MSVC environment (a Developer Command Prompt, or `vcvars64.bat` sourced), and
-the OpenCV leg needs vcpkg's manifest installed first.
-
-### Optional: the CAD kernel
-
-STEP export needs OpenCascade — about 1 GB of wheels, and deliberately not a
-core requirement.
-
-```bash
-pip install ".[cad]"
-```
-
-Without it the catalog reports `step` as unavailable **with a reason**, and
-STL/GLB/JSON are unaffected.
-
-## 📡 API Reference
-
-The backend provides a comprehensive REST API for interacting with the engines and managing jobs.
-
-- **System**: `GET /api/health`, `GET /api/engines`
-- **Execution**: `POST /api/execute`, `POST /api/math/solve`, `POST /api/cad/generate`, `POST /api/requirements/execute`
-- **Intelligence (Stage 4)**: `POST /api/intelligence/stream-plan` (SSE token
-  streaming), `POST /api/agents/coder/run`, `POST /api/agents/researcher/run`
-  (multi-step loops), `POST /api/workflows/execute` (multi-node DAG with
-  per-node status and `{node:<id>}.<path>` dependency threading)
-- **State**: `GET /api/jobs`, `GET /api/jobs/{job_id}`, `GET /api/artifacts/{artifact_id}`
-
-### Connecting your own LLM
-
-The model surface works with any **OpenAI-compatible** `chat/completions`
-endpoint — self-hosted, keyless, no account:
-
-| Variable | Required | Meaning |
-| --- | --- | --- |
-| `TRINITY_MODEL_ENDPOINT` | yes | The **full** `chat/completions` URL, OpenAI wire shape |
-| `TRINITY_MODEL_NAME` | no | Model name sent in the body (default: `local-model`) |
-| `TRINITY_MODEL_API_KEY` | no | Sent as `Authorization: Bearer <key>` only when set — some gateways demand any non-empty key |
-
-```bash
-# Ollama — pull a model first, then expose its OpenAI-compatible route
-ollama pull llama3.1
-export TRINITY_MODEL_ENDPOINT=http://127.0.0.1:11434/v1/chat/completions
-export TRINITY_MODEL_NAME=llama3.1
-
-# LM Studio (local server tab) / llama.cpp-server / vLLM
-#   LM Studio:     http://127.0.0.1:1234/v1/chat/completions
-#   llama.cpp:     http://127.0.0.1:8080/v1/chat/completions
-#   vLLM:          http://127.0.0.1:8100/v1/chat/completions
-export TRINITY_MODEL_NAME=$(curl -s http://127.0.0.1:1234/v1/models | jq -r '.data[0].id')
-
-# PowerShell equivalent
-$env:TRINITY_MODEL_ENDPOINT = "http://127.0.0.1:11434/v1/chat/completions"
-$env:TRINITY_MODEL_NAME = "llama3.1"
-```
-
-The endpoint must be the **OpenAI-shaped** path — Ollama's native
-`/api/chat` route speaks a different wire format and will fail with an
-error that names the endpoint verbatim.
-
-**Attach-time vs call-time truth.** Configuration is checked at attach
-(the endpoint env var present or absent — that is all): with an endpoint
-configured but unreachable, calls fail with
-`local model request failed: …` surfaced verbatim in the response and
-the panel. Verify your attach with the product, not a health check:
-fill the AGENT WORKBENCH prompt and press RUN AGENT, or ask the PLAN
-panel to plan a request.
-
-**What turns on when a model is attached:** `POST
-/api/intelligence/stream-plan` streams real token deltas (the PLAN panel
-labels them "PLAN FROM MODEL — EDIT THEN EXECUTE") and closes with a
-validated executable plan; `POST /api/agents/{coder|researcher}/run`
-executes the multi-step loop. Any instruct-capable model works — the
-loop parses JSON action objects from ordinary replies; no tool-API
-support is required.
-
-**What stays deterministic, with or without an attach:** engine
-execution, DAG execution, jobs, and artifacts never consult the model.
-Without an endpoint these intelligence surfaces degrade honestly and
-label themselves: the PLAN panel plans via the deterministic router
-("PLAN FROM DETERMINISTIC ROUTER — NO MODEL ATTACHED") and the agent
-endpoints refuse with `capability_unavailable`, naming
-`TRINITY_MODEL_ENDPOINT`. Nothing pretends a model is attached.
-
-### Example Request (CAD Generation)
-
-```json
-POST /api/cad/generate
-{
-  "type": "quadcopter_frame",
-  "parameters": {
-    "overall_size": 50
-  },
-  "outputs": ["stl", "glb", "json", "step"]
-}
-```
-
-### Output Formats
-
-| Format | Availability | What it is |
-| --- | --- | --- |
-| `stl`, `glb`, `json` | always | Binary STL, GLB and the IR spec — pure Python, no kernel |
-| `step` | needs `pip install ".[cad]"` | AP214 faceted B-rep from OpenCascade |
-
-STEP availability is decided per environment, not assumed. `GET /api/cad/catalog`
-reports it under `outputs.step` with `available`, `schema`, `unit`,
-`representation` and — when it is off — the reason. Asking for a format that
-cannot be written never fails silently: the engine returns what it did write
-and names the rest under `result.unavailable_formats`.
-
-`step` is **faceted**: every triangle becomes a planar face, and each
-connected body of the mesh becomes its own solid. A cylinder arrives as a
-polygonal prism. It is a valid, importable, correctly-scaled solid — it is
-not parametric and not the original analytic surface. Parts are assembled
-from interpenetrating boxes, and STEP keeps those surfaces rather than
-booleaning them, so the file inherits the mesh's own self-intersections.
-Reported volume is a geometry self-check, not a bill of materials.
-
-Every engine operation securely returns a standardized envelope:
-`{ success, engine, operation, result, artifacts, validation, errors, job_id }`
-
-## 📖 Documentation
-
-For a deeper dive into the system's design patterns and capabilities, please refer to the [Architecture Documentation](docs/ARCHITECTURE.md).
-
-## 🧪 Testing
-
-Verification is the point of this system, so the tests are the interesting part.
-
-```bash
-# Python — 344 with the native bridge, 322 without
-python -m pytest -q
-
-# With engines: point at the binary. The bridge injects the Qt runtime
-# directory into the child's PATH itself (TRINITY_QT_BIN overrides).
-$env:TRINITY_NATIVE_EXEC = "app\native\build\debug-vcpkg\Debug\Trinity.exe"
-python -m pytest -q
-```
-
-The **browser suites** are the ones that earn their keep. They drive a real
-browser over the DevTools protocol — no Playwright, no puppeteer, nothing to
-install but Node — and they found 8 real product bugs, 6 of them in paths that
-had no coverage at all.
-
-```bash
-node frontend/e2e/run.mjs                  # all 10 suites, 81 assertions
-node frontend/e2e/run.mjs pcb vision       # just these two
-```
-
-It needs the stack already running and a browser listening:
-
-```powershell
-$edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-Start-Process $edge -ArgumentList '--headless=new','--remote-debugging-port=9222',`
-  '--user-data-dir=$env:TEMP\e2e','--no-first-run','about:blank'
-```
-
-Suites: `chat`, `firmware`, `math`, `pcb`, `registry`, `research`, `robotics`,
-`simulation`, `theme`, `vision` — one per engine, plus the registry. They run
-in CI too, in the `e2e` job of `native-windows.yml`.
-
-Native tests: `ctest` after a CMake build, or
-`app/native/build/<preset>/trinity_tests.exe`.
-
-### What is deliberately not tested
-
-LLM transport tests are skipped by design — they need a real `OPENAI_API_KEY`
-or `ANTHROPIC_API_KEY`, and a mocked one would only prove the mock. Without a
-key, `generate()` raises `CapabilityUnavailableError` rather than inventing an
-answer, and there are tests for *that*.
+### Design Record Flow
+1. Create a design via `/api/projects/from-design`
+2. View details via `/api/projects/{id}` or the UI `/projects/view/{id}`
+3. Export BOM as CSV via `/api/projects/{id}/bom.csv`
+4. Rebuild BOM from PCB via `/api/projects/{id}/bom/rebuild`
+5. Save and restore snapshots via the History tab
+
+### Eval Set
+- 38 prompts across domains: cad (10), pcb (9), firmware (6), math (7), mixed (6)
+- 24 PASS / 6 SKIP baseline, with 8 additional prompts for M29 close-out

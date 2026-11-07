@@ -1,0 +1,63 @@
+{
+  "record_id": "ref-esp32-i2c",
+  "record_schema_version": 1,
+  "created_at": "2026-11-05T08:03:14.583446+00:00",
+  "updated_at": "2026-11-05T08:03:14.583446+00:00",
+  "app_version": "1.0.0",
+  "pcb": {
+    "components": [
+      {
+        "ref": "R1",
+        "value": "1k",
+        "footprint": "R1206"
+      },
+      {
+        "ref": "U1",
+        "value": "ESP32-WROOM-32E",
+        "footprint": "QFN32"
+      }
+    ]
+  },
+  "firmware": {},
+  "holes": [],
+  "connectors": [],
+  "enclosure": {},
+  "bom": {
+    "lines": [
+      {
+        "ref": "R1",
+        "part": "",
+        "value": "1k",
+        "quantity": 1,
+        "package": "R1206"
+      },
+      {
+        "ref": "U1",
+        "part": "",
+        "value": "ESP32-WROOM-32E",
+        "quantity": 1,
+        "package": "QFN32"
+      }
+    ]
+  },
+  "power": {},
+  "engine_checks": [
+    {
+      "check_id": "c001",
+      "name": "BOM completeness",
+      "status": "pass",
+      "reason": "",
+      "location": "",
+      "evidence": "All refs populated"
+    },
+    {
+      "check_id": "c002",
+      "name": "Net connectivity",
+      "status": "pass",
+      "reason": "",
+      "location": "",
+      "evidence": "No unconnected nets"
+    }
+  ],
+  "overall_status": null
+}

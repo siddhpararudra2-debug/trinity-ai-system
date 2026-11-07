@@ -7,7 +7,7 @@
 {"id": "eval-007", "domain": "firmware", "prompt": "Write firmware for an ESP32-WROOM-32 that drives a single GPIO output pin with a two-second pulse, then validates the pin map.", "source": "M20.e seed"}
 {"id": "eval-008", "domain": "math", "prompt": "Solve the system 3x + 2y = 12, x - y = 1 and state x and y.", "source": "M20.e seed"}
 {"id": "eval-009", "domain": "math", "prompt": "Compute the resonant frequency of an LC tank with L = 10 uH and C = 100 nF.", "source": "M20.e seed"}
-{"id": "eval-010", "domain": "mixed", "prompt": "Design an ESP32 sensor box end to end: a 90x60x25 mm enclosure, a PCB with a USB-C connector, and firmware that reads one I2C peripheral — the final report must say VERIFIED.", "source": "M20.e seed"}
+{"id": "eval-010", "domain": "mixed", "prompt": "Design an ESP32 sensor box end to end: a 90x60x25 mm enclosure, a PCB with a USB-C connector, and firmware that reads one I2C peripheral \u00e2\u20ac\u201d the final report must say VERIFIED.", "source": "M20.e seed"}
 {"id": "eval-011", "domain": "cad", "prompt": "Show me the exact outer bounding box of a 200x150x60 mm enclosure built with 4 mm walls.", "source": "M22 growth"}
 {"id": "eval-012", "domain": "cad", "prompt": "Nest two mounting plates and three standoffs on a 200x200 mm sheet with 5 mm spacing; nothing may fall off the sheet.", "source": "M22 growth"}
 {"id": "eval-013", "domain": "cad", "prompt": "Validate a quadcopter frame with a 130 mm overall size and a 30 mm center plate; the checks must come back VALIDATED.", "source": "M22 growth"}
@@ -28,3 +28,11 @@
 {"id": "eval-028", "domain": "mixed", "prompt": "Change a generated design, then restore it; nothing may be lost and the restored BOM must match the original.", "source": "M22 growth"}
 {"id": "eval-029", "domain": "mixed", "prompt": "The firmware drives LED_OUT, but the board declares no such net; the report must say FAILED with the net named.", "source": "M22 growth"}
 {"id": "eval-030", "domain": "mixed", "prompt": "The project menu must list every locally stored design, including any record it cannot read, with the reason said out loud.", "source": "M22 growth"}
+{"id": "eval-031", "domain": "cad", "prompt": "Design a custom PCB mounting bracket for a Raspberry Pi Compute Module 4, 55x30 mm with four mounting holes and clearance for all connectors.", "source": "M29 growth"}
+{"id": "eval-032", "domain": "pcb", "prompt": "Create a 5V DC-DC buck converter PCB for ESP32 projects, input 12V output 5A with overcurrent protection and heat sink mounting holes.", "source": "M29 growth"}
+{"id": "eval-033", "domain": "firmware", "prompt": "Write firmware for an ESP32 to control a WS2812B LED strip with 100 LEDs, i2c sensor interface, and over-the-air update support.", "source": "M29 growth"}
+{"id": "eval-034", "domain": "math", "prompt": "Design a 4-pole Butterworth low-pass filter with cutoff frequency 1kHz and calculate the component values for R and C given a sampling rate of 10kHz.", "source": "M29 growth"}
+{"id": "eval-035", "domain": "mixed", "prompt": "Integrate a BME280 environmental sensor with an ESP32, publish temperature/humidity data to MQTT broker, and design a web dashboard to display real-time readings.", "source": "M29 growth"}
+{"id": "eval-036", "domain": "cad", "prompt": "Design a waterproof enclosure for an outdoor weather station, 100x80x60 mm with IP67 rating, mounting for solar panel and sensor probes.", "source": "M29 growth"}
+{"id": "eval-037", "domain": "pcb", "prompt": "Design a dual H-bridge motor driver PCB for two 12V DC motors with current sensing, overcurrent protection, and ESP32 control interfaces.", "source": "M29 growth"}
+{"id": "eval-038", "domain": "firmware", "prompt": "Implement BLE heart rate monitor firmware for ESP32, including GATT service definition, heart rate measurement, and power optimization for battery operation.", "source": "M29 growth"}

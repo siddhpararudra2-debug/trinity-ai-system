@@ -1,28 +1,28 @@
 import React from 'react';
 
-type TableRowProps = {
+export type TableRowProps = {
   children: React.ReactNode;
   className?: string;
 };
 
-type TableCellProps = {
+export type TableCellProps = {
   children: React.ReactNode;
   className?: string;
 };
 
-type TableHeaderProps = {
+export type TableHeaderProps = {
   children: React.ReactNode;
   className?: string;
 };
 
-type TableBodyProps = {
+export type TableBodyProps = {
   children: React.ReactNode;
   className?: string;
 };
 
 export const Table = React.forwardRef<
   HTMLTableElement,
-  { className?: string }
+  { className?: string; children?: React.ReactNode }
 >(({ className, children }, ref) => (
   <table ref={ref} className={className}>{children}</table>
 ));
@@ -41,10 +41,7 @@ TableHeader.displayName = 'TableHeader';
 export const TableRow = ({
   className,
   children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) => (
+}: TableRowProps) => (
   <tr className={className}>{children}</tr>
 );
 

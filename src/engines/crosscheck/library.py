@@ -27,7 +27,7 @@ from typing import Any
 from src.engines.crosscheck.record import DesignRecord, DesignRecordError
 from src.engines.crosscheck.report import assemble_report
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # Go up from library.py to project root
 LIBRARY_ROOT = REPO_ROOT / "data" / "reference" / "library"
 CANDIDATES_ROOT = REPO_ROOT / "data" / "reference" / "candidates"
 
@@ -120,13 +120,14 @@ def library_designs() -> list[dict[str, Any]]:
                 meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
                 # Determine overall status from engine checks
                 checks = record.engine_checks
-                overall = "PASS"
+                overall = "UNKNOWN"
                 if checks:
-                    all_pass = all(c.status == "pass" for c in checks)
-                    failed_any = any(c.status == "fail" for c in checks)
-                    if all_pass:
+                    # Engine check statuses: VALIDATED, VERIFIED, FAILED, WARN, etc.
+                    all_validated = all(c.get('status') == "VALIDATED" for c in checks)
+                    any_failed = any(c.get('status') == "FAILED" for c in checks)
+                    if all_validated:
                         overall = "VERIFIED"
-                    elif failed_any:
+                    elif any_failed:
                         overall = "FAIL"
                     else:
                         overall = "PARTIAL"
@@ -136,12 +137,12 @@ def library_designs() -> list[dict[str, Any]]:
                         "overall_status": overall,
                         "checks": [
                             {
-                                "check_id": c.check_id,
-                                "name": c.name,
-                                "status": c.status,
-                                "reason": c.reason,
-                                "location": c.location,
-                                "evidence": c.evidence,
+                                "check_id": c['check_id'],
+                                "name": c['name'],
+                                "status": c['status'],
+                                "reason": c['reason'],
+                                "location": c['location'],
+                                "evidence": c['evidence'],
                             }
                             for c in checks
                         ]
@@ -183,8 +184,8 @@ def candidate_designs() -> list[dict[str, Any]]:
                 checks = record.engine_checks
                 overall = "PASS"
                 if checks:
-                    all_pass = all(c.status == "pass" for c in checks)
-                    failed_any = any(c.status == "fail" for c in checks)
+                    all_pass = all(c.get('status') == "pass" for c in checks)
+                    failed_any = any(c.get('status') == "fail" for c in checks)
                     if all_pass:
                         overall = "VERIFIED"
                     elif failed_any:
@@ -197,12 +198,12 @@ def candidate_designs() -> list[dict[str, Any]]:
                         "overall_status": overall,
                         "checks": [
                             {
-                                "check_id": c.check_id,
-                                "name": c.name,
-                                "status": c.status,
-                                "reason": c.reason,
-                                "location": c.location,
-                                "evidence": c.evidence,
+                                "check_id": c['check_id'],
+                                "name": c['name'],
+                                "status": c['status'],
+                                "reason": c['reason'],
+                                "location": c['location'],
+                                "evidence": c['evidence'],
                             }
                             for c in checks
                         ]

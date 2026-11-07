@@ -1,0 +1,7 @@
+{
+  "design_id": "ref-uart",
+  "added_on": "2026-11-06T12:01:30.096872Z",
+  "verified": true,
+  "notes": "UART-to-USB Bridge",
+  "probes": []
+}

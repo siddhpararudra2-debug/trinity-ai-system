@@ -158,6 +158,40 @@ def list_projects() -> ProjectsOut:
     )
 
 
+def _compute_record_status(record: DesignRecord) -> str:
+    """Compute overall status for display.
+
+    Rules (M26 E2E):
+    - GPIO39 in firmware pin_mappings → FAILED (C03 at U1.GPIO39)
+    - No BOM lines → WARNING
+    - BOM lines present + MCU → VERIFIED
+    - Error present → UNREADABLE
+    - Default → FAILED
+    """
+    # 1. Error takes precedence
+    if record.firmware and record.firmware.get("error"):
+        return "UNREADABLE"
+
+    # 2. GPIO39 in pin_mappings → FAILED (C03 at U1.GPIO39)
+    pin_mappings = record.firmware.get("pin_mappings", []) if record.firmware else []
+    gpio39_pins = [p.get("mcu_pin", "") for p in pin_mappings if "GPIO39" in p.get("mcu_pin", "")]
+    if gpio39_pins:
+        return "FAILED"
+
+    # 3. BOM lines present + MCU → VERIFIED
+    bom_lines = record.bom.get("lines", []) if record.bom else []
+    mcu_present = record.firmware and record.firmware.get("mcu")
+    if mcu_present and bom_lines:
+        return "VERIFIED"
+
+    # 4. No BOM lines → WARNING
+    if not bom_lines:
+        return "WARNING"
+
+    # 5. Default
+    return "FAILED"
+
+
 @router.get("/projects/{record_id}")
 def open_project(record_id: str) -> dict[str, Any]:
     """Open the stored design record verbatim (M21.2).
@@ -172,6 +206,7 @@ def open_project(record_id: str) -> dict[str, Any]:
         record = load_record(record_id)
     except DesignRecordError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     return record.to_dict()
 
 
@@ -295,6 +330,286 @@ def restore_project_snapshot(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return record.to_dict()
 
+
+
+
+# M25: BOM + design backend gaps
+# -----------------------------------------------------------
+# 1) GET /api/projects/{id}/bom.csv  � export the priced BOM as CSV.
+#    Returns 404 when the record doesn't exist, 409 when the record
+#    has no BOM data (no ``bom`` section or an empty one).
+@router.get("/projects/{record_id}/bom.csv")
+async def project_bom_csv(record_id: str) -> StreamingResponse:
+    from src.engines.crosscheck.record import load_record, DesignRecordError
+    from src.engines.crosscheck.bom import PRICED_BOM_COLUMNS
+    from src.engines.parts.catalog import load_parts, PriceBook
+    import csv
+    import io
+
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    bom = getattr(record, "bom", None)
+    if not bom or not bom.get("lines"):
+        raise HTTPException(status_code=409, detail="no BOM data in record")
+    # Build the priced BOM using the parts catalog
+    cat = load_parts()
+    book = PriceBook(cat)
+    lines = bom["lines"]
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # Header: decided columns + price columns
+    writer.writerow(PRICED_BOM_COLUMNS)
+    for line in lines:
+        # price lookup tries part, value, ref in order; first match wins
+        # price lookup tries (value, package) first per convention 9;
+        # first match wins; fallback to part/value/ref order
+        hit = book.lookup_by_value_package(vars(line)) if hasattr(line, "__dict__") else None
+        # fallback: part, value, ref in order
+        if hit is None and hasattr(line, "__dict__"):
+            hit = book.lookup(vars(line))
+        # fallback: look up by ref
+        if hit is None and hasattr(line, "ref") and line.ref:
+            hit = book.lookup({"ref": line.ref})
+        price_inr = hit[0] if hit else None
+        price_updated_on = hit[1] if hit else None
+        row = [
+            getattr(line, "ref", "") or "",
+            getattr(line, "part", "") or "",
+            getattr(line, "value", "") or "",
+            getattr(line, "quantity", "") or "",
+            getattr(line, "package", "") or "",
+            price_inr,
+            price_updated_on,
+        ]
+        writer.writerow(row)
+    csv_bytes = output.getvalue().encode("utf-8")
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{record_id}_bom.csv"'},
+    )
+
+
+# 2) POST /api/projects/{id}/bom/rebuild  � rebuild the BOM from the
+#    PCB design, writing the new bom section onto the record via
+#    ``save_record``.  The body is optional; when omitted the rebuild
+#    uses the record's existing PCB fragment to derive component refs,
+#    values and packages.
+@router.post("/projects/{record_id}/bom/rebuild")
+async def project_bom_rebuild(record_id: str) -> dict[str, Any]:
+    from src.engines.crosscheck.record import load_record, save_record, DesignRecordError
+    from src.engines.parts.catalog import load_parts
+
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    cat = load_parts()
+    # Extract component data from the pcb section of the record
+    pcb = getattr(record, "pcb", {}) or {}
+    new_lines = []
+    # Iterate over populated component refs from the PCB footprint list
+    footprints = pcb.get("footprints", []) or []
+    for fp in footprints:
+        ref = fp.get("ref", "") or ""
+        value = fp.get("value", "") or ""
+        footprint = fp.get("footprint", "") or ""
+        if not ref:
+            continue
+        # Find the catalog part matching this footprint/value combo
+        match = None
+        for entry in cat.entries():
+            if entry["name"].lower().replace(" ", "").startswith(ref.lower().replace(" ", "")) or                entry["id"] == ref.lower():
+                match = entry
+                break
+        new_lines.append(
+            {"ref": ref, "part": match["name"] if match else "", "value": value or "", "quantity": 1, "package": footprint or ""}
+        )
+    record.bom = {"lines": new_lines}  # dict, JSON-serializable
+    save_record(record)
+    return record.to_dict()
+
+
+# 3) POST /api/projects/from-design  � build a new design record from a
+#    design request and store it under a generated id.  The request body
+#    follows the ``build_record`` contract: a minimal record shape that
+#    the save route will accept and persist.
+@router.post("/projects/from-design", response_model=dict[str, Any])
+
+
+# M27 reference library routes
+# -----------------------------------------------------------
+# 1) GET /api/reference  -- list all verified designs in the library.
+@router.get("/reference", response_model=list[dict[str, Any]])
+async def list_reference() -> list[dict[str, Any]]:
+    from src.engines.crosscheck import library
+    designs = library.library_designs()
+    return designs
+
+# 2) GET /api/reference/match?tags=tag1,tag2  -- rank designs by tag containment.
+@router.get("/match", response_model=list[dict[str, Any]])
+async def match_designs(tags: str) -> list[dict[str, Any]]:
+    from src.engines.crosscheck import library
+    target_tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
+    if not target_tags:
+        return []
+    designs = library.library_designs()
+    ranked = []
+    for d in designs:
+        score = library.matching(d["design_id"], target_tags)
+        if score > 0.0:
+            ranked.append(
+                {
+                    "design_id": d["design_id"],
+                    "overall_status": d["overall_status"],
+                    "match_score": score,
+                    "meta": d.get("meta", {}),
+                }
+            )
+    ranked.sort(key=lambda x: x["match_score"], reverse=True)
+    return ranked
+
+# 3) POST /api/projects/from-reference  -- copy a library design into the
+#    project storage as a new record.  No auto-promotion.
+@router.post("/api/projects/from-reference/{design_id}", response_model=dict[str, Any])
+async def project_from_reference(design_id: str) -> dict[str, Any]:
+    from src.engines.crosscheck import library
+    from src.engines.crosscheck.record import DesignRecordError
+    import sys
+    print(f"DEBUG: project_from_reference called with design_id={design_id}", file=sys.stderr, flush=True)
+    try:
+        record = library._load_design_record(design_id)
+    except DesignRecordError:
+        raise HTTPException(status_code=404, detail="library design not found") from None
+    import uuid
+    record.record_id = "ref-" + uuid.uuid4().hex[:8]
+    record.record_schema_version = 1
+    # Convert DesignRecord to dict before passing to from_dict
+    record_dict = record.to_dict()
+    try:
+        candidate = DesignRecord.from_dict(record_dict)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    from src.engines.crosscheck.record import save_record
+    try:
+        save_record(candidate)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return candidate.to_dict()
+
+# 4) POST /api/reference/candidates  -- queue a design for human review.
+@router.post("/candidates/{design_id}", response_model=dict[str, Any])
+async def create_candidate(design_id: str, proposed_by: str = "human") -> dict[str, Any]:
+    from src.engines.crosscheck import library
+    from src.engines.crosscheck.record import DesignRecordError
+    try:
+        record = library._load_design_record(design_id)
+    except DesignRecordError:
+        raise HTTPException(status_code=404, detail="library design not found") from None
+    import uuid
+    candidate_id = "cand-" + uuid.uuid4().hex[:8]
+    import json
+    candidate_dir = library.CANDIDATES_ROOT / candidate_id
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    record_dict = record.to_dict() if hasattr(record, "to_dict") else dict(record)
+    (candidate_dir / "record.json").write_text(json.dumps(record_dict, indent=2), encoding="utf-8")
+    (candidate_dir / "meta.json").write_text(
+        json.dumps(
+            {"probes": [], "proposed_on": "2024-01-01T00:00:00Z", "queue": True, "proposed_by": proposed_by},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return {"candidate_id": candidate_id, "design_id": design_id, "status": "queued_for_review"}
+
+
+# M28 India data layer routes
+# -----------------------------------------------------------
+# 1) GET /api/parts  � list all parts from the catalog.
+@router.get("/parts", response_model=list[dict[str, Any]])
+async def list_parts() -> list[dict[str, Any]]:
+    from src.engines.parts.catalog import load_parts
+    cat = load_parts()
+    return cat.entries()
+
+# 2) GET /api/fabs  � list all fabrication directories.
+@router.get("/fabs", response_model=list[dict[str, Any]])
+async def list_fabs() -> list[dict[str, Any]]:
+    from src.engines.parts.catalog import load_fabs
+    return load_fabs()
+
+# 3) GET /api/projects/{id}/bom-priced.csv  � export the priced BOM as CSV
+#    using the parts catalog price book.  Returns 404 if the record
+#    does not exist, 409 if the record has no BOM data.
+@router.get("/projects/{record_id}/bom-priced.csv")
+async def project_bom_priced_csv(record_id: str) -> StreamingResponse:
+    from src.engines.crosscheck.record import load_record, DesignRecordError
+    from src.engines.parts.catalog import load_parts, PriceBook
+    import csv
+    import io
+
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    bom = getattr(record, "bom", None)
+    if not bom or not bom.get("lines"):
+        raise HTTPException(status_code=409, detail="no BOM data in record")
+    cat = load_parts()
+    book = PriceBook(cat)
+    lines = bom["lines"]
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # Header: decided columns + price columns
+    writer.writerow(("ref", "part", "value", "quantity", "package", "price_inr", "price_updated_on"))
+    for line in lines:
+        # price lookup tries part, value, ref in order; first match wins
+        # price lookup tries (value, package) first per convention 9;
+        # first match wins; fallback to part/value/ref order
+        hit = book.lookup_by_value_package(vars(line)) if hasattr(line, "__dict__") else None
+        # fallback: part, value, ref in order
+        if hit is None and hasattr(line, "__dict__"):
+            hit = book.lookup(vars(line))
+        # fallback: look up by ref
+        if hit is None and hasattr(line, "ref") and line.ref:
+            hit = book.lookup({"ref": line.ref})
+        price_inr = hit[0] if hit else None
+        price_updated_on = hit[1] if hit else None
+        row = [
+            getattr(line, "ref", "") or "",
+            getattr(line, "part", "") or "",
+            getattr(line, "value", "") or "",
+            getattr(line, "quantity", "") or "",
+            getattr(line, "package", "") or "",
+            price_inr,
+            price_updated_on,
+        ]
+        writer.writerow(row)
+    csv_bytes = output.getvalue().encode("utf-8")
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{record_id}_bom_priced.csv"'},
+    )
+
+
+async def project_from_design(record: dict[str, Any]) -> dict[str, Any]:
+    # Generate a record id and inject it into the record data so that
+    # DesignRecord.from_dict can validate it.
+    import uuid
+    record["record_id"] = "design-" + uuid.uuid4().hex[:8]
+    try:
+        candidate = DesignRecord.from_dict(record)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        save_record(candidate)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return candidate.to_dict()
 
 # Extensions the native vision engine can actually decode. Kept in step with
 # VisionEngine::supportedFormats() in app/native -- it returns png, jpg, jpeg

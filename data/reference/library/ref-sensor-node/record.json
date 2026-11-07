@@ -1,0 +1,61 @@
+{
+  "record_id": "ref-sensor-node",
+  "overall_status": null,
+  "engine_checks": [
+    {
+      "artifact": "pcb",
+      "op": "validate",
+      "status": "VALIDATED"
+    },
+    {
+      "artifact": "firmware",
+      "op": "validate",
+      "status": "VERIFIED"
+    },
+    {
+      "artifact": "cad",
+      "op": "nest",
+      "status": "VALIDATED"
+    }
+  ],
+  "tags": [
+    "esp32",
+    "bme280",
+    "sensor",
+    "iot"
+  ],
+  "firmware": {
+    "mcu": "ESP32",
+    "pin_mappings": [
+      {
+        "mcu_pin": "GPIO21",
+        "function": "i2c_sda"
+      },
+      {
+        "mcu_pin": "GPIO22",
+        "function": "i2c_scl"
+      }
+    ]
+  },
+  "pcb": {
+    "footprints": [
+      {
+        "ref": "U1",
+        "value": "ESP32-WROOM-32",
+        "footprint": "ESP32-WROOM-32"
+      }
+    ]
+  },
+  "bom": {
+    "lines": [
+      {
+        "ref": "U1",
+        "part": "ref-sensor-node-part",
+        "value": "ESP32-WROOM-32",
+        "quantity": 1,
+        "package": "ESP32-WROOM-32"
+      }
+    ]
+  },
+  "record_schema_version": 1
+}

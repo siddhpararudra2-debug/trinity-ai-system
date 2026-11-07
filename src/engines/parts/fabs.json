@@ -1,0 +1,21 @@
+{
+  "provenance": "Indian PCB fabrication directories (Proway, Edesign, Sarskon, Sanjaya, PCBkits etc). Stated capabilities drawn from public directories.",
+  "updated_on": "2026-09-30",
+  "fabs": [
+    {"id": "fab-001", "name": "Proway Electronic Manufacturing", "city": "Pune", "capabilities": ["pcb_fabrication", "smt_assembly", "box_build"]},
+    {"id": "fab-002", "name": "Edesign Labs", "city": "Bangalore", "capabilities": ["pcb_fabrication", "prototype_pcb"]},
+    {"id": "fab-003", "name": "Sarakon Systems", "city": "Bangalore", "capabilities": ["pcb_fabrication", "quick_turn"]},
+    {"id": "fab-004", "name": "Sanjaya Electronics Fab", "city": "Mumbai", "capabilities": ["pcb_fabrication", "smt_assembly"]},
+    {"id": "fab-005", "name": "Imsys Prototyping", "city": "Chennai", "capabilities": ["pcb_fabrication", "cnc_routing"]},
+    {"id": "fab-006", "name": "Circuits King Fab", "city": "Delhi", "capabilities": ["pcb_fabrication", "rapid_prototyping"]},
+    {"id": "fab-007", "name": "AeroPCB Services", "city": "Hyderabad", "capabilities": ["aerospace_pcb", "hdi_pcb"]},
+    {"id": "fab-008", "name": "Kishore Industries Circuits", "city": "Pune", "capabilities": ["pcb_fabrication", "silkscreen", "drilling"]},
+    {"id": "fab-009", "name": "Nova PCB Solutions", "city": "Bangalore", "capabilities": ["pcb_fabrication", "pcb_assembly"]},
+    {"id": "fab-010", "name": "Rapidx Circuit Fab", "city": "Mumbai", "capabilities": ["pcb_fabrication", "quick_turn"]},
+    {"id": "fab-011", "name": "Sunil Fabworks", "city": "Ahmedabad", "capabilities": ["pcb_fabrication", "smt_assembly"]},
+    {"id": "fab-012", "name": "Rapid Turn Circuits", "city": "Chennai", "capabilities": ["pcb_fabrication", "fast_turn"]},
+    {"id": "fab-013", "name": "Krishna Circuit Board", "city": "Delhi", "capabilities": ["pcb_fabrication", "solder_mask"]},
+    {"id": "fab-014", "name": "Fibertech PCB", "city": "Hyderabad", "capabilities": ["rf_pcb", "high_speed"]},
+    {"id": "fab-015", "name": "National Circuits (NATCO)", "city": "Bangalore", "capabilities": ["pcb_fabrication", "box_build"]}
+  ]
+}

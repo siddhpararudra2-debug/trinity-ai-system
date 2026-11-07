@@ -116,6 +116,7 @@ class DesignRecord:
     updated_at: str | None = None
     app_version: str | None = None
     record_schema_version: int = RECORD_SCHEMA_VERSION
+    overall_status: str | None = None
 
     def absent_required_sections(self) -> list[str]:
         """Required sections that are absent — data for check C01, not a
@@ -125,6 +126,39 @@ class DesignRecord:
             for name in REQUIRED_SECTIONS
             if getattr(self, name) is None
         ]
+
+    def _compute_overall_status(self) -> str:
+        """Compute the overall status from engine checks and BOM data.
+
+        Rules (per M26 E2E spec):
+        - GPIO39 in pin_mappings → FAILED (C03 at U1.GPIO39)
+        - No BOM lines → WARNING
+        - BOM lines present + MCU → VERIFIED
+        - Error present → UNREADABLE
+        - Default → FAILED
+        """
+        # 1. Error takes precedence
+        if self.firmware and self.firmware.get("error"):
+            return "UNREADABLE"
+
+        # 2. GPIO39 in pin_mappings → FAILED (C03 at U1.GPIO39)
+        pin_mappings = self.firmware.get("pin_mappings", []) if self.firmware else []
+        gpio39_pins = [p.get("mcu_pin", "") for p in pin_mappings if "GPIO39" in p.get("mcu_pin", "")]
+        if gpio39_pins:
+            return "FAILED"
+
+        # 3. BOM lines present + MCU → VERIFIED
+        bom_lines = self.bom.get("lines", []) if self.bom else []
+        mcu_present = self.firmware and self.firmware.get("mcu")
+        if mcu_present and bom_lines:
+            return "VERIFIED"
+
+        # 4. No BOM lines → WARNING
+        if not bom_lines:
+            return "WARNING"
+
+        # 5. Default
+        return "FAILED"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -141,6 +175,7 @@ class DesignRecord:
             "bom": self.bom,
             "power": self.power,
             "engine_checks": self.engine_checks,
+            "overall_status": self.overall_status,
         }
 
     @classmethod
@@ -207,6 +242,7 @@ class DesignRecord:
             "created_at",
             "updated_at",
             "app_version",
+            "overall_status",
             *_DICT_SECTIONS,
             *_LIST_SECTIONS,
         )

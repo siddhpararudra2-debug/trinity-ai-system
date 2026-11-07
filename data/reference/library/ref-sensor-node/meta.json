@@ -1,0 +1,7 @@
+{
+  "design_id": "ref-sensor-node",
+  "added_on": "2026-11-06T12:01:30.093375Z",
+  "verified": true,
+  "notes": "BME280 Sensor Node",
+  "probes": []
+}

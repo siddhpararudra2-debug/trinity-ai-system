@@ -1,6 +1,6 @@
 import React from 'react';
 
-type TabListProps = {
+export type TabListProps = {
   children: React.ReactNode;
   className?: string;
   defaultValue?: string;
@@ -8,13 +8,14 @@ type TabListProps = {
   onValueChange?: (value: string) => void;
 };
 
-type TabProps = {
+export type TabProps = {
   value: string;
   children: React.ReactNode;
   className?: string;
+  onClick?: () => void;
 };
 
-type TabPanelProps = {
+export type TabPanelProps = {
   value: string;
   children: React.ReactNode;
   className?: string;
@@ -27,11 +28,16 @@ export function TabList({
   value,
   onValueChange,
 }: TabListProps) {
+  const activeValue = value ?? defaultValue;
   return (
-    <div className={className} role="tablist">
+    <div className={className} role="tablist" data-active={activeValue}>
       {React.Children.toArray(children).map((child) => {
-        const childValue = child.props.value || child.key;
-        return React.cloneElement(child, {
+        if (!React.isValidElement(child)) {
+          return child;
+        }
+        const childProps = child.props as Record<string, unknown>;
+        const childValue = (childProps.value as string | undefined) ?? (typeof child.key === 'string' ? child.key : undefined);
+        return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
           value: childValue,
           onValueChange,
         });
@@ -42,13 +48,14 @@ export function TabList({
 
 TabList.displayName = 'TabList';
 
-export function Tab({ value, className, children }: TabProps) {
+export function Tab({ value, className, children, onClick }: TabProps) {
   return (
     <div
       role="tab"
-      selected={true}
+      aria-selected={true}
+      data-value={value}
       className={className}
-      onClick={() => {}}
+      onClick={onClick}
     >
       {children}
     </div>
@@ -58,7 +65,12 @@ export function Tab({ value, className, children }: TabProps) {
 Tab.displayName = 'Tab';
 
 export function TabPanel({ value, className, children }: TabPanelProps) {
-  return <div role="tabpanel" className={className}>{children}</div>;
+  return (
+    <div role="tabpanel" data-value={value} className={className}>
+      {children}
+    </div>
+  );
 }
 
 TabPanel.displayName = 'TabPanel';
+

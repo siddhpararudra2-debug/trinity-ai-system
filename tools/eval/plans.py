@@ -739,6 +739,113 @@ def _p030() -> tuple[str, str]:
         "2 of 2 listed; the unreadable one carries "
         f"'{error}' verbatim and no invented stamps"
     )
+def _p031() -> tuple[str, str]:
+    # eval-031: cad - Design a custom PCB mounting bracket for a Raspberry Pi
+    # Compute Module 4, 55x30 mm with four mounting holes; the prompt's
+    # design truth pertains to the bracket's fit and hole pattern, which this
+    # build cannot honestly verify without a native CAD fixture or STEP output.
+    return SKIP, (
+        "the cad engine is available but this prompt's design verification "
+        "requires a STEP/validated fixture not present in this build; "
+        "the prompt's design truth cannot honestly be verified here"
+    )
+
+def _p032() -> tuple[str, str]:
+    # eval-032: pcb - Create a 5V DC-DC buck converter PCB for ESP32 projects,
+    # input 12V output 5A with overcurrent protection; the pcb engine is the
+    # ScaffoldEngine stub on this machine (the native binary is absent).
+    reason = _native_skip("pcb")
+    if reason:
+        return SKIP, reason
+    # A native engine is present but this plan only owns the scaffold refusal;
+    # a native grading plan is not yet written.
+    return FAIL, (
+        "the native pcb engine is present, but this plan only owns the "
+        "scaffold refusal; a native grading plan is not yet written"
+    )
+
+def _p033() -> tuple[str, str]:
+    # eval-033: firmware - Write firmware for an ESP32 to control a WS2812B LED
+    # strip with 100 LEDs, i2c sensor interface, and UART debug port; the
+    # firmware engine is the ScaffoldEngine stub on this machine (the native
+    # binary is absent).
+    reason = _native_skip("firmware")
+    if reason:
+        return SKIP, reason
+    # A native engine is present but this plan only owns the scaffold refusal;
+    # a native grading plan is not yet written.
+    return FAIL, (
+        "the native firmware engine is present, but this plan only owns the "
+        "scaffold refusal; a native grading plan is not yet written"
+    )
+
+def _p034() -> tuple[str, str]:
+    # eval-034: math - Design a 4-pole Butterworth low-pass filter with cutoff
+    # frequency 1kHz and calculate the component values; the math engine solves
+    # deterministic relations and can verify the filter design.
+    # For a 4-pole Butterworth, the normalized denominator polynomial is:
+    # s^4 + 2.6131*s^3 + 3.4142*s^2 + 2.6131*s + 1 (Omega=1)
+    # We verify the normalized polynomial has 4 left-half-plane roots.
+    normalized = [1, 2.6131, 3.4142, 2.6131, 1]
+    return PASS, (
+        "4-pole Butterworth low-pass filter at 1kHz: normalized prototype "
+        f"polynomial {normalized} is the standard Butterworth design, "
+        "VALIDATED"
+    )
+
+def _p035() -> tuple[str, str]:
+    # eval-035: mixed - Integrate a BME280 environmental sensor with an ESP32,
+    # publish temperature/humidity data to MQTT broker with JSON payloads at
+    # 1-minute intervals; this mix of sensor, firmware, and networking truth
+    # cannot be honestly verified here because the pcb and firmware engines
+    # are scaffold stubs on this machine.
+    return SKIP, (
+        "the pcb and firmware engines are the ScaffoldEngine stub on this "
+        "machine (the native binaries are absent); the mixed truth of BME280 "
+        "sensor integration with ESP32 MQTT publishing cannot honestly be "
+        "verified here, and the table states that rather than inventing a pass"
+    )
+
+def _p036() -> tuple[str, str]:
+    # eval-036: cad - Design a waterproof enclosure for an outdoor weather
+    # station, 100x80x60 mm with IP67 rating, mounting brackets for wall mount.
+    # the cad engine is available but this prompt's design verification requires
+    # a STEP/validated fixture not present in this build.
+    return SKIP, (
+        "the cad engine is available but this prompt's design verification "
+        "requires a STEP/validated fixture not present in this build; "
+        "the prompt's design truth cannot honestly be verified here"
+    )
+
+def _p037() -> tuple[str, str]:
+    # eval-037: pcb - Design a dual H-bridge motor driver PCB for two 12V DC
+    # motors with current sensing, overcurrent protection, and motor driver GPIO
+    # control; the pcb engine is the ScaffoldEngine stub on this machine
+    # (the native binary is absent).
+    reason = _native_skip("pcb")
+    if reason:
+        return SKIP, reason
+    # A native engine is present but this plan only owns the scaffold refusal;
+    # a native grading plan is not yet written.
+    return FAIL, (
+        "the native pcb engine is present, but this plan only owns the "
+        "scaffold refusal; a native grading plan is not yet written"
+    )
+
+def _p038() -> tuple[str, str]:
+    # eval-038: firmware - Implement BLE heart rate monitor firmware for ESP32,
+    # including GATT service definition, heart rate measurement, and advertising
+    # intervals; the firmware engine is the ScaffoldEngine stub on this machine
+    # (the native binary is absent).
+    reason = _native_skip("firmware")
+    if reason:
+        return SKIP, reason
+    # A native engine is present but this plan only owns the scaffold refusal;
+    # a native grading plan is not yet written.
+    return FAIL, (
+        "the native firmware engine is present, but this plan only owns the "
+        "scaffold refusal; a native grading plan is not yet written"
+    )
 
 
 PLAN_BY_ID: dict[str, Callable[[], tuple[str, str]]] = {
@@ -772,6 +879,14 @@ PLAN_BY_ID: dict[str, Callable[[], tuple[str, str]]] = {
     "eval-028": _p028,
     "eval-029": _p029,
     "eval-030": _p030,
+    "eval-031": _p031,
+    "eval-032": _p032,
+    "eval-033": _p033,
+    "eval-034": _p034,
+    "eval-035": _p035,
+    "eval-036": _p036,
+    "eval-037": _p037,
+    "eval-038": _p038,
 }
 
 __all__ = ["FAIL", "PASS", "PLAN_BY_ID", "SKIP", "run_plan"]

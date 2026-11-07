@@ -1,6 +1,6 @@
 import React from 'react';
 
-type BadgeProps = {
+export type BadgeProps = {
   children: React.ReactNode;
   variant?: 'default' | 'destructive' | 'secondary' | 'outline';
   className?: string;
@@ -12,7 +12,7 @@ export function Badge({
   children,
 }: BadgeProps) {
   return (
-    <span className={className}>
+    <span data-variant={variant} className={className}>
       {children}
     </span>
   );
