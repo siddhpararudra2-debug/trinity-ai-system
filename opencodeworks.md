@@ -1084,3 +1084,10 @@ Last full run, against a freshly built native binary:
 | ruff + lint + build | clean |
 
 LLM transport tests are permanently skipped by decision â€” no API keys.
+## Stage 13 — Accounts, Billing, Trust Plans (new)
+- [ ] M30 accounts (1.5 wks). Signup, verify, login, refresh, logout, reset, delete my account. In-app login screen; signed-out use stays on the free tier. Tests: lockout, expired tokens, replayed reset links.
+- [ ] M31 trust pages (1 wk). Privacy, terms, refund and cancellation, design ownership, linked in the footer (About and Contact exist). Draft from the user's facts only and mark each "DRAFT - needs lawyer review" until the user removes it. Record policy version and time at signup. No training on user designs unless the user decides otherwise.
+- [ ] M32 billing (1.5 wks). Plans from config. Checkout, webhook with signature check, deduped by event id. States: trialing, active, past_due, cancelled, expired. Cancel and refund follow the refund page. Tests from sample webhooks: duplicate, out-of-order, bad signature.
+- [ ] M33 plans and limits (1 wk). Signed plan token, offline verify, grace. Meter LLM calls per day, exports, saved designs. Over a limit, show a plain message naming the plan and limit, never a silent failure. The free tier keeps all Stage 12 features working.
+- [ ] M34 business basics (1 wk). Error reports (opt-in, no design contents). Minimal events with a visible opt-out. In-app feedback button (text plus app version) posting to the cloud, and a CLI to read it.
+- [ ] M35 launch check (3-4 days). Staging run in test mode: signup, verify, subscribe, webhook, token, cancel, offline. Backups, secrets, auth review, installer pointing at the production API. Production keys only after the user confirms legal sign-off.
