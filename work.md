@@ -78,7 +78,7 @@ M35 launch check (3-4 days). [ pending ]
 
 A1 XLSX BOM [pending - needs XLSX library + test data with price columns]
 A2 Enclosure lid [pending - needs lid design datasheets + enclosure fit measurements]
-A3 Skipped eval prompts [pending - needs Windows run outputs + fixture data + --require-native flag]
+A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
 A5 Literature RAG [pending - needs embedding model choice + document chunking infrastructure + ~15 retrieval evals]
 A6 Router [pending - needs LLM link-up from other developer + model config + fake client infrastructure]

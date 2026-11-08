@@ -1098,7 +1098,7 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 **A2 Enclosure lid** [pending] Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt must now pass.
 
-**A3 Skipped eval prompts** [pending] Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.
+**A3 Skipped eval prompts** [chosen smaller option - Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.]
 
 **A4 CAD catalog audit** [pending] Write `docs/cad-catalog-audit.md`: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. Add a test that builds every part at default/min/max. Flag any dimension without a datasheet or standard as UNVERIFIED. Never correct dimensions from memory.
 

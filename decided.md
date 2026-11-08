@@ -45,7 +45,7 @@
 
 **A2 Enclosure lid (3-4 days).** Add a lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output a separate lid part (STEP/STL). Update the board-fits-enclosure check to use inner height with the lid fitted. The skipped eval prompt must now pass. [NEEDS: lid design datasheets, enclosure fit measurements]
 
-**A3 Skipped eval prompts (3 days).** Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping. [NEEDS: Windows run outputs, fixture data, --require-native flag]
+**A3 Skipped eval prompts (3 days).** Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping. [NEEDS: Windows run outputs, fixture data, --require-native flag] **__(CHOSEN SMALLER OPTION for Stage 14 first implementation)__**
 
 **A4 CAD catalog audit (1 wk).** Write `docs/cad-catalog-audit.md`: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. Add a test that builds every part at default/min/max. Flag any dimension without a datasheet or standard as UNVERIFIED. Never correct dimensions from memory. [NEEDS: CAD part datasheets, build test infrastructure]
 
