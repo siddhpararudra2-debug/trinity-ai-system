@@ -11,7 +11,7 @@ asserts, in order:
   3. /chat resolves through the .html retry
   4. an engine execution answers -- through the bundled native bridge on
      Windows, through the Python math engine on Linux
-  5. (linux) a native-backed engine refuses with the honest
+  5. (linux) a native-only capability refuses with the honest
      capability_unavailable reason inside the frozen bundle -- absence
      must be stated, never papered over
   6. the OpenCascade kernel works IN THE BUNDLE: the catalog reports
@@ -82,8 +82,8 @@ def main() -> int:
     if args.platform == "windows":
         env["TRINITY_NATIVE_EXEC"] = str(dist / "native" / "Trinity.exe")
         env["TRINITY_QT_BIN"] = str(dist / "native")
-    # Linux: deliberately no TRINITY_NATIVE_EXEC -- the bridge must keep
-    # the six native-backed engines on ScaffoldEngine and refuse them
+    # Linux: deliberately no TRINITY_NATIVE_EXEC -- Python fallbacks may
+    # serve supported operations, while native-only operations must refuse
     # honestly; that refusal is what step 5 below proves.
 
     # The API's own log is the only evidence when the frozen process dies
@@ -159,14 +159,13 @@ def main() -> int:
         findings.append("engine probe ok")
 
         # --- M16 (linux): absence must be stated, never papered over ----
-        # Inside the frozen bundle, a native-backed engine answers with
-        # the scaffold's honest capability_unavailable refusal. Probe an
-        # op the scaffold actually advertises: pcb lists validate, not
-        # create, and a scaffold refuses any op — asking for an
-        # unadvertised one would prove nothing about a real capability.
+        # Python fallbacks are intentionally available for PCB validation
+        # and other supported operations. Probe a vision operation that is
+        # explicitly native-only instead, and require its honest
+        # capability_unavailable refusal inside the frozen bundle.
         if args.platform == "linux":
             body = json.dumps({
-                "engine": "pcb", "operation": "validate",
+                "engine": "vision", "operation": "geometry_extract",
                 "parameters": {},
             }).encode()
             req = urllib.request.Request(
@@ -176,10 +175,10 @@ def main() -> int:
                 out = json.loads(resp.read())
             codes = [e.get("code") for e in (out.get("errors") or [])]
             if out.get("success") or "capability_unavailable" not in codes:
-                print(f"FAIL: linux bundle must refuse native-backed "
+                print(f"FAIL: linux bundle must refuse native-only "
                       f"engines honestly: {out}", file=sys.stderr)
                 return 1
-            findings.append("native-backed refusal honest")
+            findings.append("native-only refusal honest")
 
         # --- M11: the bundled OpenCascade kernel must genuinely work ------
         # The catalog is pure registry read; `step` flips to available only
