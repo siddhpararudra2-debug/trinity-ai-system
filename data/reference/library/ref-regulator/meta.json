@@ -3,5 +3,6 @@
   "added_on": "2026-11-06T12:01:30.092024Z",
   "verified": true,
   "notes": "ESP32 Regulator",
-  "probes": []
+  "probes": [],
+  "user_corrections": []
 }

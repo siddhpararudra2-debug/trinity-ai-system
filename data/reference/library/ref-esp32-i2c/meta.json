@@ -3,5 +3,6 @@
   "added_on": "2026-11-05T08:03:14.584446+00:00",
   "verified": true,
   "notes": "ESP32 dev board with I2C peripheral",
-  "probes": []
+  "probes": [],
+  "user_corrections": []
 }

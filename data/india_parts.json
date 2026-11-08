@@ -1,0 +1,110 @@
+{
+  "parts": [
+    {
+      "part_id": "resistor_kv",
+      "description": "Resistor 1k ohm 1/4W",
+      "category": "passive",
+      "inr_price": 1,
+      "currency": "INR",
+      "fab_availability": "always",
+      "suppliers": [
+        "Han Tech",
+        "New Cat Components"
+      ],
+      "footprints": [
+        "R1206",
+        "R0805"
+      ]
+    },
+    {
+      "part_id": "capacitor_10uF",
+      "description": "Capacitor 10uF 25V",
+      "category": "passive",
+      "inr_price": 5,
+      "currency": "INR",
+      "fab_availability": "usually",
+      "suppliers": [
+        "Han Tech",
+        "Solar Electronics"
+      ],
+      "footprints": [
+        "C1206",
+        "C0805"
+      ]
+    },
+    {
+      "part_id": "esp32-wroom",
+      "description": "ESP32-WROOM-32E module",
+      "category": "module",
+      "inr_price": 250,
+      "currency": "INR",
+      "fab_availability": "usually",
+      "suppliers": [
+        "Ai-Thinker",
+        "Espressif Official"
+      ],
+      "footprints": [
+        "QFN32"
+      ]
+    },
+    {
+      "part_id": "led_5mm_red",
+      "description": "5mm Red LED",
+      "category": "passive",
+      "inr_price": 2,
+      "currency": "INR",
+      "fab_availability": "always",
+      "suppliers": [
+        "Han Tech",
+        "Local Electronics"
+      ],
+      "footprints": [
+        "Through-hole"
+      ]
+    },
+    {
+      "part_id": "bme280-sensor",
+      "description": "BME280 environmental sensor",
+      "category": "sensor",
+      "inr_price": 350,
+      "currency": "INR",
+      "fab_availability": "sometimes",
+      "suppliers": [
+        "Bosch Official",
+        "Han Tech"
+      ],
+      "footprints": [
+        "SMD-8"
+      ]
+    },
+    {
+      "part_id": "pcb_fabric_standard",
+      "description": "Standard 2-layer PCB (100x80mm)",
+      "category": "fabrication",
+      "inr_price": 500,
+      "currency": "INR",
+      "fab_availability": "usually",
+      "suppliers": [
+        "PCBWay India",
+        "JLCPCB India"
+      ],
+      "lead_time_days": 3,
+      "min_order": 1
+    },
+    {
+      "part_id": "pcb_fabric_4layer",
+      "description": "4-layer PCB (100x80mm)",
+      "inr_price": 1500,
+      "currency": "INR",
+      "fab_availability": "sometimes",
+      "suppliers": [
+        "PCBWay India",
+        "JLCPCB India"
+      ],
+      "lead_time_days": 5,
+      "min_order": 1
+    }
+  ],
+  "generated": "08-11-2026",
+  "currency": "INR"
+}
