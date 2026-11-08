@@ -72,6 +72,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.dummy is the documented swap-me-everything dummy configuration.
+# It ships ONLY dummy values (no live secrets) so the repo reproduces
+# the whole dummy deployment from a checkout.
+!.env.dummy
 
 # vercel
 .vercel
