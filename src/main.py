@@ -3,6 +3,12 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env.dummy from the repository root
+# main.py is at src/main.py, so parents[1] = project root
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(str(_PROJECT_ROOT / ".env.dummy"))
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError as FastAPIValidationError

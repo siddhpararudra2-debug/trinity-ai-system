@@ -23,6 +23,37 @@ CORS_ORIGINS: tuple[str, ...] = tuple(
     if origin.strip()
 )
 
+# --- Authentication (Item 9) ---
+AUTH_ENABLED = os.getenv("TRINITY_AUTH_ENABLED", "false").lower() == "true"
+JWT_SECRET = os.getenv("TRINITY_JWT_SECRET", "")
+SESSION_TIMEOUT_MINUTES = int(
+    os.getenv("TRINITY_SESSION_TIMEOUT_MINUTES", "43200")
+)
+
+# --- Safe Execution (Item 10) ---
+SAFE_EXECUTION_ENABLED = os.getenv("SAFE_EXECUTION_ENABLED", "false").lower() == "true"
+SAFE_EXECUTION_TIMEOUT_SECONDS = int(
+    os.getenv("SAFE_EXECUTION_TIMEOUT_SECONDS", "300")
+)
+SAFE_EXECUTION_MAX_RETRIES = int(os.getenv("SAFE_EXECUTION_MAX_RETRIES", "3"))
+SAFE_EXECUTION_PER_USER_LIMIT = int(os.getenv("SAFE_EXECUTION_PER_USER_LIMIT", "5"))
+
+# --- Trust / business details (Item 12) ---
+TRINITY_COMPANY_NAME = os.getenv("TRINITY_COMPANY_NAME", "Trinity AI Systems")
+TRINITY_DOMAIN = os.getenv("TRINITY_DOMAIN", "example.com")
+TRINITY_ADMIN_EMAIL = os.getenv("TRINITY_ADMIN_EMAIL", "admin@example.com")
+TRINITY_SUPPORT_EMAIL = os.getenv("TRINITY_SUPPORT_EMAIL", "support@example.com")
+TRINITY_ABOUT_TEXT = os.getenv("TRINITY_ABOUT_TEXT", "")
+TRINITY_PRIVACY_POLICY = os.getenv("TRINITY_PRIVACY_POLICY", "")
+TRINITY_TERMS_OF_SERVICE = os.getenv("TRINITY_TERMS_OF_SERVICE", "")
+TRINITY_DESIGN_OWNERSHIP = os.getenv("TRINITY_DESIGN_OWNERSHIP", "")
+
+# --- Feedback / analytics (Item 13) ---
+# Empty TRINITY_FEEDBACK_ENDPOINT means feedback is stored in the local log only.
+TRINITY_FEEDBACK_ENDPOINT = os.getenv("TRINITY_FEEDBACK_ENDPOINT", "")
+TRINITY_LOGGING_ENABLED = os.getenv("TRINITY_LOGGING_ENABLED", "true").lower() == "true"
+TRINITY_ANALYTICS_ENABLED = os.getenv("TRINITY_ANALYTICS_ENABLED", "false").lower() == "true"
+
 
 @dataclass(frozen=True)
 class Settings:
