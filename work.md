@@ -73,3 +73,18 @@ M35 launch check (3-4 days). [ pending ]
 - Staging run in test mode: signup, verify, subscribe, webhook, token, cancel, offline
 - Backups, secrets, auth review, installer pointing at the production API
 - Production keys only after the user confirms legal sign-off
+
+### Stage 14 — Remaining Gaps [ pending ]
+
+A1 XLSX BOM [pending - needs XLSX library + test data with price columns]
+A2 Enclosure lid [pending - needs lid design datasheets + enclosure fit measurements]
+A3 Skipped eval prompts [pending - needs Windows run outputs + fixture data + --require-native flag]
+A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
+A5 Literature RAG [pending - needs embedding model choice + document chunking infrastructure + ~15 retrieval evals]
+A6 Router [pending - needs LLM link-up from other developer + model config + fake client infrastructure]
+A7 Explain and Fix [pending - needs report data structure + citation validation + patch validation + snapshot infrastructure + UI buttons]
+B1 Native engine audit [pending - needs hosted decision + Linux build assessment or Windows workers]
+B2 Workers [pending - blocked on B1 hosted decision]
+B3 Sandbox and limits [pending - needs hosted decision + plan token integration]
+
+One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

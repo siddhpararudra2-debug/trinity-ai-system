@@ -1084,10 +1084,39 @@ Last full run, against a freshly built native binary:
 | ruff + lint + build | clean |
 
 LLM transport tests are permanently skipped by decision â€” no API keys.
-## Stage 13 — Accounts, Billing, Trust Plans (new)
+## Stage 13 ï¿½ Accounts, Billing, Trust Plans (new)
 - [ ] M30 accounts (1.5 wks). Signup, verify, login, refresh, logout, reset, delete my account. In-app login screen; signed-out use stays on the free tier. Tests: lockout, expired tokens, replayed reset links.
 - [ ] M31 trust pages (1 wk). Privacy, terms, refund and cancellation, design ownership, linked in the footer (About and Contact exist). Draft from the user's facts only and mark each "DRAFT - needs lawyer review" until the user removes it. Record policy version and time at signup. No training on user designs unless the user decides otherwise.
 - [ ] M32 billing (1.5 wks). Plans from config. Checkout, webhook with signature check, deduped by event id. States: trialing, active, past_due, cancelled, expired. Cancel and refund follow the refund page. Tests from sample webhooks: duplicate, out-of-order, bad signature.
 - [ ] M33 plans and limits (1 wk). Signed plan token, offline verify, grace. Meter LLM calls per day, exports, saved designs. Over a limit, show a plain message naming the plan and limit, never a silent failure. The free tier keeps all Stage 12 features working.
 - [ ] M34 business basics (1 wk). Error reports (opt-in, no design contents). Minimal events with a visible opt-out. In-app feedback button (text plus app version) posting to the cloud, and a CLI to read it.
 - [ ] M35 launch check (3-4 days). Staging run in test mode: signup, verify, subscribe, webhook, token, cancel, offline. Backups, secrets, auth review, installer pointing at the production API. Production keys only after the user confirms legal sign-off.
+
+### Stage 14 - Remaining Gaps (new) [pending]
+
+**A1 XLSX BOM** [pending] `GET /api/projects/{id}/bom.xlsx` via openpyxl, same columns as CSV plus price columns when present. Second sheet: record id, snapshot id, report status. No formulas. Test: reopen, compare to CSV.
+
+**A2 Enclosure lid** [pending] Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt must now pass.
+
+**A3 Skipped eval prompts** [pending] Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.
+
+**A4 CAD catalog audit** [pending] Write `docs/cad-catalog-audit.md`: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. Add a test that builds every part at default/min/max. Flag any dimension without a datasheet or standard as UNVERIFIED. Never correct dimensions from memory.
+
+**A5 Literature RAG** [pending] Chunk the existing documents with source and page. Local embedding model by default (offline), named in config. Keep keyword search as fallback. Show only retrieved passages with source; below a score threshold, say "not found". Add ~15 retrieval evals.
+
+**A6 Router** [pending] One `ModelClient` interface over the existing clients. Model per task from config, fallback order, timeout, and a log of which model answered (no design content). The rule-based router stays first; tests assert zero model calls on matched requests, and cover timeout, error and fallback with fake clients.
+
+**A7 Explain and Fix** [pending]
+- **Explain:** read-only. Every claim cites a check id or record field from the report. Test that each cited id exists.
+- **Fix:** takes a FAILED report and returns a record patch. The server validates the patch with the normal loaders and shows a diff. Only after the user confirms does it save (a snapshot is made first), re-run Inspect, and show before and after. If a new FAIL appears, offer a one-click restore. Max 3 attempts. Tests: good patch, invalid patch refused, patch that makes things worse.
+- **UI:** "Explain" and "Propose fix" buttons on the Report tab.
+
+**B1 Native engine audit** [pending] Record what the PCB/firmware engine is and whether a Linux build is possible. Choose Linux build or Windows workers; default to Windows workers unless a Linux build is cheap.
+
+**B2 Workers** [pending] Implement B1's choice. Linux refuses PCB/firmware until done.
+
+**B3 Sandbox and limits** [pending] Containers with no network, read-only filesystem, CPU/memory/process limits and a timeout. Add a queue, a per-user concurrent job cap and a daily compute budget from the plan token.
+
+Track B runs only if the user goes fully hosted.
+
+One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
