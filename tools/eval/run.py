@@ -34,6 +34,11 @@ _DOMAINS = {"cad", "pcb", "firmware", "math", "mixed"}
 # the same contract).
 _PROMPT_KEYS = {"id", "domain", "prompt", "source"}
 
+#: When set, the runner FAILs instead of SKIPing prompts whose engine
+#: is the ScaffoldEngine stub (native binary absent). Meant for CI / Windows
+#: run enforcement: ``TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run``.
+REQUIRE_NATIVE = False
+
 
 def _redirect_storage() -> None:
     """Point engine writes at an isolated root, never at repo data."""
@@ -125,7 +130,13 @@ def _print_table(rows: list[dict[str, str]]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    del argv  # the runner takes no arguments by contract
+    # Support ``--require-native`` so that, on a machine where the native
+    # binary is absent, prompts that would SKIP are instead FAILED.  This
+    # is intended for CI / Windows‑run enforcement.
+    if argv is None and "--require-native" in sys.argv:
+        os.environ["TRINITY_REQUIRE_NATIVE"] = "1"
+    elif argv is not None and "--require-native" in argv:
+        os.environ["TRINITY_REQUIRE_NATIVE"] = "1"
     _redirect_storage()
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -137,6 +148,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"eval set refused: {exc}")
         return 1
     rows = [plans.run_plan(record) for record in prompts]
+    # If --require-native was given, upgrade any SKIP whose detail mentions
+    # the native binary being absent to a FAIL — this enforces honest
+    # verdicts when a native build is required.
+    if os.getenv("TRINITY_REQUIRE_NATIVE"):
+        for row in rows:
+            if row["verdict"] == "SKIP" and "native binary is absent" in row.get("detail", ""):
+                row["verdict"] = "FAIL"
     _print_table(rows)
     return 1 if any(row["verdict"] == "FAIL" for row in rows) else 0
 

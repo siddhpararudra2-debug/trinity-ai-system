@@ -17,6 +17,7 @@ verdicts below are reproducible by ``python tools/eval/run.py`` and by
 from __future__ import annotations
 
 import copy
+import os
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -54,8 +55,19 @@ def _native_skip(engine_name: str) -> str | None:
 
     Probes ``describe()`` rather than executing: the stub is registered
     so callers can discover the refusal without an exception.
+
+    Returns the human-readable skip reason, or ``None`` if the engine
+    is not a scaffold stub on this machine.
     """
-    status = _engine(engine_name).describe().get("status")
+    global _ENGINES_BOOTED
+    if not _ENGINES_BOOTED:
+        from src.engines.registry import bootstrap_engines, registry
+
+        bootstrap_engines()
+        _ENGINES_BOOTED = True
+    from src.engines.registry import registry
+
+    status = registry.get(engine_name).describe().get("status")
     if status == "scaffolded":
         return (
             f"{engine_name} is the ScaffoldEngine stub on this machine "
