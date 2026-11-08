@@ -270,11 +270,27 @@ def _extract_math(text: str) -> dict | None:
     expression = match.group(1).strip().strip("'\"")
     if not expression:
         raise RequestValidationError("'expression' is required for math.solve")
+
+    # Natural phrasing "Solve 2*x + 3*4 - 6 for x" — strip the trailing
+    # "for <variable>" clause (and any final punctuation) and hand the
+    # variable to the engine as solve_for instead of leaving it inside
+    # the expression where sympy would honestly choke on it.
+    split = re.match(
+        r"^(?P<expr>.*\S)\s+for\s+(?P<var>[A-Za-z]\w*)\s*[.?!]?$",
+        expression,
+        re.IGNORECASE,
+    )
+    parameters: dict[str, Any] = {"expression": expression}
+    if split:
+        parameters = {
+            "expression": split.group("expr").strip().strip("'\""),
+            "solve_for": split.group("var"),
+        }
     return {
         "domain": "math",
         "operation": "solve",
         "object": "expression",
-        "parameters": {"expression": expression},
+        "parameters": parameters,
         "units": "",
     }
 
