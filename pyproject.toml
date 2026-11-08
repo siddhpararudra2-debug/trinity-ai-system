@@ -14,6 +14,10 @@ dependencies = [
     "openai>=1.0",
     "anthropic>=0.34",
     "python-multipart>=0.0.9",
+    # POST /api/login mints and validates JWTs (import jwt).
+    "pyjwt>=2.8",
+    # src/main.py loads .env.dummy for the zero-code-edit runtime config.
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

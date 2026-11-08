@@ -9,6 +9,7 @@ prints the pass/fail table and exits 0 with no FAIL.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -179,10 +180,23 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     # test verifies output content rather than exit code.
     assert completed.stdout is not None
     assert "38 prompts" in completed.stdout
-    # EVal baseline: 25 PASS / 0 FAIL / 13 SKIP of 38. A FAIL is a
-    # regression; undevelopable paths SKIP with their reasons, always
-    # visible in the table, never hidden.
-    assert "25 PASS / 0 FAIL / 13 SKIP of 38" in completed.stdout
+    # Baseline truth is environment-conditional: eval-003 honestly
+    # requires the native STEP kernel (cadquery/OCP). With the kernel
+    # installed the baseline is 25 PASS / 0 FAIL / 13 SKIP of 38; without
+    # it the same prompt demotes to SKIP and the baseline is
+    # 24 PASS / 0 FAIL / 14 SKIP of 38 (the CI backend env, CI #214).
+    # Either way, any FAIL verdict or a structural change to the 38-prompt
+    # total is a regression; SKIP reasons stay stated, never hidden.
+    has_step_kernel = (
+        importlib.util.find_spec("cadquery") is not None
+        or importlib.util.find_spec("OCP") is not None
+    )
+    expected_summary = (
+        "25 PASS / 0 FAIL / 13 SKIP of 38"
+        if has_step_kernel
+        else "24 PASS / 0 FAIL / 14 SKIP of 38"
+    )
+    assert expected_summary in completed.stdout
     # The fallback engines are visible in the table, never hidden:
     # they name the missing native binary instead of inventing a pass.
     assert "Python fallback engine on this machine" in completed.stdout
