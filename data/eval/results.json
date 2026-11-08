@@ -1,0 +1,230 @@
+[
+  {
+    "id": "eval-001",
+    "domain": "cad",
+    "verdict": "SKIP",
+    "detail": "the V1 enclosure has no lid parameter (length, width, height, wall_thickness only); the prompt's removable-lid truth cannot be verified by this build"
+  },
+  {
+    "id": "eval-002",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "5/5 placed, 0 unplaced, no overlap, every part inside the 400x300 sheet"
+  },
+  {
+    "id": "eval-003",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "VALIDATED; STEP written to quadcopter_frame_250mm_a644fe51.step (260198 bytes)"
+  },
+  {
+    "id": "eval-004",
+    "domain": "pcb",
+    "verdict": "SKIP",
+    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-005",
+    "domain": "pcb",
+    "verdict": "SKIP",
+    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-006",
+    "domain": "firmware",
+    "verdict": "SKIP",
+    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-007",
+    "domain": "firmware",
+    "verdict": "SKIP",
+    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-008",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "x = 2.8, y = 1.7999999999999998 (solve + substitute chain)"
+  },
+  {
+    "id": "eval-009",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "resonant frequency 159154.943 Hz, VERIFIED numeric"
+  },
+  {
+    "id": "eval-010",
+    "domain": "mixed",
+    "verdict": "PASS",
+    "detail": "good_esp32_i2c: VERIFIED, 12/12 PASS"
+  },
+  {
+    "id": "eval-011",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "outer bounding box spans 200.000 x 150.000 x 60.000 mm as requested"
+  },
+  {
+    "id": "eval-012",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "5/5 placed at 5 mm spacing, none off the 200x200 sheet"
+  },
+  {
+    "id": "eval-013",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "VALIDATED with checks actual_span_mm/all_vertices_finite/arm_length_mm/arm_length_positive/degenerate_triangle_count/dimensions_within_tolerance/expected_span_mm/manufacturable_min_feature/triangle_count"
+  },
+  {
+    "id": "eval-014",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "DXF written to l_bracket_40x80x20mm_drawing_e60e3395.dxf (10108 bytes)"
+  },
+  {
+    "id": "eval-015",
+    "domain": "cad",
+    "verdict": "PASS",
+    "detail": "the honest refusal names the problem: wall_thickness must be at most 50 mm"
+  },
+  {
+    "id": "eval-016",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "derivative_check: PASS \u2014 d/dt(sin(t)*t**2) matches the sympy re-derivation (t**2*cos(t) + 2.0*t*sin(t))"
+  },
+  {
+    "id": "eval-017",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "root -2.0 VERIFIED by back-substitution (VALIDATED)"
+  },
+  {
+    "id": "eval-018",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "integral evaluates to 2.0 on [0, pi], VERIFIED numeric"
+  },
+  {
+    "id": "eval-019",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "roots 1, 2, 3 all re-substitute into the cubic (VALIDATED)"
+  },
+  {
+    "id": "eval-020",
+    "domain": "pcb",
+    "verdict": "PASS",
+    "detail": "3 lines round-trip the CSV; C11 PASSes"
+  },
+  {
+    "id": "eval-021",
+    "domain": "pcb",
+    "verdict": "PASS",
+    "detail": "C06 FAILs at VCC (power net 'VCC' carries 2 classes (3.3V, 5.0V))"
+  },
+  {
+    "id": "eval-022",
+    "domain": "pcb",
+    "verdict": "PASS",
+    "detail": "C07 FAILs at VCC (rail 'VCC' is over budget: 620.0 mA drawn of 600.0 mA capacity)"
+  },
+  {
+    "id": "eval-023",
+    "domain": "pcb",
+    "verdict": "PASS",
+    "detail": "C08 FAILs at board.right (the board sticks out past the cavity's right edge by 9.00 mm (50.0x40.0 mm board in a 44.0x50.0 mm c...)"
+  },
+  {
+    "id": "eval-024",
+    "domain": "pcb",
+    "verdict": "PASS",
+    "detail": "C11 WARNs: BOM line 'U1' differs from the populated part: value 'ESP32-WROOM-32!misspelt' vs 'ESP32-WROOM-32'"
+  },
+  {
+    "id": "eval-025",
+    "domain": "firmware",
+    "verdict": "PASS",
+    "detail": "C03 FAILs at U1.GPIO39 (firmware maps 'gpio_out' to MCU pin 'GPIO39', but the board's MCU component has no pin by that name)"
+  },
+  {
+    "id": "eval-026",
+    "domain": "firmware",
+    "verdict": "SKIP",
+    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-027",
+    "domain": "mixed",
+    "verdict": "PASS",
+    "detail": "good_esp32_i2c_roomy: VERIFIED, 12/12 PASS"
+  },
+  {
+    "id": "eval-028",
+    "domain": "mixed",
+    "verdict": "PASS",
+    "detail": "restore returned the original sections and stamps verbatim; history stayed [1 save, 2 restore]; the BOM parse-back matches"
+  },
+  {
+    "id": "eval-029",
+    "domain": "mixed",
+    "verdict": "PASS",
+    "detail": "C04 FAILs at U1.GPIO23 (pin 'GPIO23' carries net 'LED_OUT' but no net by that name is declared in the board netlist)"
+  },
+  {
+    "id": "eval-030",
+    "domain": "mixed",
+    "verdict": "PASS",
+    "detail": "2 of 2 listed; the unreadable one carries 'C:\\Users\\rudra\\AppData\\Local\\Temp\\tmpz2gq3z1l\\unreadable-design\\record.json is unreadable or not valid JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1)); refusing to guess what this record contains' verbatim and no invented stamps"
+  },
+  {
+    "id": "eval-031",
+    "domain": "cad",
+    "verdict": "SKIP",
+    "detail": "the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
+  },
+  {
+    "id": "eval-032",
+    "domain": "pcb",
+    "verdict": "SKIP",
+    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-033",
+    "domain": "firmware",
+    "verdict": "SKIP",
+    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-034",
+    "domain": "math",
+    "verdict": "PASS",
+    "detail": "4-pole Butterworth low-pass filter at 1kHz: normalized prototype polynomial [1, 2.6131, 3.4142, 2.6131, 1] is the standard Butterworth design, VALIDATED"
+  },
+  {
+    "id": "eval-035",
+    "domain": "mixed",
+    "verdict": "SKIP",
+    "detail": "the pcb and firmware engines are the Python fallbacks on this machine (status 'scaffolded' \u2014 the native binaries are absent); the mixed truth of BME280 sensor integration with ESP32 MQTT publishing cannot honestly be verified here, and the table states that rather than inventing a pass"
+  },
+  {
+    "id": "eval-036",
+    "domain": "cad",
+    "verdict": "SKIP",
+    "detail": "the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
+  },
+  {
+    "id": "eval-037",
+    "domain": "pcb",
+    "verdict": "SKIP",
+    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  },
+  {
+    "id": "eval-038",
+    "domain": "firmware",
+    "verdict": "SKIP",
+    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+  }
+]

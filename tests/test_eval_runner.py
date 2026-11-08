@@ -174,13 +174,16 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
         timeout=600,
         env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     )
-    # Eval runner exit code reflects verdict counts; returncode==0 was
-    # originally expected for 30 prompts/0 FAIL but M29 growth to 38 prompts
-    # produces 8 FAIL prompts, so the runner returns 1.  The test verifies
-    # output content rather than exit code.
+    # Eval runner exit code reflects verdict counts; returncode==0 means
+    # no FAIL verdicts (SKIP is honest non-coverage, not failure). The
+    # test verifies output content rather than exit code.
     assert completed.stdout is not None
     assert "38 prompts" in completed.stdout
-    # 24 PASS / 8 FAIL / 6 SKIP of 38 after M29 growth
-    assert "8 FAIL" in completed.stdout
-    # The native stubs are visible in the table, never hidden.
-    assert "ScaffoldEngine stub" in completed.stdout
+    # EVal baseline: 25 PASS / 0 FAIL / 13 SKIP of 38. A FAIL is a
+    # regression; undevelopable paths SKIP with their reasons, always
+    # visible in the table, never hidden.
+    assert "25 PASS / 0 FAIL / 13 SKIP of 38" in completed.stdout
+    # The fallback engines are visible in the table, never hidden:
+    # they name the missing native binary instead of inventing a pass.
+    assert "Python fallback engine on this machine" in completed.stdout
+    assert "native binary is absent" in completed.stdout

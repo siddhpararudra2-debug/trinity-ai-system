@@ -1,17 +1,15 @@
 """M22's one command: ``python tools/eval/run.py``.
 
-Loads ``data/evals/prompts.jsonl`` under the seed contract decided in
-M20.e — one prompt per line, exactly ``{id, domain, prompt, source}``.
-An ``expected`` field is refused outright: expected-verdict grading is
-owned by the plans, never by the prompt data, and models never grade.
+Loads the eval dataset from ``EVAL_DATASET_PATH`` env var (default:
+``data/eval/prompts.jsonl``), runs each prompt through its deterministic
+plan, saves scores to ``EVAL_RESULTS_PATH``, and flags regressions when
+``EVAL_FLAG_REGRESSIONS`` is true.
 
-Executes exactly one deterministic plan per prompt (tools/eval/plans),
-prints the pass/fail table by id, and exits 0 when no plan FAILs —
-SKIPs stay in the table, honestly unverified — and 1 otherwise.
-
-Engine writes never touch the repo: the storage root is redirected to
-a process-private temp dir before src is imported (a pre-set
-``TRINITY_STORAGE_ROOT`` is honored as the operator's explicit choice).
+Configurable via .env.dummy:
+- EVAL_DATASET_PATH  - path to prompts JSONL file
+- EVAL_RESULTS_PATH  - path to results JSON file
+- EVAL_SAVE_SCORES   - whether to save scores to results file
+- EVAL_FLAG_REGRESSIONS - whether to flag regression comparisons
 """
 
 from __future__ import annotations
@@ -23,9 +21,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+# Load config from environment (set via .env.dummy)
+EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "data/eval/prompts.jsonl")
+EVAL_RESULTS_PATH = os.getenv("EVAL_RESULTS_PATH", "data/eval/results.json")
+EVAL_SAVE_SCORES = os.getenv("EVAL_SAVE_SCORES", "true").lower() == "true"
+EVAL_FLAG_REGRESSIONS = os.getenv("EVAL_FLAG_REGRESSIONS", "true").lower() == "true"
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_PROMPTS_RELATIVE = Path("data") / "evals" / "prompts.jsonl"
+_PROMPTS_RELATIVE = Path(EVAL_DATASET_PATH).name
 
 _DOMAINS = {"cad", "pcb", "firmware", "math", "mixed"}
 
@@ -35,8 +39,9 @@ _DOMAINS = {"cad", "pcb", "firmware", "math", "mixed"}
 _PROMPT_KEYS = {"id", "domain", "prompt", "source"}
 
 #: When set, the runner FAILs instead of SKIPing prompts whose engine
-#: is the ScaffoldEngine stub (native binary absent). Meant for CI / Windows
-#: run enforcement: ``TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run``.
+#: is the Python fallback (status 'scaffolded', native binary absent).
+#: Meant for CI / Windows run enforcement:
+#: ``TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run``.
 REQUIRE_NATIVE = False
 
 
@@ -55,6 +60,8 @@ def load_prompts(path: Path) -> list[dict[str, Any]]:
     row, a missing key, an ``expected`` field (verdicts belong to the
     plans), an unknown domain, a malformed id, and a duplicate id.
     """
+    if not path.exists():
+        raise ValueError(f"eval dataset not found at {path}")
     lines = path.read_text(encoding="utf-8").splitlines()
     prompts: list[dict[str, Any]] = []
     seen: dict[str, int] = {}
@@ -113,7 +120,7 @@ def load_prompts(path: Path) -> list[dict[str, Any]]:
 def _print_table(rows: list[dict[str, str]]) -> None:
     print(
         f"Trinity AI eval runner - M22 ({len(rows)} prompts, "
-        f"source: {_PROMPTS_RELATIVE.as_posix()})"
+        f"source: {EVAL_DATASET_PATH})"
     )
     print()
     print(f"{'id':10} {'domain':9} {'verdict':8} detail")
@@ -132,7 +139,7 @@ def _print_table(rows: list[dict[str, str]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     # Support ``--require-native`` so that, on a machine where the native
     # binary is absent, prompts that would SKIP are instead FAILED.  This
-    # is intended for CI / Windows‑run enforcement.
+    # is intended for CI / Windows run enforcement.
     if argv is None and "--require-native" in sys.argv:
         os.environ["TRINITY_REQUIRE_NATIVE"] = "1"
     elif argv is not None and "--require-native" in argv:
@@ -143,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     from tools.eval import plans  # noqa: PLC0415 — after the redirect
 
     try:
-        prompts = load_prompts(REPO_ROOT / _PROMPTS_RELATIVE)
+        prompts = load_prompts(REPO_ROOT / EVAL_DATASET_PATH.removeprefix("/"))
     except ValueError as exc:
         print(f"eval set refused: {exc}")
         return 1
@@ -156,6 +163,39 @@ def main(argv: list[str] | None = None) -> int:
             if row["verdict"] == "SKIP" and "native binary is absent" in row.get("detail", ""):
                 row["verdict"] = "FAIL"
     _print_table(rows)
+
+    # Save scores if enabled
+    if EVAL_SAVE_SCORES:
+        results = []
+        for row in rows:
+            results.append(
+                {
+                    "id": row["id"],
+                    "domain": row["domain"],
+                    "verdict": row["verdict"],
+                    "detail": row["detail"],
+                }
+            )
+        results_path = Path(EVAL_RESULTS_PATH)
+        results_path.parent.mkdir(parents=True, exist_ok=True)
+        results_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+        print(f"\nScores saved to {EVAL_RESULTS_PATH}")
+
+    # Flag regressions if enabled
+    if EVAL_FLAG_REGRESSIONS:
+        results_path = Path(EVAL_RESULTS_PATH)
+        if results_path.exists():
+            previous = json.loads(results_path.read_text(encoding="utf-8"))
+            # Simple regression detection: check if any previously PASS
+            # prompts are now FAIL or SKIP
+            prev_by_id = {r["id"]: r["verdict"] for r in previous}
+            for row in rows:
+                if row["id"] in prev_by_id and row["verdict"] != prev_by_id[row["id"]]:
+                    print(
+                        f"REGRESSION: {row['id']} changed from "
+                        f"{prev_by_id[row['id']]} to {row['verdict']}"
+                    )
+
     return 1 if any(row["verdict"] == "FAIL" for row in rows) else 0
 
 

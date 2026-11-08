@@ -53,11 +53,11 @@ def _engine(name: str) -> Any:
 def _native_skip(engine_name: str) -> str | None:
     """A skip reason when the engine is still the scaffold stub.
 
-    Probes ``describe()`` rather than executing: the stub is registered
-    so callers can discover the refusal without an exception.
+    Probes ``describe()`` rather than executing: the fallback is
+    registered so callers can discover the refusal without an exception.
 
     Returns the human-readable skip reason, or ``None`` if the engine
-    is not a scaffold stub on this machine.
+    offers native-grade behavior on this machine.
     """
     global _ENGINES_BOOTED
     if not _ENGINES_BOOTED:
@@ -70,10 +70,11 @@ def _native_skip(engine_name: str) -> str | None:
     status = registry.get(engine_name).describe().get("status")
     if status == "scaffolded":
         return (
-            f"{engine_name} is the ScaffoldEngine stub on this machine "
-            "(the native binary is absent); it cannot honestly run this "
-            "prompt, and the table states that rather than inventing a "
-            "pass"
+            f"{engine_name} is the Python fallback engine on this machine "
+            "(status 'scaffolded' — the native binary is absent); this "
+            "prompt's truth requires native-grade STEP/gerber fidelity the "
+            "fallback does not claim, so the honest verdict is SKIP, "
+            "not an invented pass"
         )
     return None
 
@@ -810,12 +811,14 @@ def _p035() -> tuple[str, str]:
     # publish temperature/humidity data to MQTT broker with JSON payloads at
     # 1-minute intervals; this mix of sensor, firmware, and networking truth
     # cannot be honestly verified here because the pcb and firmware engines
-    # are scaffold stubs on this machine.
+    # request native-grade STEP/gerber fidelity their Python fallbacks do not
+    # claim, and the native binaries are absent on this machine.
     return SKIP, (
-        "the pcb and firmware engines are the ScaffoldEngine stub on this "
-        "machine (the native binaries are absent); the mixed truth of BME280 "
-        "sensor integration with ESP32 MQTT publishing cannot honestly be "
-        "verified here, and the table states that rather than inventing a pass"
+        "the pcb and firmware engines are the Python fallbacks on this "
+        "machine (status 'scaffolded' — the native binaries are absent); "
+        "the mixed truth of BME280 sensor integration with ESP32 MQTT "
+        "publishing cannot honestly be verified here, and the table states "
+        "that rather than inventing a pass"
     )
 
 def _p036() -> tuple[str, str]:
