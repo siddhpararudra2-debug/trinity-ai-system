@@ -10,8 +10,6 @@ a verification report on generated designs.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 from src.engines.base import BaseEngine, EngineResult, ValidationResult

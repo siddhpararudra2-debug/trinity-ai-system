@@ -7,9 +7,7 @@ output from part definitions — no native binary required.
 
 from __future__ import annotations
 
-import json
 import tempfile
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -102,7 +100,6 @@ class PcbEngine(BaseEngine):
         height = float(parameters.get("height_mm", DEFAULT_BOARD_HEIGHT_MM))
         thickness = float(parameters.get("thickness_mm", DEFAULT_BOARD_THICKNESS_MM))
 
-        components = parameters.get("components", [])
         netlist = parameters.get("netlist", {})
 
         # Generate outline rectangle

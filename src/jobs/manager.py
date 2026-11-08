@@ -30,11 +30,9 @@ from src.core.config import (
     SAFE_EXECUTION_MAX_RETRIES,
     SAFE_EXECUTION_PER_USER_LIMIT,
     SAFE_EXECUTION_TIMEOUT_SECONDS,
-    settings,
 )
 from src.core.errors import JobNotFoundError, TrinityError
 from src.core.logging_config import get_logger
-from src.db.database import get_connection
 from src.db.database import get_connection
 from src.engines.registry import registry
 from src.models.schemas import JobOut

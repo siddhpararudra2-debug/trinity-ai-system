@@ -14,7 +14,6 @@ from src.engines import registry as registry_module
 from src.engines.pcb import PcbEngine
 from src.engines.research import engine as engine_module
 from src.engines.research.engine import ResearchEngine
-from src.engines.scaffold import ScaffoldEngine
 
 
 @pytest.fixture()

@@ -12,9 +12,11 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
+
+from src.embeddings import cosine_similarity, embed
 
 # ------------------------------------------------------------------
 # Simple in‑memory vector store (good for prototyping & dummy data)
@@ -37,7 +39,7 @@ class VectorStore:
     def __init__(self, dimension: int, similarity: str = "cosine") -> None:
         self.dimension = dimension
         self.similarity = similarity
-        self._vectors: List[Tuple[str, Vector, dict[str, Any]]] = []
+        self._vectors: list[tuple[str, Vector, dict[str, Any]]] = []
 
     def add(self, id: str, vector: Vector, metadata: dict[str, Any] | None = None) -> None:
         """Add a vector with an identifier and optional metadata."""
@@ -50,7 +52,7 @@ class VectorStore:
 
     def search(
         self, query_vector: Vector, k: int = 4
-    ) -> List[Tuple[str, float, dict[str, Any]]]:
+    ) -> list[tuple[str, float, dict[str, Any]]]:
         """Return the top‑k most similar vectors to *query_vector*.
 
         Returns
@@ -61,7 +63,7 @@ class VectorStore:
             return []
 
         # Compute similarities
-        results: list[Tuple[str, float, dict[str, Any]]] = []
+        results: list[tuple[str, float, dict[str, Any]]] = []
         for vid, vvec, vmeta in self._vectors:
             if self.similarity == "cosine":
                 sim = cosine_similarity(query_vector, vvec)
@@ -75,7 +77,7 @@ class VectorStore:
         results.sort(key=lambda r: r[1], reverse=True)
         return results[:k]
 
-    def get(self, id: str) -> Optional[Tuple[Vector, dict[str, Any]]]:
+    def get(self, id: str) -> tuple[Vector, dict[str, Any]] | None:
         """Return the vector and metadata for a given id, or None."""
         for vid, vvec, vmeta in self._vectors:
             if vid == id:
@@ -102,10 +104,10 @@ class VectorStore:
 
 def ingest_documents(
     store: VectorStore,
-    documents: List[dict[str, Any]],
+    documents: list[dict[str, Any]],
     text_key: str = "text",
     id_key: str = "id",
-    meta_keys: Optional[List[str]] = None,
+    meta_keys: list[str] | None = None,
 ) -> None:
     """Ingest a list of document dicts into *store*.
 

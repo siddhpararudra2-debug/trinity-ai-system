@@ -14,8 +14,6 @@ model later requires zero code changes.
 from __future__ import annotations
 
 import hashlib
-import json
-from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -34,7 +32,7 @@ def _load_model_config() -> None:
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "hash")
 
 
-def embed(text: str, dimension: Optional[int] = None) -> np.ndarray:
+def embed(text: str, dimension: int | None = None) -> np.ndarray:
     """Return a deterministic embedding vector for *text*.
 
     The vector is ``dimension``‑long (default ``DEFAULT_EMBEDDING_DIM``)
@@ -92,7 +90,7 @@ def _numpy_embedding(text: str, dimension: int) -> np.ndarray:
     return vec
 
 
-def embed_documents(texts: List[str], dimension: Optional[int] = None) -> List[np.ndarray]:
+def embed_documents(texts: list[str], dimension: int | None = None) -> list[np.ndarray]:
     """Embed a list of documents (batch version of ``embed``)."""
     return [embed(t, dimension) for t in texts]
 

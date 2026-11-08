@@ -10,11 +10,10 @@ engine operations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from src.engines.registry import EngineRegistry, EngineNotFoundError
-from src.workflows.dag import WorkflowNode, ordered
+from src.workflows.dag import ordered
 
 
 class Router:
@@ -53,7 +52,7 @@ class Router:
             }
         except EngineNotFoundError as e:
             return {"status": "error", "result": None, "error": str(e)}
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # noqa: BLE001 - convert engine failures to API errors
             return {"status": "error", "result": None, "error": f"{type(exc).__name__}: {exc}"}
 
     def execute_complex(
@@ -127,7 +126,7 @@ class Router:
             }
 
         # If any node failed, surface the first error
-        first_error: Optional[str] = None
+        first_error: str | None = None
         for node in executed:
             if node.status == "failed" and first_error is None:
                 # Find the error from the last execute_simple call

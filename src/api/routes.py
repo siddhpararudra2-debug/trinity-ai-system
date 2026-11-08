@@ -1265,7 +1265,7 @@ def submit_feedback(feedback: dict[str, str]) -> dict[str, str]:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
-                result = resp.read().decode("utf-8")
+                resp.read()
         except Exception:  # noqa: BLE001 - network failures surface honestly
             pass  # feedback stored locally even if endpoint unreachable
 

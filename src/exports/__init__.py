@@ -15,7 +15,7 @@ from __future__ import annotations
 import csv
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.router import Router
 from src.engines.registry import bootstrap_engines, registry
@@ -191,7 +191,7 @@ def export_bom(components: list[dict[str, Any]]) -> dict[str, Any]:
                 part_type = comp.get("type", "")
                 nets = ", ".join(comp.get("nets", []))
                 writer.writerow([ref, value, part_type, nets])
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - export failures are returned
         return {"status": "error", "error": f"BOM export failed: {exc}"}
 
     return {
@@ -234,7 +234,7 @@ def export_firmware_zip(project_id: str, mcu: str = "ESP32-WROOM-32",
     source_path = work_dir / f"firmware_{project_id}.c"
     try:
         source_path.write_text(source_text, encoding="utf-8")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - export failures are returned
         return {"status": "error", "error": f"Firmware write failed: {exc}"}
 
     return {

@@ -21,11 +21,9 @@ if "inspect" not in _sys.modules:
     import importlib as _importlib
     _sys.modules["inspect"] = _importlib.import_module("inspect")
 
-import json
-import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def _ensure_engines():
@@ -42,7 +40,7 @@ def inspect_design(
     design_path: str,
     design_type: str = "cad",
     **parameters: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Analyse an uploaded design and return a list of issues.
 
     This is a read-only operation: the returned issues are informational
@@ -80,7 +78,7 @@ def inspect_design(
         dest = work_dir / "design.json"
         dest.write_text(design_path)
 
-    issues: List[Dict[str, Any]] = []
+    issues: list[dict[str, Any]] = []
     verdict: str = "CLEAN"
 
     # 1. Verification check
@@ -100,7 +98,7 @@ def inspect_design(
                     "report", "Design verification failed"
                 ),
             })
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - report engine errors honestly
         issues.append({
             "check": "verification",
             "severity": "error",
@@ -134,7 +132,7 @@ def inspect_design(
 
         if xc_dict.get("summary") and "All checks passed" not in xc_dict.get("summary", ""):
             verdict = "ISSUES_FOUND"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - report engine errors honestly
         issues.append({
             "check": "crosscheck",
             "severity": "warning",
@@ -170,8 +168,8 @@ def inspect_design(
             })
 
     # Deduplicate issues by (check, reason) to avoid flooding
-    seen: set[Tuple[str, str]] = set()
-    deduped: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    deduped: list[dict[str, Any]] = []
     for issue in issues:
         key = (issue.get("check", ""), issue.get("reason", ""))
         if key not in seen:
@@ -192,7 +190,7 @@ def inspect_design(
     }
 
 
-def inspect_file(design_path: str, design_type: str = "cad") -> Dict[str, Any]:
+def inspect_file(design_path: str, design_type: str = "cad") -> dict[str, Any]:
     """Convenience wrapper that bootstraps and calls ``inspect_design``.
 
     Args:

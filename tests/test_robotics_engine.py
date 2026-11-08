@@ -15,7 +15,6 @@ from src.core.errors import CapabilityUnavailableError, RequestValidationError
 from src.engines import registry as registry_module
 from src.engines.pcb import PcbEngine
 from src.engines.robotics.engine import RoboticsEngine
-from src.engines.scaffold import ScaffoldEngine
 from src.engines.simulation.engine import SimulationEngine
 
 

@@ -11,10 +11,9 @@ no code changes.
 
 from __future__ import annotations
 
-import json
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
-from src.embeddings import embed, embed_documents, cosine_similarity
+from src.embeddings import embed
 from src.vector_store import VectorStore, ingest_documents
 
 
@@ -26,7 +25,7 @@ def chunk_text(
     text: str,
     chunk_size: int = 512,
     chunk_overlap: int = 50,
-) -> List[str]:
+) -> list[str]:
     """Split *text* into overlapping chunks of *chunk_size* tokens.
 
     A crude word‑based splitter is used so that no external
@@ -72,7 +71,7 @@ class RagPipeline:
 
     def __init__(
         self,
-        store: Optional[VectorStore] = None,
+        store: VectorStore | None = None,
         chunk_size: int = 512,
         chunk_overlap: int = 50,
         embedding_dim: int = 384,
@@ -82,7 +81,7 @@ class RagPipeline:
         self.chunk_overlap = chunk_overlap
         self.embedding_dim = embedding_dim
 
-    def ingest(self, documents: List[dict[str, Any]]) -> None:
+    def ingest(self, documents: list[dict[str, Any]]) -> None:
         """Add documents to the pipeline's vector store.
 
         Each document dict should contain at least a ``text`` field.
@@ -96,7 +95,7 @@ class RagPipeline:
             meta_keys=["source", "page", "chapter"],
         )
 
-    def query(self, question: str, k: int = 4) -> List[dict[str, Any]]:
+    def query(self, question: str, k: int = 4) -> list[dict[str, Any]]:
         """Return the top‑k most relevant passages for *question*.
 
         Each result is a dict with:
@@ -115,7 +114,7 @@ class RagPipeline:
         # Search the store
         hits = self.store.search(q_vec, k=k)
 
-        results: List[dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         for vid, sim, meta in hits:
             # The passage is stored in the metadata if available,
             # otherwise we reconstruct from the id or return empty.
@@ -136,7 +135,7 @@ class RagPipeline:
 
 # A small dummy corpus so that ``RagPipeline`` works out‑of‑the‑box
 # when no external data has been loaded yet.
-_DUMMY_CORPUS: List[dict[str, Any]] = [
+_DUMMY_CORPUS: list[dict[str, Any]] = [
     {
         "id": "trinity_arch",
         "text": (

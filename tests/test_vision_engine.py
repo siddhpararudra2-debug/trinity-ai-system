@@ -17,7 +17,6 @@ from src.core.errors import (
 from src.engines import registry as registry_module
 from src.engines.base import ArtifactRef
 from src.engines.pcb import PcbEngine
-from src.engines.scaffold import ScaffoldEngine
 from src.engines.vision import engine as engine_module
 from src.engines.vision.engine import VisionEngine
 

@@ -12,13 +12,10 @@ Each mismatch gets a reason code and severity.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 from src.engines.base import BaseEngine, EngineResult, ValidationResult
-from src.engines.pcb import PcbEngine
-from src.engines.firmware import FirmwareEngine
-from src.engines.cad.engine import CADEngine
 from src.core.errors import RequestValidationError
 
 

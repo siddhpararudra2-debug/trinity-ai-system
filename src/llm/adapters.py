@@ -13,9 +13,8 @@ The adapter wraps any OpenAI-compatible client and ensures:
 
 from __future__ import annotations
 
-import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def llm_link_mark(text: str) -> str:
@@ -90,7 +89,7 @@ class LLMAdapter:
     # Chat completions shape (OpenAI-compatible)
     # ------------------------------------------------------------------
 
-    def chat_completion(self, messages: List[dict[str, str]], **kwargs: Any) -> dict[str, Any]:
+    def chat_completion(self, messages: list[dict[str, str]], **kwargs: Any) -> dict[str, Any]:
         """Send a chat completion request through the adapter.
 
         Args:
@@ -108,7 +107,7 @@ class LLMAdapter:
         raw = self._client.generate(messages=messages, **kwargs)  # type: ignore[arg-type]
         return {"content": llm_link_mark(raw), "model": self.model_name}
 
-    def chat_completion_stream(self, messages: List[dict[str, str]], **kwargs: Any) -> Any:
+    def chat_completion_stream(self, messages: list[dict[str, str]], **kwargs: Any) -> Any:
         """Send a streaming chat completion request.
 
         Args:
@@ -130,7 +129,7 @@ class LLMAdapter:
     # Canned/mock responses for development
     # ------------------------------------------------------------------
 
-    def _mock_response(self, messages: List[dict[str, str]]) -> dict[str, Any]:
+    def _mock_response(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         """Return a canned JSON response for development/testing.
 
         The response shape matches OpenAI chat-completions output.
@@ -177,7 +176,7 @@ class LLMAdapter:
         # Default helpful response
         return "I'm Trinity AI, your electronic design assistant. I can help you with CAD design, PCB layout, firmware generation, verification reporting, and export in standard formats. What would you like to work on today?"
 
-    def _mock_stream(self, messages: List[dict[str, str]]) -> Any:
+    def _mock_stream(self, messages: list[dict[str, str]]) -> Any:
         """Yield canned streaming response chunks."""
         user_msg = ""
         for m in messages:
@@ -197,7 +196,7 @@ class LLMAdapter:
 
 
 # Global adapter instance for easy import
-_adapter: Optional[LLMAdapter] = None
+_adapter: LLMAdapter | None = None
 
 
 def get_adapter() -> LLMAdapter:
@@ -212,7 +211,7 @@ def get_adapter() -> LLMAdapter:
     return _adapter
 
 
-def chat(messages: List[dict[str, str]], **kwargs: Any) -> dict[str, Any]:
+def chat(messages: list[dict[str, str]], **kwargs: Any) -> dict[str, Any]:
     """Convenience function: send messages through the global adapter.
 
     Args:
@@ -225,7 +224,7 @@ def chat(messages: List[dict[str, str]], **kwargs: Any) -> dict[str, Any]:
     return get_adapter().chat_completion(messages, **kwargs)
 
 
-def chat_stream(messages: List[dict[str, str]], **kwargs: Any) -> Any:
+def chat_stream(messages: list[dict[str, str]], **kwargs: Any) -> Any:
     """Convenience function: stream LLM response through the global adapter.
 
     Args:
