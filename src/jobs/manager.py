@@ -1,11 +1,16 @@
-"""
-Job System (PRD §27).
+"""Job System (PRD §27).
 
 V1 stays deliberately lightweight: asyncio.to_thread runs each engine
 call off the event loop, sqlite tracks state, and there's no queue
 broker. Every job goes queued -> running -> completed|failed.
 Distributed infra (Redis/Celery) is an explicit non-goal until it's
 actually required.
+
+Safe execution (Item 10):
+- SAFE_EXECUTION_ENABLED: global toggle
+- SAFE_EXECUTION_TIMEOUT_SECONDS: max runtime per job
+- SAFE_EXECUTION_MAX_RETRIES: max retry attempts on failure
+- SAFE_EXECUTION_PER_USER_LIMIT: max concurrent jobs per user
 """
 
 from __future__ import annotations
@@ -13,23 +18,86 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.artifacts.manager import artifact_manager
 from src.core import cache
+from src.core.config import (
+    SAFE_EXECUTION_ENABLED,
+    SAFE_EXECUTION_MAX_RETRIES,
+    SAFE_EXECUTION_PER_USER_LIMIT,
+    SAFE_EXECUTION_TIMEOUT_SECONDS,
+    settings,
+)
 from src.core.errors import JobNotFoundError, TrinityError
 from src.core.logging_config import get_logger
+from src.db.database import get_connection
 from src.db.database import get_connection
 from src.engines.registry import registry
 from src.models.schemas import JobOut
 
 log = get_logger("jobs")
 
+# Per-user job count tracking (in-memory; replace with Redis in production)
+_user_job_counts: dict[str, int] = {}
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _check_user_limit(user_id: str | None = None) -> bool:
+    """Check if the user has not exceeded the per-user job limit."""
+    if not SAFE_EXECUTION_ENABLED:
+        return True
+    if user_id is None:
+        return True
+    current = _user_job_counts.get(user_id, 0)
+    limit = SAFE_EXECUTION_PER_USER_LIMIT
+    if current >= limit:
+        return False
+    _user_job_counts[user_id] = current + 1
+    return True
+
+
+def _release_user_limit(user_id: str | None = None) -> None:
+    """Release a slot in the per-user job counter."""
+    if not SAFE_EXECUTION_ENABLED:
+        return
+    if user_id is None:
+        return
+    current = _user_job_counts.get(user_id, 0)
+    if current > 0:
+        _user_job_counts[user_id] = current - 1
+
+
+def _with_timeout(
+    func, timeout_seconds: int, user_id: str | None = None
+) -> Any:
+    """Run *func* with a wall-clock timeout.
+
+    The per-user limit is enforced by the caller (run_sync) exactly once;
+    this wrapper only bounds the wall clock. Engine calls run in a worker
+    thread via asyncio.to_thread, so the timeout must be thread-based:
+    asyncio.wait_for cannot join a sync call from inside a plain thread.
+
+    Returns the function result, or raises TrinityError(job_timeout) if it
+    exceeds the limit.
+    """
+    if not SAFE_EXECUTION_ENABLED or not timeout_seconds or timeout_seconds <= 0:
+        return func()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(func)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except TimeoutError as exc:  # concurrent.futures.TimeoutError
+            raise TrinityError(
+                code="job_timeout",
+                message=f"Job timed out after {timeout_seconds}s",
+            ) from exc
 
 
 class JobManager:
@@ -74,8 +142,13 @@ class JobManager:
         job is really "one traceable unit of work" rather than a
         long-running background task. The same job row still gives us
         status history, timing, and a stable job_id for artifact lookups.
+
+        Safe execution (Item 10): enforces timeout, retry, and per-user limits.
         """
+
         job_id = str(uuid.uuid4())
+        user_id = parameters.get("user_id")
+
         self._insert_job(job_id, engine_name, operation, parameters)
         self._update_job(job_id, status="running", progress=0.1)
         log.info(
@@ -85,6 +158,9 @@ class JobManager:
             },
         )
 
+        # Unknown engines must surface as HTTP 404, not a 200 failed job:
+        # resolve the engine BEFORE the safe-execution retry loop and
+        # re-raise registry errors exactly like the V1 contract does.
         try:
             engine = registry.get(engine_name)
         except TrinityError as exc:
@@ -92,6 +168,33 @@ class JobManager:
                 job_id, status="failed", progress=1.0, error=json.dumps(exc.to_dict())
             )
             raise
+
+        # Safe execution (Item 10): enforce the per-user concurrent-job limit
+        # exactly once, before any attempt runs.
+        if not _check_user_limit(user_id):
+            err = TrinityError(
+                code="user_job_limit_exceeded",
+                message=(
+                    f"User {user_id} has exceeded the job limit of "
+                    f"{SAFE_EXECUTION_PER_USER_LIMIT} concurrent jobs"
+                ),
+            )
+            self._update_job(
+                job_id,
+                status="failed",
+                progress=1.0,
+                error=json.dumps(err.to_dict()),
+            )
+            return {
+                "success": False,
+                "engine": engine_name,
+                "operation": operation,
+                "result": {},
+                "artifacts": [],
+                "validation": None,
+                "errors": [err.to_dict()],
+                "job_id": job_id,
+            }
 
         # Only known pure operations are cacheable. CAD artifacts deliberately
         # are not reused because each artifact must preserve job provenance.
@@ -114,13 +217,121 @@ class JobManager:
             return cached
 
         try:
-            engine_result = engine.execute(operation, parameters)
-        except TrinityError as exc:
+            # Execute with timeout and retry logic (Item 10)
+            max_retries = SAFE_EXECUTION_MAX_RETRIES
+            timeout = SAFE_EXECUTION_TIMEOUT_SECONDS
+
+            for attempt in range(max_retries + 1):
+                try:
+                    result = _with_timeout(
+                        lambda: engine.execute(operation, parameters),
+                        timeout,
+                        user_id,
+                    )
+                    # Success - persist and return
+                    stored_artifacts = []
+                    for temp_path_str, artifact_type in result.pending_artifacts:
+                        ref = artifact_manager.store_file(
+                            Path(temp_path_str), artifact_type=artifact_type, job_id=job_id
+                        )
+                        stored_artifacts.append(ref)
+                    result.artifacts.extend(stored_artifacts)
+
+                    if result.pending_artifacts:
+                        scratch_dir = Path(result.pending_artifacts[0][0]).parent
+                        shutil.rmtree(scratch_dir, ignore_errors=True)
+
+                    if result.validation is not None:
+                        self._insert_validation(
+                            job_id,
+                            engine_name,
+                            result.validation.status,
+                            result.validation.checks,
+                        )
+
+                    response = {
+                        "success": result.success,
+                        "engine": result.engine,
+                        "operation": result.operation,
+                        "result": result.result,
+                        "artifacts": [
+                            {
+                                "artifact_id": a.artifact_id,
+                                "type": a.type,
+                                "path": a.path,
+                                "size_bytes": a.size_bytes,
+                                "checksum": a.checksum,
+                            }
+                            for a in result.artifacts
+                        ],
+                        "validation": (
+                            {
+                                "status": result.validation.status,
+                                "checks": result.validation.checks,
+                            }
+                            if result.validation
+                            else None
+                        ),
+                        "errors": result.errors,
+                        "job_id": job_id,
+                    }
+
+                    self._update_job(
+                        job_id,
+                        status="completed" if result.success else "failed",
+                        progress=1.0,
+                        result=json.dumps(response["result"]),
+                    )
+                    if deterministic and response["success"]:
+                        cache.put(key, engine_name, operation, response)
+                    log.info(
+                        "job finished",
+                        extra={"ctx": {"job_id": job_id, "success": result.success}},
+                    )
+                    return response
+
+                except TrinityError as exc:
+                    if attempt < max_retries:
+                        # Retry
+                        continue
+                    # Final failure
+                    self._update_job(
+                        job_id,
+                        status="failed",
+                        progress=1.0,
+                        error=json.dumps(exc.to_dict()),
+                    )
+                    return {
+                        "success": False,
+                        "engine": engine_name,
+                        "operation": operation,
+                        "result": {},
+                        "artifacts": [],
+                        "validation": None,
+                        "errors": [exc.to_dict()],
+                        "job_id": job_id,
+                    }
+                except Exception as exc:  # noqa: BLE001 — intentional catch-all: mark failed, never stuck running
+                    if attempt < max_retries:
+                        continue
+                    err = {"code": "engine_execution_error", "message": str(exc), "details": {}}
+                    self._update_job(
+                        job_id, status="failed", progress=1.0, error=json.dumps(err)
+                    )
+                    return {
+                        "success": False,
+                        "engine": engine_name,
+                        "operation": operation,
+                        "result": {},
+                        "artifacts": [],
+                        "validation": None,
+                        "errors": [err],
+                        "job_id": job_id,
+                    }
+
+            # Should not reach here, but just in case
             self._update_job(
-                job_id, status="failed", progress=1.0, error=json.dumps(exc.to_dict())
-            )
-            log.info(
-                "job failed", extra={"ctx": {"job_id": job_id, "error": exc.to_dict()}}
+                job_id, status="failed", progress=1.0, error=json.dumps({"code": "max_retries_exceeded"})
             )
             return {
                 "success": False,
@@ -129,85 +340,19 @@ class JobManager:
                 "result": {},
                 "artifacts": [],
                 "validation": None,
-                "errors": [exc.to_dict()],
-                "job_id": job_id,
-            }
-        except Exception as exc:  # noqa: BLE001 — intentional catch-all: mark failed, never stuck running
-            err = {"code": "engine_execution_error", "message": str(exc), "details": {}}
-            self._update_job(job_id, status="failed", progress=1.0, error=json.dumps(err))
-            log.exception("job failed unexpectedly", extra={"ctx": {"job_id": job_id}})
-            return {
-                "success": False,
-                "engine": engine_name,
-                "operation": operation,
-                "result": {},
-                "artifacts": [],
-                "validation": None,
-                "errors": [err],
+                "errors": [{"code": "max_retries_exceeded", "message": "Max retries exceeded"}],
                 "job_id": job_id,
             }
 
-        # Persist any files the engine wrote to scratch space.
-        stored_artifacts = []
-        for temp_path_str, artifact_type in engine_result.pending_artifacts:
-            ref = artifact_manager.store_file(
-                Path(temp_path_str), artifact_type=artifact_type, job_id=job_id
-            )
-            stored_artifacts.append(ref)
-        engine_result.artifacts.extend(stored_artifacts)
+        finally:
+            _release_user_limit(user_id)
 
-        if engine_result.pending_artifacts:
-            scratch_dir = Path(engine_result.pending_artifacts[0][0]).parent
-            shutil.rmtree(scratch_dir, ignore_errors=True)
-
-        if engine_result.validation is not None:
-            self._insert_validation(
-                job_id,
-                engine_name,
-                engine_result.validation.status,
-                engine_result.validation.checks,
-            )
-
-        response = {
-            "success": engine_result.success,
-            "engine": engine_result.engine,
-            "operation": engine_result.operation,
-            "result": engine_result.result,
-            "artifacts": [
-                {
-                    "artifact_id": a.artifact_id,
-                    "type": a.type,
-                    "path": a.path,
-                    "size_bytes": a.size_bytes,
-                    "checksum": a.checksum,
-                }
-                for a in engine_result.artifacts
-            ],
-            "validation": (
-                {
-                    "status": engine_result.validation.status,
-                    "checks": engine_result.validation.checks,
-                }
-                if engine_result.validation
-                else None
-            ),
-            "errors": engine_result.errors,
-            "job_id": job_id,
-        }
-
-        self._update_job(
-            job_id,
-            status="completed" if engine_result.success else "failed",
-            progress=1.0,
-            result=json.dumps(response["result"]),
-        )
-        if deterministic and response["success"]:
-            cache.put(key, engine_name, operation, response)
-        log.info(
-            "job finished",
-            extra={"ctx": {"job_id": job_id, "success": engine_result.success}},
-        )
-        return response
+    def _execute_engine(
+        self, engine_name: str, operation: str, parameters: dict[str, Any]
+    ) -> Any:
+        """Execute a single engine call. Meant to be called within a timeout."""
+        engine = registry.get(engine_name)
+        return engine.execute(operation, parameters)
 
     def get(self, job_id: str) -> JobOut:
         with get_connection() as conn:
