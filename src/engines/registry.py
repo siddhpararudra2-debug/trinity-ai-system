@@ -1,5 +1,4 @@
-"""
-Engine Registry (PRD §24).
+"""Engine Registry (PRD §24).
 
 A single process-wide registry that engines register themselves into
 at import time. This is what eventually lets an LLM tool-caller ask
@@ -46,9 +45,12 @@ def bootstrap_engines() -> None:
     from src.engines.cad.engine import CADEngine
     from src.engines.math.engine import MathEngine
     from src.engines.native_bridge import NATIVE_ENGINES, NativeBridgeEngine
+    from src.engines.pcb import PcbEngine
+    from src.engines.firmware import FirmwareEngine
+    from src.engines.verification import VerificationEngine
+    from src.engines.crosscheck import CrossCheckEngine
     from src.engines.research.engine import ResearchEngine
     from src.engines.robotics.engine import RoboticsEngine
-    from src.engines.scaffold import ScaffoldEngine
     from src.engines.simulation.engine import SimulationEngine
     from src.engines.vision.engine import VisionEngine
 
@@ -58,6 +60,7 @@ def bootstrap_engines() -> None:
     for name, capabilities in (
         ("pcb", ["inspect", "validate", "generate", "export"]),
         ("firmware", ["create", "build", "test", "compile"]),
+        ("verification", ["verify"]),
         (
             "vision",
             ["image_inspect", "ocr", "document_parse", "geometry_extract"],
@@ -65,9 +68,18 @@ def bootstrap_engines() -> None:
         ("research", ["search"]),
         ("simulation", ["simulate"]),
         ("robotics", ["kinematics", "trajectory_plan"]),
+        ("crosscheck", ["cross_check"]),
     ):
         if name in bridged:
             registry.register(NativeBridgeEngine(name, NATIVE_ENGINES[name]))
+        elif name == "pcb":
+            registry.register(PcbEngine())
+        elif name == "firmware":
+            registry.register(FirmwareEngine())
+        elif name == "verification":
+            registry.register(VerificationEngine())
+        elif name == "crosscheck":
+            registry.register(CrossCheckEngine())
         elif name == "simulation":
             # M18.1: a real Python fallback where the native daemon cannot
             # run (Linux bundle, native-less CI). Advertises exactly the
@@ -84,6 +96,9 @@ def bootstrap_engines() -> None:
             # M18.4: search over request documents or the bundled repo docs.
             registry.register(ResearchEngine())
         else:
+            # This branch is kept for safety; all named engines above
+            # should have been handled before we reach here.
+            from src.engines.scaffold import ScaffoldEngine
             registry.register(ScaffoldEngine(name, capabilities))
 
 

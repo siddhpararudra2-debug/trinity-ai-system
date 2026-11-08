@@ -11,6 +11,7 @@ import pytest
 
 from src.core.errors import CapabilityUnavailableError, RequestValidationError
 from src.engines import registry as registry_module
+from src.engines.pcb import PcbEngine
 from src.engines.research import engine as engine_module
 from src.engines.research.engine import ResearchEngine
 from src.engines.scaffold import ScaffoldEngine
@@ -179,4 +180,4 @@ def test_registry_uses_python_fallbacks_without_native(monkeypatch):
     registry_module.bootstrap_engines()
 
     assert isinstance(registry_module.registry.get("research"), ResearchEngine)
-    assert isinstance(registry_module.registry.get("pcb"), ScaffoldEngine)
+    assert isinstance(registry_module.registry.get("pcb"), PcbEngine)

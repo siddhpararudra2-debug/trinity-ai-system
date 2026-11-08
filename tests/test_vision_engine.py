@@ -16,6 +16,7 @@ from src.core.errors import (
 )
 from src.engines import registry as registry_module
 from src.engines.base import ArtifactRef
+from src.engines.pcb import PcbEngine
 from src.engines.scaffold import ScaffoldEngine
 from src.engines.vision import engine as engine_module
 from src.engines.vision.engine import VisionEngine
@@ -259,4 +260,4 @@ def test_registry_uses_python_fallbacks_without_native(monkeypatch):
     registry_module.bootstrap_engines()
 
     assert isinstance(registry_module.registry.get("vision"), VisionEngine)
-    assert isinstance(registry_module.registry.get("pcb"), ScaffoldEngine)
+    assert isinstance(registry_module.registry.get("pcb"), PcbEngine)
