@@ -79,7 +79,12 @@ M35 launch check (3-4 days). [ pending ]
 - [x] Stage 14 pre-work: CI lint gate repair — `ruff check src tests` green again; two latent NameErrors in `src/vector_store` fixed (missing `src.embeddings` import); 707 passed / 26 skipped unchanged.
 - [x] A3.1 runner honesty: p035's stale "binaries absent" claim fixed; `--require-native` now structural (every SKIP fails on a native-capable claim); runner tests native-state-aware; 708 passed / 26 skipped.
 
-A1 XLSX BOM [pending - needs XLSX library + test data with price columns]
+- [x] A1 XLSX BOM export — `[xlsx] extra + GET /api/projects/{id}/bom.xlsx`.
+  New `[xlsx]` optional dependency (openpyxl); endpoint mirrors the CSV BOM
+  route (404 if record missing, 409 if no BOM data, priced rows with
+  ref/part/value/quantity/package/price_inr/price_updated_on). Uses
+  openpyxl Workbook/WS.append to produce a valid .xlsx file. Proof:
+  pytest 708 passed / 26 skipped, ruff clean.
 A2 Enclosure lid [pending - needs lid design datasheets + enclosure fit measurements]
 A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]

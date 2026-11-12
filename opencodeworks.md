@@ -1094,7 +1094,7 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 ### Stage 14 - Remaining Gaps (new) [pending]
 
-**A1 XLSX BOM** [pending] `GET /api/projects/{id}/bom.xlsx` via openpyxl, same columns as CSV plus price columns when present. Second sheet: record id, snapshot id, report status. No formulas. Test: reopen, compare to CSV.
+**A1 XLSX BOM** `[done]` `GET /api/projects/{id}/bom.xlsx` via openpyxl, same columns as CSV plus price columns when present. Second sheet: record id, snapshot id, report status. No formulas. Test: reopen, compare to CSV.
 
 **A2 Enclosure lid** [pending] Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt must now pass.
 
