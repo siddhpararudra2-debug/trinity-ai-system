@@ -1121,6 +1121,25 @@ Track B runs only if the user goes fully hosted.
 
 ### Stage 14 pre-work (done)
 
+- [x] **A3.1 runner honesty** (`tools/eval/run.py`, `tools/eval/plans.py`,
+  `tests/test_eval_runner.py`): a native-attached Windows run (the Oct 28
+  `debug-vcpkg` build verified through the daemon: selftest exit 0,
+  `math.solve` → x=5.0, suite 726 passed / 4 skipped with the binary
+  attached) exposed three honesty bugs, now fixed. p035 claimed "the
+  native binaries are absent" while native was present — it now probes
+  `_native_skip` like its siblings and states the real reason both ways
+  (native-present: no plan owns MQTT/telemetry truth). `--require-native`
+  replaced the fragile detail-string match with the structural rule the
+  flag always meant: on a machine claimed native-capable, every SKIP is
+  a broken promise and fails with its reason preserved. The three
+  pinned runner tests are now native-state-aware instead of
+  native-absent-only (the nine scaffold-refusal prompts legitimately
+  FAIL "not yet written" with native attached), and the smoke
+  subprocess pins its no-native baseline deterministically by stripping
+  `TRINITY_NATIVE_EXEC`. New test pins the require-native table
+  (25 PASS / 13 FAIL / 0 SKIP native-absent, exit 1). Proof: suite 708
+  passed / 26 skipped, ruff clean.
+
 - [x] **CI lint gate repair — `ruff check src tests` back to green.** The
   Stage 13/14 commits left the CI lint step red (69 findings in `src tests`:
   38 unused imports, 12 E402 in `main.py`, 9 deprecated `typing` imports,

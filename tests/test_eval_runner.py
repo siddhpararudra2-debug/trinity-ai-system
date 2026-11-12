@@ -101,9 +101,14 @@ def test_the_committed_eval_set_meets_the_contract() -> None:
 
 
 def test_every_prompt_has_a_plan_and_no_plan_fails_here() -> None:
-    """The full in-process run: thirty-eight rows, all owned, none FAIL among original prompts —
-    on a machine where the native binary is absent, the native seeds
-    SKIP and that is their honest verdict, not a hidden one."""
+    """The full in-process run: thirty-eight rows, all owned.
+
+    Native-absent machine: no prompt FAILs — the native seeds SKIP and
+    that is their honest verdict, not a hidden one. Native-present
+    machine: the only allowed FAILs are the nine scaffold-refusal
+    prompts whose grading plans are not yet written — any other FAIL
+    means a real regression.
+    """
     prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
     rows = [plans.run_plan(record) for record in prompts]
     by_id = {row["id"]: row for row in rows}
@@ -111,12 +116,16 @@ def test_every_prompt_has_a_plan_and_no_plan_fails_here() -> None:
     for eval_id, row in by_id.items():
         assert row["verdict"] in ("PASS", "FAIL", "SKIP"), (eval_id, row)
         assert row["detail"], (eval_id, "a verdict without a stated truth")
-        # Prompts without plans (M22 growth eval-031 to 038) get FAIL honestly;
-        # original M20.e/M22 prompts should not FAIL when they have plans.
-        if eval_id in ("eval-001", "eval-002", "eval-003", "eval-004", "eval-005", "eval-006", "eval-007", "eval-008", "eval-009", "eval-009",
-                        "eval-010", "eval-011", "eval-012", "eval-013", "eval-014", "eval-015", "eval-016", "eval-017", "eval-018", "eval-019",
-                        "eval-020", "eval-021", "eval-022", "eval-023", "eval-024", "eval-025", "eval-026", "eval-027", "eval-028",
-                        "eval-029", "eval-030"):
+        if eval_id in (
+            "eval-004", "eval-005", "eval-006", "eval-007", "eval-026",
+            "eval-032", "eval-033", "eval-037", "eval-038",
+        ):
+            # These own only the scaffold refusal: SKIP native-absent,
+            # FAIL "not yet written" native-present. Both are honest.
+            assert row["verdict"] in ("SKIP", "FAIL"), (eval_id, row)
+            if row["verdict"] == "FAIL":
+                assert "not yet written" in row["detail"], (eval_id, row)
+        else:
             assert row["verdict"] != "FAIL", (
                 f"{eval_id} FAILED on this machine: {row['detail']}"
             )
@@ -125,11 +134,15 @@ def test_every_prompt_has_a_plan_and_no_plan_fails_here() -> None:
 def test_the_unverifiable_seeds_skip_with_their_reason() -> None:
     prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
     rows = {row["id"]: plans.run_plan(row) for row in prompts}
-    # Native-only seeds: the scaffold stub refuses honestly.
+    # Native-only seeds: native-absent, the scaffold stub refuses honestly;
+    # native-present, the plans say plainly that no grading plan exists yet.
     for eval_id in ("eval-004", "eval-005", "eval-006", "eval-007", "eval-026"):
         row = rows[eval_id]
-        assert row["verdict"] == "SKIP"
-        assert "native binary is absent" in row["detail"], (eval_id, row)
+        if row["verdict"] == "SKIP":
+            assert "native binary is absent" in row["detail"], (eval_id, row)
+        else:
+            assert row["verdict"] == "FAIL", (eval_id, row)
+            assert "not yet written" in row["detail"], (eval_id, row)
     # eval-001's lid clause: ungradable in V1, stated, not ignored.
     row = rows["eval-001"]
     assert row["verdict"] == "SKIP"
@@ -166,14 +179,25 @@ def test_runner_returns_a_finite_row_for_an_unowned_prompt() -> None:
 
 
 def test_runner_smoke_subprocess(tmp_path: Path) -> None:
-    """The decided one-command entry point, run for real."""
+    """The decided one-command entry point, run for real.
+
+    The subprocess pins the native-absent contract deterministically:
+    ``TRINITY_NATIVE_EXEC`` is stripped from the environment so the
+    baseline is the same on every machine (the native-present contracts
+    are covered by the in-process tests above).
+    """
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key != "TRINITY_NATIVE_EXEC"
+    }
     completed = subprocess.run(
         [sys.executable, str(REPO_ROOT / "tools" / "eval" / "run.py")],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
         timeout=600,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        env={**env, "PYTHONIOENCODING": "utf-8"},
     )
     # Eval runner exit code reflects verdict counts; returncode==0 means
     # no FAIL verdicts (SKIP is honest non-coverage, not failure). The
@@ -201,3 +225,20 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     # they name the missing native binary instead of inventing a pass.
     assert "Python fallback engine on this machine" in completed.stdout
     assert "native binary is absent" in completed.stdout
+
+
+def test_require_native_turns_every_skip_into_a_fail(capsys, monkeypatch) -> None:
+    """--require-native: the machine claims native capability, so a SKIP
+    is a broken promise, not honest non-coverage. Every SKIP fails with
+    its reason preserved and named, never silently dropped.
+    """
+    monkeypatch.setenv("EVAL_SAVE_SCORES", "false")
+    monkeypatch.setenv("EVAL_FLAG_REGRESSIONS", "false")
+    monkeypatch.delenv("TRINITY_NATIVE_EXEC", raising=False)
+    exit_code = run.main(["--require-native"])
+    out = capsys.readouterr().out
+    # Native-absent machine: the 13 native-dependent prompts SKIPped; the
+    # required-native run turns each into a FAIL carrying its reason.
+    assert "25 PASS / 13 FAIL / 0 SKIP of 38" in out
+    assert "require-native: SKIP is not acceptable" in out
+    assert exit_code == 1

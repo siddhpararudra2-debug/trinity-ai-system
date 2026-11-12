@@ -155,13 +155,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"eval set refused: {exc}")
         return 1
     rows = [plans.run_plan(record) for record in prompts]
-    # If --require-native was given, upgrade any SKIP whose detail mentions
-    # the native binary being absent to a FAIL — this enforces honest
-    # verdicts when a native build is required.
+    # ``--require-native`` means the machine claims native-grade capability:
+    # a SKIP is then a broken promise, not honest non-coverage, so every
+    # SKIP fails with its reason preserved. (Structural, not the old
+    # detail-string match: a skip reason may name anything.)
     if os.getenv("TRINITY_REQUIRE_NATIVE"):
         for row in rows:
-            if row["verdict"] == "SKIP" and "native binary is absent" in row.get("detail", ""):
+            if row["verdict"] == "SKIP":
                 row["verdict"] = "FAIL"
+                row["detail"] = (
+                    "require-native: SKIP is not acceptable on a machine "
+                    "claimed to be native-capable - " + row.get("detail", "")
+                )
     _print_table(rows)
 
     # Save scores if enabled

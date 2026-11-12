@@ -810,14 +810,20 @@ def _p035() -> tuple[str, str]:
     # eval-035: mixed - Integrate a BME280 environmental sensor with an ESP32,
     # publish temperature/humidity data to MQTT broker with JSON payloads at
     # 1-minute intervals; this mix of sensor, firmware, and networking truth
-    # cannot be honestly verified here because the pcb and firmware engines
-    # request native-grade STEP/gerber fidelity their Python fallbacks do not
-    # claim, and the native binaries are absent on this machine.
+    # cannot be honestly verified here: no plan owns MQTT publishing or JSON
+    # telemetry checks, and native-present or not the record machinery has
+    # no networking truth to grade against.
+    reason = _native_skip("pcb") or _native_skip("firmware")
+    if reason:
+        return SKIP, (
+            f"{reason} Beyond that, the mixed truth of BME280 sensor "
+            "integration with ESP32 MQTT publishing has no grading plan "
+            "at all, and the table states that rather than inventing a pass"
+        )
     return SKIP, (
-        "the pcb and firmware engines are the Python fallbacks on this "
-        "machine (status 'scaffolded' — the native binaries are absent); "
-        "the mixed truth of BME280 sensor integration with ESP32 MQTT "
-        "publishing cannot honestly be verified here, and the table states "
+        "native pcb/firmware engines are present, but no plan owns MQTT "
+        "publishing or JSON telemetry truth; the mixed BME280 + ESP32 "
+        "prompt cannot honestly be verified here, and the table states "
         "that rather than inventing a pass"
     )
 

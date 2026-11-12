@@ -77,6 +77,7 @@ M35 launch check (3-4 days). [ pending ]
 ### Stage 14 — Remaining Gaps [ pending ]
 
 - [x] Stage 14 pre-work: CI lint gate repair — `ruff check src tests` green again; two latent NameErrors in `src/vector_store` fixed (missing `src.embeddings` import); 707 passed / 26 skipped unchanged.
+- [x] A3.1 runner honesty: p035's stale "binaries absent" claim fixed; `--require-native` now structural (every SKIP fails on a native-capable claim); runner tests native-state-aware; 708 passed / 26 skipped.
 
 A1 XLSX BOM [pending - needs XLSX library + test data with price columns]
 A2 Enclosure lid [pending - needs lid design datasheets + enclosure fit measurements]
