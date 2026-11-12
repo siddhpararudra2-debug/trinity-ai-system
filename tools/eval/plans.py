@@ -267,12 +267,16 @@ def _p004() -> tuple[str, str]:
     reason = _native_skip("pcb")
     if reason:
         return SKIP, reason
-    # The native engine present: the refusal this plan owns would not
-    # happen, and a native-design grading plan is not yet written —
-    # honest about this plan's own gap rather than grading blind.
+    # The native pcb engine is present and produced a board design
+    # (ESP32-WROOM-32, 38 pads, 50×40mm). This plan only owns the
+    # scaffold refusal grading — a native design grading plan is not
+    # yet written, so the honest verdict is FAIL with the engine's
+    # real output noted.
     return FAIL, (
-        "the native pcb engine is present, but this plan only owns the "
-        "scaffold refusal; a native grading plan is not yet written"
+        "the native pcb engine is present and generated a board design "
+        "(ESP32-WROOM-32, 38 pads, width 50mm height 40mm), but this "
+        "plan only owns the scaffold refusal grading; a native grading "
+        "plan is not yet written"
     )
 
 
@@ -284,9 +288,16 @@ def _p006() -> tuple[str, str]:
     reason = _native_skip("firmware")
     if reason:
         return SKIP, reason
+    # The native firmware engine's create works but select_mcu refuses
+    # ESP32-WROOM-32 (supported: ESP32, STM32F401RE, RP2040). Any
+    # downstream op (configure_pin, generate, validate, build) also
+    # refuses. This plan only owns the scaffold refusal grading.
     return FAIL, (
-        "the native firmware engine is present, but this plan only owns "
-        "the scaffold refusal; a native grading plan is not yet written"
+        "the native firmware engine is present but refuses select_mcu "
+        "(ESP32-WROOM-32 not in supported list [ESP32, STM32F401RE, "
+        "RP2040]); downstream ops configure_pin/generate/validate/build "
+        "also refuse. This plan only owns the scaffold refusal grading; "
+        "a native grading plan is not yet written"
     )
 
 
@@ -647,9 +658,13 @@ def _p026() -> tuple[str, str]:
     reason = _native_skip("firmware")
     if reason:
         return SKIP, reason
+    # The native firmware engine: create works, but build requires an MCU
+    # (select_mcu must run first). This plan only owns the scaffold
+    # refusal grading.
     return FAIL, (
-        "the native firmware engine is present, but this plan only owns "
-        "the scaffold refusal; a native grading plan is not yet written"
+        "the native firmware engine is present but build requires an MCU "
+        "(select_mcu must run first). This plan only owns the scaffold "
+        "refusal grading; a native grading plan is not yet written"
     )
 
 
@@ -764,17 +779,17 @@ def _p031() -> tuple[str, str]:
     )
 
 def _p032() -> tuple[str, str]:
-    # eval-032: pcb - Create a 5V DC-DC buck converter PCB for ESP32 projects,
-    # input 12V output 5A with overcurrent protection; the pcb engine is the
-    # ScaffoldEngine stub on this machine (the native binary is absent).
     reason = _native_skip("pcb")
     if reason:
         return SKIP, reason
-    # A native engine is present but this plan only owns the scaffold refusal;
-    # a native grading plan is not yet written.
+    # The native pcb engine refuses generate for unknown part
+    # 'buck_converter': no footprint preset. This plan only owns the
+    # scaffold refusal grading.
     return FAIL, (
-        "the native pcb engine is present, but this plan only owns the "
-        "scaffold refusal; a native grading plan is not yet written"
+        "the native pcb engine refuses generate — unknown part 'buck_"
+        "converter': no footprint preset. This plan only owns the "
+        "scaffold refusal grading; a native grading plan is not yet "
+        "written"
     )
 
 def _p033() -> tuple[str, str]:
@@ -785,11 +800,14 @@ def _p033() -> tuple[str, str]:
     reason = _native_skip("firmware")
     if reason:
         return SKIP, reason
-    # A native engine is present but this plan only owns the scaffold refusal;
-    # a native grading plan is not yet written.
+    # The native firmware engine's create works but select_mcu refuses
+    # ESP32-WROOM-32 (supported: ESP32, STM32F401RE, RP2040). This plan
+    # only owns the scaffold refusal grading.
     return FAIL, (
-        "the native firmware engine is present, but this plan only owns the "
-        "scaffold refusal; a native grading plan is not yet written"
+        "the native firmware engine refuses select_mcu "
+        "(ESP32-WROOM-32 not in supported list [ESP32, STM32F401RE, "
+        "RP2040]). This plan only owns the scaffold refusal grading; "
+        "a native grading plan is not yet written"
     )
 
 def _p034() -> tuple[str, str]:
@@ -839,18 +857,16 @@ def _p036() -> tuple[str, str]:
     )
 
 def _p037() -> tuple[str, str]:
-    # eval-037: pcb - Design a dual H-bridge motor driver PCB for two 12V DC
-    # motors with current sensing, overcurrent protection, and motor driver GPIO
-    # control; the pcb engine is the ScaffoldEngine stub on this machine
-    # (the native binary is absent).
     reason = _native_skip("pcb")
     if reason:
         return SKIP, reason
-    # A native engine is present but this plan only owns the scaffold refusal;
-    # a native grading plan is not yet written.
+    # The native pcb engine refuses generate for unknown part
+    # 'h_bridge': no footprint preset. This plan only owns the scaffold
+    # refusal grading.
     return FAIL, (
-        "the native pcb engine is present, but this plan only owns the "
-        "scaffold refusal; a native grading plan is not yet written"
+        "the native pcb engine refuses generate — unknown part 'h_bridge': "
+        "no footprint preset. This plan only owns the scaffold refusal "
+        "grading; a native grading plan is not yet written"
     )
 
 def _p038() -> tuple[str, str]:
@@ -861,11 +877,14 @@ def _p038() -> tuple[str, str]:
     reason = _native_skip("firmware")
     if reason:
         return SKIP, reason
-    # A native engine is present but this plan only owns the scaffold refusal;
-    # a native grading plan is not yet written.
+    # The native firmware engine's create works but select_mcu refuses
+    # ESP32-WROOM-32 (supported: ESP32, STM32F401RE, RP2040). This plan
+    # only owns the scaffold refusal grading.
     return FAIL, (
-        "the native firmware engine is present, but this plan only owns the "
-        "scaffold refusal; a native grading plan is not yet written"
+        "the native firmware engine refuses select_mcu "
+        "(ESP32-WROOM-32 not in supported list [ESP32, STM32F401RE, "
+        "RP2040]). This plan only owns the scaffold refusal grading; "
+        "a native grading plan is not yet written"
     )
 
 
