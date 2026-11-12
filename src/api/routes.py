@@ -443,7 +443,67 @@ async def project_bom_csv(record_id: str) -> StreamingResponse:
     )
 
 
-# 2) POST /api/projects/{id}/bom/rebuild  � rebuild the BOM from the
+# 2) GET /api/projects/{id}/bom.xlsx  � export the priced BOM as XLSX.
+#    Returns 404 when the record doesn't exist, 409 when the record
+#    has no BOM data (no ``bom`` section or an empty one).
+@router.get("/projects/{record_id}/bom.xlsx")
+async def project_bom_xlsx(record_id: str) -> StreamingResponse:
+    from src.engines.crosscheck.record import load_record, DesignRecordError
+    from src.engines.crosscheck.bom import PRICED_BOM_COLUMNS
+    from src.engines.parts.catalog import load_parts, PriceBook
+    import openpyxl
+    from io import BytesIO
+
+    try:
+        record = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    bom = getattr(record, "bom", None)
+    if not bom or not bom.get("lines"):
+        raise HTTPException(status_code=409, detail="no BOM data in record")
+    # Build the priced BOM using the parts catalog
+    cat = load_parts()
+    book = PriceBook(cat)
+    lines = bom["lines"]
+    output = BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "BOM"
+    # Header row
+    ws.append(PRICED_BOM_COLUMNS)
+    for line in lines:
+        # price lookup tries part, value, ref in order; first match wins
+        # price lookup tries (value, package) first per convention 9;
+        # first match wins; fallback to part/value/ref order
+        hit = book.lookup_by_value_package(vars(line)) if hasattr(line, "__dict__") else None
+        # fallback: part, value, ref in order
+        if hit is None and hasattr(line, "__dict__"):
+            hit = book.lookup(vars(line))
+        # fallback: look up by ref
+        if hit is None and hasattr(line, "ref") and line.ref:
+            hit = book.lookup({"ref": line.ref})
+        price_inr = hit[0] if hit else None
+        price_updated_on = hit[1] if hit else None
+        row = [
+            getattr(line, "ref", "") or "",
+            getattr(line, "part", "") or "",
+            getattr(line, "value", "") or "",
+            getattr(line, "quantity", "") or "",
+            getattr(line, "package", "") or "",
+            price_inr,
+            price_updated_on,
+        ]
+        ws.append(row)
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.read()]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{record_id}_bom.xlsx"'},
+    )
+
+
+# 3) POST /api/projects/{id}/bom/rebuild  � rebuild the BOM from the
 #    PCB design, writing the new bom section onto the record via
 #    ``save_record``.  The body is optional; when omitted the rebuild
 #    uses the record's existing PCB fragment to derive component refs,
