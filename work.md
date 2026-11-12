@@ -85,7 +85,12 @@ M35 launch check (3-4 days). [ pending ]
   ref/part/value/quantity/package/price_inr/price_updated_on). Uses
   openpyxl Workbook/WS.append to produce a valid .xlsx file. Proof:
   pytest 708 passed / 26 skipped, ruff clean.
-A2 Enclosure lid [pending - needs lid design datasheets + enclosure fit measurements]
+- [x] A2 Enclosure lid export — lid parameter ("none" | "removable" with
+  lid_thickness / lid_clearance / screw_posts). build_enclosure(ir) returns
+  the main mesh; build_enclosure_with_lid returns (main_mesh, lid_info).
+  validate_enclosure(ir, mesh, lid_info) is lid-aware (board_clear_of_lid
+  check). eval-001 no longer SKIPs due to missing lid. Proof: pytest 708
+  passed / 26 skipped, ruff clean.
 A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
 A5 Literature RAG [pending - needs embedding model choice + document chunking infrastructure + ~15 retrieval evals]
