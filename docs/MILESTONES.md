@@ -38,6 +38,9 @@ For *how* the work was done (rules, decisions, lessons), see
 | M13 | Auto-update: `latest.yml` manifest, hash-verified staged apply, swap at next boot | `75bf618`, `12cfd04`, `deb4882` | — / 342 |
 | M14 | CAD depth: parameter families, nesting with pairwise proof, multi-sheet DXF | `ca61424`, `07e1d69`, `fe3e58f` | — / 375 |
 | Stage 9 (M15) | Agentic workflow depth: plan contract → plan UI → DAG productization → agent surface → attach docs | `864579b`…`7943acc` | — / 386 + E2E 137 |
+| M16 | Linux portable bundle: cross-platform spec, honest no-native smoke, release-flow proof (prerelease) | `79955ee`, `ab67607` (Release #14) | — / — |
+| M17 | Data schema/migration seam: versioned marker, explicit chain, refuses future/corrupt storage | `1b277da` (CI #200) | — / 398 |
+| M18 | Engine depth beyond CAD: Python fallbacks for simulation, robotics, vision (`[vision]`), research | `7557dc4`…`1cc907f` | — / 488 |
 
 ---
 
@@ -552,12 +555,61 @@ E2E workflows green on every code commit of the stage (CI #187+#188, E2E
 
 ---
 
+## Stage 10: working the deferred list — M16 Linux bundle, M17 data seam, M18 engine depth (`79955ee`…`1cc907f`)
+
+Started because "recorded, not promised" was being read as permission to
+keep recorded forever. The working order was verification capacity, not
+convenience: CI-side Linux building first (a Linux machine exists only in
+CI), then the data seam, engine depth last.
+
+- **M16.1 Linux portable bundle** (`79955ee`, Linux Package #6): the same
+  PyInstaller spec made cross-platform, the smoke contract gained
+  `--platform linux` (api/ + web/ + `trinity.sh`, no native/ —
+  native-backed engines must refuse honestly *inside the bundle*, which
+  the smoke now proves), and the kernel-collection gate counts
+  `libTK*.so*`/`OCP*.so*` so a wheel-less bundle cannot pass.
+- **M16.2 Linux bundle joins the release flow** (`ab67607`, Release #14,
+  tag `v1.0.0-m16proof`): a parallel `linux-package` CI job builds +
+  smokes the zip; the Windows job downloads the artifact, adds
+  `TrinityAI-<ver>-linux64.zip` to `SHA256SUMS.txt`, upload, and
+  download-back verification. `latest.yml` stays win64-scoped (M13's
+  updater gates intact); the proof tag publishes as a prerelease and
+  `/releases/latest` still resolves to `v0.9.0`.
+- **M17 data schema/migration seam** (`1b277da`, CI #200 + Linux
+  Package #7): `DATA_SCHEMA.json` at `TRINITY_STORAGE_ROOT` records
+  `schema_version` and is applied at startup *before* the database is
+  touched; legacy unmarked storage is version 0 and migration 1 is the
+  idempotent v1 schema init; future-version, corrupt-marker, non-integer,
+  negative, and gap-in-chain states all refuse with the problem named
+  (atomic write-then-replace; explicit tested `MIGRATIONS` chain).
+- **M18.1–.4 engine depth beyond CAD** (`7557dc4`, `ef6be45`, `57e342d`,
+  `1cc907f`; books ticked `734ac59`): the verify-before-advertise rule
+  applied to the non-CAD engines, native preferred whenever `Trinity.exe`
+  exists. `simulation`: closed-form linear motion + RK4/semi-implicit
+  `simulate_spring_chain` with a 1% energy-conservation check and honest
+  downsample flags. `robotics`: standard-DH FK + linear joint-space
+  trajectory planning under the native default envelopes (joint/link IR
+  ops stay native-only and unadvertised). `vision`: `image_inspect` +
+  `document_parse` behind the light `[vision]` extra (Pillow/pypdf);
+  OCR is named native-only. `research`: `search` keeps the native hit
+  shape over caller documents or the bundled repo docs (shipped inside
+  the PyInstaller spec). `pcb`/`firmware` stay native-Windows with
+  honest refusals until the POSIX native transport lands.
+
+Suite counts at stage close: pytest 398 passed / 40 skipped after M17;
+488 passed / 40 skipped after M18.4; ruff clean. Proof runs: Linux
+Package #6/#7, Release #14, CI #200.
+
+---
+
 ## Where this leaves the project
 
-Everything planned through Stage 9 has shipped and been verified end to
-end. The current limits are deliberate and stated by the product itself
-wherever they are observable; [ROADMAP.md](ROADMAP.md) keeps the honest
-list: Windows-only packaging (no macOS/Linux bundle), self-signed
+Stages 1–10 have shipped and been verified end to end; the deferred list
+worked. The current limits are deliberate and stated by the product
+itself wherever they are observable; [ROADMAP.md](ROADMAP.md) keeps the
+honest list: native engines are Windows-only — the Linux bundle ships
+without them and says so inside the bundle (macOS packaging still
+deferred), self-signed
 certificates until public distribution begins (M12's settled policy),
 a single OpenAI-shaped self-hosted model seam whose CI truth is pinned
 by scripted fakes — CI never attaches a model — and `v1.0.0` remaining

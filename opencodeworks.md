@@ -1138,3 +1138,16 @@ Track B runs only if the user goes fully hosted.
   clean.
 
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
+
+### Stage 14 A0 pre-work (done)
+
+- [x] **Milestone-record backfill.** `docs/MILESTONES.md` stops at
+  Stage 9 while M16/M17/M18 shipped — every hash the backfill cites was
+  verified against `git show` (M16.1 `79955ee`, M16.2 `ab67607`, M17
+  `1b277da`, M18.1–.4 `7557dc4`/`ef6be45`/`57e342d`/`1cc907f`, books
+  `734ac59`), proof-run refs included, timeline rows added, and the
+  closing limits paragraph now matches what actually shipped (a Linux
+  bundle exists and says no-native inside the bundle; macOS still
+  deferred). `docs/ROADMAP.md` corrected: M18 "(in work)" → done with
+  past-tense descriptions and suite proof (488/40); the closing section
+  keeps the POSIX daemon as the open queue head.

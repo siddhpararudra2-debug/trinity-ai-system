@@ -1,8 +1,10 @@
 # Trinity AI — Roadmap
 
-Status: everything planned through Stage 9 has shipped — M1–M9
+Status: everything planned through Stage 10 has shipped — M1–M9
 (Stages 1–6), M10–M13 release hardening (Stage 7), M14 CAD depth
-(Stage 8), M15 agentic workflow depth (Stage 9). The complete,
+(Stage 8), M15 agentic workflow depth (Stage 9), and Stage 10's
+deferred-list work (M16 Linux bundle, M17 data seam, M18 engine depth
+beyond CAD). The complete,
 hash-verified record lives in [MILESTONES.md](MILESTONES.md); the
 working rules are [PROCESS.md](PROCESS.md). This file no longer plans
 milestones that have already happened — it keeps the honest list of
@@ -27,7 +29,7 @@ what is *not* done.
    decision; re-tagging old shas from later stages is not done and the
    `v0.9.0` workflow runs stay as the published proof of the pipeline.
 
-## Stage 10 (open): working the deferred list
+## Stage 10 (done): working the deferred list
 
 Started because "recorded, not promised" was read as permission to keep
 recorded forever — it is not. Working order is verification capacity,
@@ -57,19 +59,21 @@ the M-rules: one concern per commit, verified before advertised.
   v1 schema init; future versions refuse and say so rather than guessing,
   corrupt markers refuse the same way, and the migration chain is
   explicit and tested. Linux Package #7 @ `1b277da` is green too.
-- **M18 — engine depth beyond CAD** (in work): smallest
+- **M18 — engine depth beyond CAD** (done, `7557dc4`…`1cc907f`,
+  books ticked `734ac59`): smallest
   verify-before-advertise increments the registry rules allow. M18.1
-  gives `simulation` a real Python fallback for the two ops it
+  gave `simulation` a real Python fallback for the two ops it
   advertises (`simulate`, `simulate_spring_chain`) where no
   `Trinity.exe` exists; native stays preferred when present, and the
   native-only ledger/export paths are documented as such rather than
-  faked. M18.2 gives `robotics` the same treatment for `kinematics`
+  faked. M18.2 gave `robotics` the same treatment for `kinematics`
   (standard-DH FK) and `trajectory_plan` (linear joint-space motion).
-  M18.3 adds `vision` with `image_inspect` and `document_parse` behind a
-  light `[vision]` extra; M18.4 adds `research` with `search` over
+  M18.3 added `vision` with `image_inspect` and `document_parse` behind a
+  light `[vision]` extra; M18.4 added `research` with `search` over
   caller-supplied documents or the bundled repo docs. `pcb` and
   `firmware` remain native-Windows with honest refusals until the POSIX
-  native transport lands.
+  native transport lands. Suite after M18.4: 488 passed / 40 skipped,
+  ruff clean (proof runs: Linux Package #6/#7, Release #14, CI #200).
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
   the transport abstraction gets a POSIX backend before any bundle
   claims native engines on Linux.
