@@ -1119,4 +1119,22 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 Track B runs only if the user goes fully hosted.
 
+### Stage 14 pre-work (done)
+
+- [x] **CI lint gate repair — `ruff check src tests` back to green.** The
+  Stage 13/14 commits left the CI lint step red (69 findings in `src tests`:
+  38 unused imports, 12 E402 in `main.py`, 9 deprecated `typing` imports,
+  5 blind excepts, 3 dead variables) and hid two latent crashes:
+  `src/vector_store/__init__.py` called `cosine_similarity` and `embed`
+  without importing either — every cosine-mode `search()` was a `NameError`
+  waiting for its first caller (the module is wired to `src.embeddings`,
+  which owns both, so the fix is the missing import). `src/main.py`'s
+  `.env.dummy`-loads-first ordering is now marked `# noqa: E402` with the
+  reason stated once; blind excepts that deliberately convert failures into
+  honest error payloads carry `# noqa: BLE001` with that reason (matching the
+  `routes.py` precedent); the three dead variables are gone. `cloud/` stays
+  outside the CI gate and untouched. Proof: `pytest tests` 707 passed /
+  26 skipped (identical to the Stage 12 baseline), `ruff check src tests`
+  clean.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
