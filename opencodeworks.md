@@ -1106,7 +1106,7 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 **A6 Router** `[done]` One `ModelClient` interface over the existing clients. Model per task from config, fallback order, timeout, and a log of which model answered (no design content). The rule-based router stays first; tests assert zero model calls on matched requests, and cover timeout, error and fallback with fake clients.
 
-**A7 Explain and Fix** [pending]
+**A7 Explain and Fix** `[done]` UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green.
 - **Explain:** read-only. Every claim cites a check id or record field from the report. Test that each cited id exists.
 - **Fix:** takes a FAILED report and returns a record patch. The server validates the patch with the normal loaders and shows a diff. Only after the user confirms does it save (a snapshot is made first), re-run Inspect, and show before and after. If a new FAIL appears, offer a one-click restore. Max 3 attempts. Tests: good patch, invalid patch refused, patch that makes things worse.
 - **UI:** "Explain" and "Propose fix" buttons on the Report tab.

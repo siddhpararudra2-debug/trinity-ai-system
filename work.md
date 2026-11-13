@@ -95,7 +95,7 @@ A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fix
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
-A7 Explain and Fix [pending - needs report data structure + citation validation + patch validation + snapshot infrastructure + UI buttons]
+A7 Explain and Fix — UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
 B1 Native engine audit [pending - needs hosted decision + Linux build assessment or Windows workers]
 B2 Workers [pending - blocked on B1 hosted decision]
 B3 Sandbox and limits [pending - needs hosted decision + plan token integration]

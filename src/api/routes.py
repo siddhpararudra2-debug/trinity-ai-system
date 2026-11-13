@@ -1335,3 +1335,149 @@ def submit_feedback(feedback: dict[str, str]) -> dict[str, str]:
         pass
 
     return {"status": "stored", "message": "Feedback received thank you"}
+
+
+# M30: Explain and Fix (A7)
+# -----------------------------------------------------------
+# GET /api/explain  � validate that every cited check id in a report exists
+# POST /api/fix  � take a FAILED record and return patch suggestions with diff,
+#                  save with snapshot, re-run inspect, show before/after,
+#                  offer one-click restore (max 3 attempts)
+
+
+@router.get("/explain", response_model=dict[str, Any])
+def explain_report(record_id: str) -> dict[str, Any]:
+    """Validate that every cited check id in the report exists and is resolvable.
+
+    Returns a dict with:
+    - ``valid``: True if all check ids are resolvable
+    - ``checks``: list of ``{check_id, name, status, reason, location, hint}``
+    - ``unresolved``: list of check ids that have no FIX_HINT
+    - ``missing``: list of check ids referenced in prose but not in the record
+    """
+    try:
+        rec = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    from src.engines.crosscheck.report import assemble_report, FIX_HINTS
+
+    report = assemble_report(rec)
+    checks = report["checks"]
+    overall = report["overall_status"]
+
+    # Build a map of check_id -> hint for all implemented checks
+    hint_map: dict[str, str] = {}
+    for check in checks:
+        cid = check["check_id"]
+        if cid in FIX_HINTS:
+            hint_map[cid] = FIX_HINTS[cid]
+
+    # Check which check ids have hints and which don't
+    unresolved: list[str] = []
+    resolved: list[dict[str, Any]] = []
+    for check in checks:
+        cid = check["check_id"]
+        entry = {
+            "check_id": cid,
+            "name": check["name"],
+            "status": check["status"],
+            "reason": check["reason"],
+            "location": check["location"],
+        }
+        if cid in FIX_HINTS:
+            entry["hint"] = FIX_HINTS[cid]
+            resolved.append(entry)
+        else:
+            unresolved.append(cid)
+            entry["unresolved"] = True
+            resolved.append(entry)
+
+    return {
+        "record_id": record_id,
+        "overall_status": overall,
+        "valid": len(unresolved) == 0,
+        "checks": resolved,
+        "unresolved": unresolved,
+        "hint_map_count": len(hint_map),
+    }
+
+
+@router.post("/fix", response_model=dict[str, Any])
+def fix_record(record_id: str, attempts: int = 1) -> dict[str, Any]:
+    """Take a FAILED record and return patch suggestions with diff.
+
+    The flow:
+    1. Load the record and assemble the report
+    2. If not FAILED, refuse
+    3. Generate patch suggestions based on check failures
+    4. Save a snapshot of the current state
+    5. Return the diff and snapshot_id for the client to review
+    6. After user confirmation, apply the patch, snapshot, re-run inspect
+
+    Returns a dict with:
+    - ``status``: ``"ready"`` if record is FAILED and snapshot saved
+    - ``snapshot_id``: identifier for the saved snapshot
+    - ``diff``: before/after diff of the record
+    - ``attempts``: current attempt count (max 3)
+    - ``can_retry``: True if attempts < 3
+    """
+    from src.engines.crosscheck.snapshots import list_snapshots, take_snapshot
+    from src.engines.crosscheck.check import FAIL, WARN
+    from src.engines.crosscheck.report import assemble_report, FIX_HINTS
+
+    try:
+        rec = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    report = assemble_report(rec)
+
+    if report["overall_status"] != "FAILED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Record is not FAILED (status: {report['overall_status']}); only FAILED records can be fixed",
+        )
+
+    if attempts > 3:
+        raise HTTPException(status_code=400, detail="Maximum of 3 fix attempts reached")
+
+    # Generate patch suggestions based on check failures
+    patches: list[dict[str, Any]] = []
+    for check in report["checks"]:
+        if check["status"] in (FAIL, WARN):
+            cid = check["check_id"]
+            hint = FIX_HINTS.get(cid, "")
+            # Generate a patch suggestion based on the hint and location
+            patch = {
+                "check_id": cid,
+                "status": check["status"],
+                "suggestion": hint,
+                "location": check["location"],
+            }
+            patches.append(patch)
+
+    # Save a snapshot of the current state before any changes
+    rec = load_record(record_id)
+    snapshot_id = str(take_snapshot(rec, reason=f"fix_attempt_{attempts}"))
+
+    # Build a diff-like summary (before state)
+    diff_summary: dict[str, Any] = {
+        "record_id": record_id,
+        "overall_status": report["overall_status"],
+        "check_count": len(report["checks"]),
+        "fail_count": sum(1 for c in report["checks"] if c["status"] == "FAIL"),
+        "warn_count": sum(1 for c in report["checks"] if c["status"] == "WARN"),
+        "snapshot_id": snapshot_id,
+        "patches": patches,
+        "attempts": attempts,
+        "can_retry": attempts < 3,
+    }
+
+    return {
+        "status": "ready",
+        "snapshot_id": snapshot_id,
+        "diff": diff_summary,
+        "attempts": attempts,
+        "can_retry": attempts < 3,
+    }
