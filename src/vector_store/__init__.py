@@ -7,7 +7,7 @@
 
  Vector data is stored as (id, embedding, metadata) tuples.
  Metadata can carry source, page, chapter, or any LLM‑link‑able
- information required for “answers with sources”.
+ information required for "answers with sources".
 """
 
 from __future__ import annotations
@@ -119,9 +119,9 @@ def ingest_documents(
     -------
     >>> docs = [
     ...     {"id": "doc1", "text": "Trinity uses Python for its engine.",
- ...      "source": "design.md", "page": 42},
+     ...      "source": "design.md", "page": 42},
     ...     {"id": "doc2", "text": "The PCB engine validates nets.",
- ...      "source": "pcb-engine.md", "page": 17},
+     ...      "source": "pcb-engine.md", "page": 17},
     ... ]
     >>> store = VectorStore(dimension=384)
     >>> ingest_documents(store, docs)
@@ -132,6 +132,6 @@ def ingest_documents(
     for doc in documents:
         text = doc.get(text_key, "")
         vid = doc.get(id_key, str(id(text)))
-        metadata = {k: doc.get(k) for k in meta_keys if k in doc}
+        metadata = {k: doc.get(k) for k in [text_key, id_key] + (meta_keys or []) if k in doc}
         vec = embed(text)
         store.add(vid, vec, metadata)

@@ -93,7 +93,7 @@ M35 launch check (3-4 days). [ pending ]
   passed / 26 skipped, ruff clean.
 A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
-A5 Literature RAG [pending - needs embedding model choice + document chunking infrastructure + ~15 retrieval evals]
+A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router [pending - needs LLM link-up from other developer + model config + fake client infrastructure]
 A7 Explain and Fix [pending - needs report data structure + citation validation + patch validation + snapshot infrastructure + UI buttons]
 B1 Native engine audit [pending - needs hosted decision + Linux build assessment or Windows workers]

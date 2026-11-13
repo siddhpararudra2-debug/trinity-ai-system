@@ -138,29 +138,23 @@ class RagPipeline:
 _DUMMY_CORPUS: list[dict[str, Any]] = [
     {
         "id": "trinity_arch",
-        "text": (
-            "Trinity is a full‑stack electronic design automation platform "
-            "supporting CAD schematic capture, PCB netlist generation, "
-            "firmware source creation, and verification reporting."
-        ),
+        "text": "Trinity is a full‑stack electronic design automation platform "
+                "supporting CAD schematic capture, PCB netlist generation, "
+                "firmware source creation, and verification reporting.",
         "source": "design_guide.md",
         "page": 1,
     },
     {
         "id": "pcb_intro",
-        "text": (
-            "The PCB engine generates a board outline, places components "
-            "from a netlist, and exports Gerber files for fabrication."
-        ),
+        "text": "The PCB engine generates a board outline, places components "
+                "from a netlist, and exports Gerber files for fabrication.",
         "source": "pcb_guide.md",
         "page": 3,
     },
     {
         "id": "firmware_intro",
-        "text": (
-            "The firmware engine generates C source code for the selected "
-            "MCU, including UART, SPI and I2C peripheral initialization.",
-        ),
+        "text": "The firmware engine generates C source code for the selected "
+                "MCU, including UART, SPI and I2C peripheral initialization.",
         "source": "fw_guide.md",
         "page": 7,
     },
