@@ -237,8 +237,19 @@ def test_require_native_turns_every_skip_into_a_fail(capsys, monkeypatch) -> Non
     monkeypatch.delenv("TRINITY_NATIVE_EXEC", raising=False)
     exit_code = run.main(["--require-native"])
     out = capsys.readouterr().out
-    # Native-absent machine: the 13 native-dependent prompts SKIPped; the
-    # required-native run turns each into a FAIL carrying its reason.
-    assert "25 PASS / 13 FAIL / 0 SKIP of 38" in out
+    # The SKIP count is environment-conditional (same truth as the
+    # baseline test above): with the STEP kernel 13 prompts SKIP and
+    # without it 14 do. --require-native turns every SKIP into a FAIL
+    # carrying its reason, so the FAIL count must match the machine.
+    has_step_kernel = (
+        importlib.util.find_spec("cadquery") is not None
+        or importlib.util.find_spec("OCP") is not None
+    )
+    expected_summary = (
+        "25 PASS / 13 FAIL / 0 SKIP of 38"
+        if has_step_kernel
+        else "24 PASS / 14 FAIL / 0 SKIP of 38"
+    )
+    assert expected_summary in out
     assert "require-native: SKIP is not acceptable" in out
     assert exit_code == 1
