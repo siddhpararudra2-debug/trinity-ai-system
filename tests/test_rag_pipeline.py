@@ -11,10 +11,8 @@ and additional test documents. Verifies that:
 """
 
 import sys
-import os
 sys.path.insert(0, r"C:\Users\rudra\Desktop\trinity ai\trinity-ai-system")
 
-import pytest
 from src.rag import RagPipeline, init_dummy_corpus, embed, chunk_text
 
 

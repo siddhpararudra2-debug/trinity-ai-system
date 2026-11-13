@@ -1422,7 +1422,7 @@ def fix_record(record_id: str, attempts: int = 1) -> dict[str, Any]:
     - ``attempts``: current attempt count (max 3)
     - ``can_retry``: True if attempts < 3
     """
-    from src.engines.crosscheck.snapshots import list_snapshots, take_snapshot
+    from src.engines.crosscheck.snapshots import take_snapshot
     from src.engines.crosscheck.check import FAIL, WARN
     from src.engines.crosscheck.report import assemble_report, FIX_HINTS
 
