@@ -1104,7 +1104,7 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 **A5 Literature RAG** `[done]` Chunk the existing documents with source and page. Local embedding model by default (offline), named in config. Keep keyword search as fallback. Show only retrieved passages with source; below a score threshold, say "not found". Add ~15 retrieval evals. Proof: pytest 723 passed / 26 skipped, ruff clean.
 
-**A6 Router** [pending] One `ModelClient` interface over the existing clients. Model per task from config, fallback order, timeout, and a log of which model answered (no design content). The rule-based router stays first; tests assert zero model calls on matched requests, and cover timeout, error and fallback with fake clients.
+**A6 Router** `[done]` One `ModelClient` interface over the existing clients. Model per task from config, fallback order, timeout, and a log of which model answered (no design content). The rule-based router stays first; tests assert zero model calls on matched requests, and cover timeout, error and fallback with fake clients.
 
 **A7 Explain and Fix** [pending]
 - **Explain:** read-only. Every claim cites a check id or record field from the report. Test that each cited id exists.

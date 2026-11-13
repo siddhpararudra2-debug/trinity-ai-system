@@ -94,7 +94,7 @@ M35 launch check (3-4 days). [ pending ]
 A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
-A6 Router [pending - needs LLM link-up from other developer + model config + fake client infrastructure]
+A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A7 Explain and Fix [pending - needs report data structure + citation validation + patch validation + snapshot infrastructure + UI buttons]
 B1 Native engine audit [pending - needs hosted decision + Linux build assessment or Windows workers]
 B2 Workers [pending - blocked on B1 hosted decision]
