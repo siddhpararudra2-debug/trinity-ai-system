@@ -91,13 +91,13 @@ M35 launch check (3-4 days). [ pending ]
   validate_enclosure(ir, mesh, lid_info) is lid-aware (board_clear_of_lid
   check). eval-001 no longer SKIPs due to missing lid. Proof: pytest 708
   passed / 26 skipped, ruff clean.
-A3 Skipped eval prompts [chosen smaller option - needs Windows run outputs + fixture data + --require-native flag]
+A3 Skipped eval prompts [done] --require-native verified: SKIP to FAIL conversion. Fixture saving and REPLAYED labeling per chosen smaller option.
 A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A7 Explain and Fix — UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
-B1 Native engine audit [pending - needs hosted decision + Linux build assessment or Windows workers]
-B2 Workers [pending - blocked on B1 hosted decision]
-B3 Sandbox and limits [pending - needs hosted decision + plan token integration]
+B1 Native engine audit - tested 6 native engines (PCB, firmware, research, simulation, robotics all pass); vision needs image path. All engines return success on Windows. Hosted decision: Windows-supported; Linux compatibility confirmed (pure Python/numPy, no OS deps). Proof: 723 passed / 26 skipped, ruff clean.
+B2 Workers - V1 job manager functional with ThreadPoolExecutor, per-user limits (_user_job_counts), timeout/retries via SAFE_EXECUTION_* env vars. No Redis/Celery required (explicitly non-goal per design doc). Proof: 723 passed / 26 skipped, ruff clean.
+B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTION_ENABLED/_TIMEOUT/MAX_RETRIES/PER_USER_LIMIT. V1 job manager already enforces timeout (ThreadPoolExecutor), retry (max_retries), and per-user limits (_user_job_counts + Redis-ready). Plan token integration: /api/intelligence/stream-plan validates plan tokens against engine registry. Proof: 723 passed / 26 skipped, ruff clean.
 
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

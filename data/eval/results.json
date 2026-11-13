@@ -2,8 +2,8 @@
   {
     "id": "eval-001",
     "domain": "cad",
-    "verdict": "SKIP",
-    "detail": "the V1 enclosure has no lid parameter (length, width, height, wall_thickness only); the prompt's removable-lid truth cannot be verified by this build"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - the V1 enclosure has no lid parameter (length, width, height, wall_thickness only); the prompt's removable-lid truth cannot be verified by this build"
   },
   {
     "id": "eval-002",
@@ -15,31 +15,31 @@
     "id": "eval-003",
     "domain": "cad",
     "verdict": "PASS",
-    "detail": "VALIDATED; STEP written to quadcopter_frame_250mm_a644fe51.step (260198 bytes)"
+    "detail": "VALIDATED; STEP written to quadcopter_frame_250mm_c73d367d.step (260228 bytes)"
   },
   {
     "id": "eval-004",
     "domain": "pcb",
-    "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-005",
     "domain": "pcb",
-    "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-006",
     "domain": "firmware",
-    "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-007",
     "domain": "firmware",
-    "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-008",
@@ -81,7 +81,7 @@
     "id": "eval-014",
     "domain": "cad",
     "verdict": "PASS",
-    "detail": "DXF written to l_bracket_40x80x20mm_drawing_e60e3395.dxf (10108 bytes)"
+    "detail": "DXF written to l_bracket_40x80x20mm_drawing_85c038d3.dxf (10108 bytes)"
   },
   {
     "id": "eval-015",
@@ -152,8 +152,8 @@
   {
     "id": "eval-026",
     "domain": "firmware",
-    "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-027",
@@ -177,25 +177,25 @@
     "id": "eval-030",
     "domain": "mixed",
     "verdict": "PASS",
-    "detail": "2 of 2 listed; the unreadable one carries 'C:\\Users\\rudra\\AppData\\Local\\Temp\\tmpz2gq3z1l\\unreadable-design\\record.json is unreadable or not valid JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1)); refusing to guess what this record contains' verbatim and no invented stamps"
+    "detail": "2 of 2 listed; the unreadable one carries 'C:\\Users\\rudra\\AppData\\Local\\Temp\\tmpivrtyskc\\unreadable-design\\record.json is unreadable or not valid JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1)); refusing to guess what this record contains' verbatim and no invented stamps"
   },
   {
     "id": "eval-031",
     "domain": "cad",
-    "verdict": "SKIP",
-    "detail": "the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
   },
   {
     "id": "eval-032",
     "domain": "pcb",
-    "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-033",
     "domain": "firmware",
-    "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-034",
@@ -206,25 +206,25 @@
   {
     "id": "eval-035",
     "domain": "mixed",
-    "verdict": "SKIP",
-    "detail": "the pcb and firmware engines are the Python fallbacks on this machine (status 'scaffolded' \u2014 the native binaries are absent); the mixed truth of BME280 sensor integration with ESP32 MQTT publishing cannot honestly be verified here, and the table states that rather than inventing a pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass Beyond that, the mixed truth of BME280 sensor integration with ESP32 MQTT publishing has no grading plan at all, and the table states that rather than inventing a pass"
   },
   {
     "id": "eval-036",
     "domain": "cad",
-    "verdict": "SKIP",
-    "detail": "the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - the cad engine is available but this prompt's design verification requires a STEP/validated fixture not present in this build; the prompt's design truth cannot honestly be verified here"
   },
   {
     "id": "eval-037",
     "domain": "pcb",
-    "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-038",
     "domain": "firmware",
-    "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "verdict": "FAIL",
+    "detail": "require-native: SKIP is not acceptable on a machine claimed to be native-capable - firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   }
 ]

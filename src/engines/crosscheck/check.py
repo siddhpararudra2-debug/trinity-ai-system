@@ -722,8 +722,14 @@ def _check_c08(record: DesignRecord) -> CheckResult:
         )
     cw = _as_float(cavity.get("width_mm"))
     ch = _as_float(cavity.get("height_mm"))
+    # A2: If enclosure has a lid fitted, use effective inner height
+    # for the board-fit check. The lid thickness + clearance reduce
+    # the available cavity height.
+    lid_t = _as_float(cavity.get("lid_thickness", 0.0))
+    lid_c = _as_float(cavity.get("lid_clearance", 0.0))
+    ch_use = ch - lid_t - lid_c if lid_t > 0 or lid_c > 0 else ch
     cavity_origin = _xy(cavity.get("origin_mm"))
-    if cw is None or ch is None or cw <= 0 or ch <= 0:
+    if cw is None or ch_use is None or cw <= 0 or ch_use <= 0:
         return _cannot_verify(
             id_, name,
             "enclosure.cavity_mm lacks a usable width_mm/height_mm",

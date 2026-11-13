@@ -156,7 +156,6 @@ def build_enclosure_with_lid(
 
     if lid != "none" and lid_thickness > 0:
         # Lid sits on top of the walls, with an inner cavity
-        lid_inner_height = height - lid_thickness - lid_clearance
         lid_mesh = box(
             center=(0, 0, height - lid_thickness / 2),
             size=(length, width, lid_thickness),

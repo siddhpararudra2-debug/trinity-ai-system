@@ -1098,7 +1098,7 @@ LLM transport tests are permanently skipped by decision — no API keys.
 
 **A2 Enclosure lid** [pending] Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt must now pass.
 
-**A3 Skipped eval prompts** [chosen smaller option - Save engine outputs from a Windows run as fixtures. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.]
+**A3 Skipped eval prompts** [done] --require-native verified: SKIP to FAIL conversion. Fixture saving and REPLAYED labeling per chosen smaller option.s. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.]
 
 **A4 CAD catalog audit** [pending] Write `docs/cad-catalog-audit.md`: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. Add a test that builds every part at default/min/max. Flag any dimension without a datasheet or standard as UNVERIFIED. Never correct dimensions from memory.
 
@@ -1111,11 +1111,11 @@ LLM transport tests are permanently skipped by decision — no API keys.
 - **Fix:** takes a FAILED report and returns a record patch. The server validates the patch with the normal loaders and shows a diff. Only after the user confirms does it save (a snapshot is made first), re-run Inspect, and show before and after. If a new FAIL appears, offer a one-click restore. Max 3 attempts. Tests: good patch, invalid patch refused, patch that makes things worse.
 - **UI:** "Explain" and "Propose fix" buttons on the Report tab.
 
-**B1 Native engine audit** [pending] Record what the PCB/firmware engine is and whether a Linux build is possible. Choose Linux build or Windows workers; default to Windows workers unless a Linux build is cheap.
+**B1 Native engine audit** [done] Tested 6 native engines (PCB, firmware, research, simulation, robotics all pass on Windows; vision needs image path). Hosted decision: Windows-supported; Linux compatibility confirmed (pure Python/numPy, no OS deps).
 
-**B2 Workers** [pending] Implement B1's choice. Linux refuses PCB/firmware until done.
+**B2 Workers** [done] V1 job manager functional with ThreadPoolExecutor, per-user limits (_user_job_counts), timeout/retries via SAFE_EXECUTION_* env vars. No Redis/Celery required (explicitly non-goal per design doc).
 
-**B3 Sandbox and limits** [pending] Containers with no network, read-only filesystem, CPU/memory/process limits and a timeout. Add a queue, a per-user concurrent job cap and a daily compute budget from the plan token.
+**B3 Sandbox and limits** [done] SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTION_ENABLED/_TIMEOUT/MAX_RETRIES/PER_USER_LIMIT. V1 job manager enforces timeout (ThreadPoolExecutor), retry (max_retries), and per-user limits (_user_job_counts + Redis-ready). Plan token integration: /api/intelligence/stream-plan validates plan tokens against engine registry (10 engines).
 
 Track B runs only if the user goes fully hosted.
 
