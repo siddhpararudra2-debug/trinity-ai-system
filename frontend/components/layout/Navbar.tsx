@@ -10,6 +10,7 @@ const navLinks = [
   { href: '/systems', label: 'Systems' },
   { href: '/projects', label: 'Artifacts' },
   { href: '/about', label: 'About' },
+  { href: '/login', label: 'Log in' },
 ];
 
 export default function Navbar() {

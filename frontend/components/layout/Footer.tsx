@@ -13,6 +13,7 @@ const systemLinks = [
   { href: '/about', label: 'Architecture' },
   { href: 'https://github.com/siddhpararudra2-debug/trinity-ai-system', label: 'GitHub' },
   { href: '/contact', label: 'Contact' },
+  { href: '/login', label: 'Log in' },
 ];
 
 export default function Footer() {
