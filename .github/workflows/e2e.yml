@@ -11,6 +11,7 @@ on:
       - 'frontend/**'
       - 'src/**'
       - 'tests/**'
+      - '.env.dummy'
       - '.github/workflows/e2e.yml'
   pull_request:
     branches:
