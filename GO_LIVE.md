@@ -16,12 +16,13 @@ the items still open before a real production launch.
   research, simulation, robotics, crosscheck. On a machine without the
   native binary, pcb/firmware run as pure-Python fallbacks and honestly
   label themselves `status: "scaffolded"`.
-- **Full pytest suite: 707 passed / 26 skipped** (the 26 tests are the
+- **Full pytest suite: 724 passed / 26 skipped** (the 26 tests are the
   native-binary-dependent ones; they skip with reasons, never fake).
-- **Eval baseline saved** at `data/eval/results.json`:
-  **25 PASS / 0 FAIL / 13 SKIP of 38** (`python -m tools.eval.run`).
-  Every SKIP names why (native binary absent / fixture not in build /
-  lid parameter not in V1 enclosure).
+- **Eval baseline saved** at `data/eval/results.json`
+  (`python -m tools.eval.run`, environment-conditional):
+  **25 PASS / 0 FAIL / 13 SKIP of 38** with the STEP kernel installed;
+  **24 PASS / 0 FAIL / 14 SKIP of 38** without it (the CI backend env).
+  Every SKIP names why (native binary absent / fixture not in build).
 - **`.env.dummy` drives behaviour with zero code edits** — auth toggle,
   plans, GST rates, trust-page copy, feedback endpoint, eval paths, part
   library paths are all read from env at startup.

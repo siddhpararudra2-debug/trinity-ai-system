@@ -100,4 +100,30 @@ B1 Native engine audit - tested 6 native engines (PCB, firmware, research, simul
 B2 Workers - V1 job manager functional with ThreadPoolExecutor, per-user limits (_user_job_counts), timeout/retries via SAFE_EXECUTION_* env vars. No Redis/Celery required (explicitly non-goal per design doc). Proof: 723 passed / 26 skipped, ruff clean.
 B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTION_ENABLED/_TIMEOUT/MAX_RETRIES/PER_USER_LIMIT. V1 job manager already enforces timeout (ThreadPoolExecutor), retry (max_retries), and per-user limits (_user_job_counts + Redis-ready). Plan token integration: /api/intelligence/stream-plan validates plan tokens against engine registry. Proof: 723 passed / 26 skipped, ruff clean.
 
+- [x] CI restoration (Nov 14) — main carried 151 failed workflow runs;
+  every install/pytest/packaging failure traced to three root causes and
+  fixed in four commits, each verified locally before push:
+  - `57feafc` frontend: remove the unused `lucide-react ^0.323.0`
+    devDependency added in C4-C5 — its peer range (react ^16||^17||^18)
+    conflicts with react 19.2.8, breaking npm ci/ERESOLVE in Build &
+    Lint, Browser E2E, and the Linux bundle; nothing imported it. Also
+    the require-native eval assertion now mirrors the baseline test's
+    kernel-conditional count (24 PASS / 14 FAIL without the kernel).
+  - `1ca4843` drop the unused imports unmasked once the pytest fix let
+    the ruff step run for the first time since A1/A7 (routes.py
+    list_snapshots; test_rag_pipeline os/pytest).
+  - `2336b7d` e2e: `.env.dummy` CORS now lists the dummy deployment's
+    own web origins (http://localhost:3000, http://127.0.0.1:3000) —
+    C4-C5's TRINITY_ENV=production rejected every browser preflight
+    with 400s, so all dynamic UI checks failed and the dag/firmware/
+    pcb/vision suites crashed on empty elements. Reproduced locally
+    against the live stack; full e2e 137 passed / 0 failed after the
+    fix. Browser E2E push paths now include `.env.dummy`.
+  - `86289dc` vision: image_inspect validates the request before the
+    Pillow capability check (document_parse already did); a test that
+    removes Pillow and asserts the request error wins locks the order.
+  Proof: pytest 724 passed / 26 skipped, ruff clean; CI, Browser E2E
+  and Linux Package green on main; latest runs of Native Windows,
+  Security & SAST, Release and PR Hygiene all success.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
