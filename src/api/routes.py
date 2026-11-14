@@ -17,16 +17,12 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
-import jwt
-
 from src.agents.coder import CoderAgent
 from src.agents.loop import refusal
 from src.agents.researcher import ResearcherAgent
+from src.api.accounts import do_login
 from src.artifacts.manager import artifact_manager
 from src.core.config import (
-    AUTH_ENABLED,
-    JWT_SECRET,
-    SESSION_TIMEOUT_MINUTES,
     TRINITY_ABOUT_TEXT,
     TRINITY_ANALYTICS_ENABLED,
     TRINITY_DESIGN_OWNERSHIP,
@@ -73,6 +69,7 @@ from src.models.schemas import (
     EngineCapability,
     ExecuteRequest,
     JobOut,
+    LoginRequest,
     MathSolveRequest,
     RequirementRequest,
     StreamPlanRequest,
@@ -110,40 +107,16 @@ def health() -> dict:
 
 
 @router.post("/login", response_model=None)
-def login(username: str, password: str) -> dict[str, Any]:
-    """Authenticate user and return a JWT token.
+def login(body: LoginRequest) -> dict[str, Any]:
+    """Authenticate a user and return access + refresh tokens.
 
-    When TRINITY_AUTH_ENABLED is true, validates credentials against
-    the configured JWT secret. When disabled, accepts any credentials
-    and returns a dummy token for development.
+    Delegates to the M30 accounts module: scrypt-verified credentials,
+    login lockout, verified-only logins and a rotating refresh token
+    (src/api/accounts.py holds the single implementation). With
+    TRINITY_AUTH_ENABLED=false this stays the documented dev mode: any
+    credentials get a per-process signed token without a stored account.
     """
-    if not AUTH_ENABLED:
-        # Development mode: accept any credentials, return dummy token
-        import time
-        issued_at = time.time()
-        token = f"dummy-jwt-{username}-{int(issued_at)}"
-        return {"access_token": token, "token_type": "bearer", "expires_in": SESSION_TIMEOUT_MINUTES * 60}
-    
-    # Production mode: validate credentials
-    # TODO: Implement proper password verification with argon2
-    # For now, accept any non-empty credentials with the JWT secret
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    
-    import time
-    issued_at = time.time()
-    expires_at = issued_at + SESSION_TIMEOUT_MINUTES * 60
-    token = jwt.encode(
-        {
-            "sub": username,
-            "iat": issued_at,
-            "exp": expires_at,
-            "role": "user",
-        },
-        JWT_SECRET,
-        algorithm="HS256",
-    )
-    return {"access_token": token, "token_type": "bearer", "expires_in": SESSION_TIMEOUT_MINUTES * 60}
+    return do_login(body)
 
 
 @router.get("/engines", response_model=list[EngineCapability])

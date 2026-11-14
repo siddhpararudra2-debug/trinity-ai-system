@@ -70,6 +70,11 @@ def trinity_error_handler(request: Request, exc: TrinityError) -> JSONResponse:
         "geometry_validation_error": 422,
         "engine_execution_error": 400,
         "capability_unavailable": 501,
+        # M30 accounts: auth failures are the caller's fault, conflicts
+        # are 409, and a locked account is 423 (Locked) with retry_after.
+        "auth_error": 401,
+        "account_conflict": 409,
+        "account_locked": 423,
     }
     status_code = status_map.get(exc.code, 500)
     log.info(
@@ -93,6 +98,13 @@ def http_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
 
 
 app.include_router(router)
+
+# M30 accounts: signup/verify/login/refresh/logout/reset/me under
+# /api/accounts/*; /api/login itself stays in routes.py for path
+# stability and delegates to the same implementation.
+from src.api.accounts import router as accounts_router  # noqa: E402
+
+app.include_router(accounts_router)
 
 # Packaged mode: TRINITY_UI_DIR points at the Next.js static export
 # (frontend `out/`), which this process then serves at "/". That makes

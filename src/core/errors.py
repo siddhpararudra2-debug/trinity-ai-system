@@ -56,5 +56,23 @@ class ArtifactNotFoundError(TrinityError):
     code = "artifact_not_found"
 
 
+class AuthError(TrinityError):
+    """Authentication failed: bad credentials, bad/expired/replayed token."""
+
+    code = "auth_error"
+
+
+class AccountConflictError(TrinityError):
+    """The email is already registered (M30 accounts)."""
+
+    code = "account_conflict"
+
+
+class AccountLockedError(TrinityError):
+    """The account is locked after repeated failed logins (M30 accounts)."""
+
+    code = "account_locked"
+
+
 class CapabilityUnavailableError(TrinityError):
     code = "capability_unavailable"

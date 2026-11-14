@@ -232,6 +232,41 @@ class ExecuteRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+# ------------------------------------------------------------- accounts ---
+
+# M30 accounts. Request bodies only; responses are plain dicts so the
+# inline-token delivery note can evolve without a schema bump.
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    """``username`` accepts the email address the account signed up with."""
+
+    username: str
+    password: str
+
+
+class VerifyRequest(BaseModel):
+    token: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
 class RequirementRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
 

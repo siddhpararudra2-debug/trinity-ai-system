@@ -63,8 +63,31 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at TEXT NOT NULL
 );
 
+-- M30 accounts: users and the single-use token registry. Passwords are
+-- scrypt hashes; auth_tokens rows carry the jti of every verify/reset/
+-- refresh JWT so replays are detectable server-side.
+CREATE TABLE IF NOT EXISTS users (
+    user_id         TEXT PRIMARY KEY,
+    email           TEXT NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    verified_at     TEXT,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until    REAL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    jti        TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    purpose    TEXT NOT NULL,   -- refresh | verify | reset
+    expires_at REAL NOT NULL,
+    used_at    REAL,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON artifacts(job_id);
 CREATE INDEX IF NOT EXISTS idx_validations_job_id ON validations(job_id);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON auth_tokens(user_id);
 """
 
 

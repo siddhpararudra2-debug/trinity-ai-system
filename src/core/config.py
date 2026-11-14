@@ -29,6 +29,16 @@ JWT_SECRET = os.getenv("TRINITY_JWT_SECRET", "")
 SESSION_TIMEOUT_MINUTES = int(
     os.getenv("TRINITY_SESSION_TIMEOUT_MINUTES", "43200")
 )
+# M30 accounts: token lifetimes and login lockout. Access tokens keep
+# SESSION_TIMEOUT_MINUTES; the refresh token outlives the access token so
+# /api/accounts/refresh can mint a fresh pair, and the verify/reset
+# tokens are short by design because they arrive by link.
+REFRESH_TOKEN_DAYS = int(os.getenv("TRINITY_REFRESH_TOKEN_DAYS", "30"))
+VERIFY_TOKEN_HOURS = int(os.getenv("TRINITY_VERIFY_TOKEN_HOURS", "24"))
+RESET_TOKEN_MINUTES = int(os.getenv("TRINITY_RESET_TOKEN_MINUTES", "30"))
+LOGIN_MAX_FAILURES = int(os.getenv("TRINITY_LOGIN_MAX_FAILURES", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.getenv("TRINITY_LOGIN_LOCKOUT_MINUTES", "15"))
+PASSWORD_MIN_LENGTH = int(os.getenv("TRINITY_PASSWORD_MIN_LENGTH", "8"))
 
 # --- Safe Execution (Item 10) ---
 SAFE_EXECUTION_ENABLED = os.getenv("SAFE_EXECUTION_ENABLED", "false").lower() == "true"
