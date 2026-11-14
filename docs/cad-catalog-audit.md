@@ -46,6 +46,42 @@ Parts are documented in the order they were registered (M18 engine depth beyond 
 
 **Verification status**: `UNVERIFIED` — no external datasheets; all dimension validity comes from the engine's internal rule checks.
 
+### Lid extension (added in A2; audited Nov 14)
+
+A2 added an optional lid to the enclosure module. It is deliberately **not**
+part of the catalog parameter table above: `EnclosureIR.from_request`
+rejects `lid`/`lid_thickness`/`lid_clearance`/`screw_posts` as unknown
+keys, so GET /api/cad/catalog and the registry remain the 4-parameter
+part documented here. The extension lives at module level in
+`src/engines/cad/enclosure.py`:
+
+- `build_enclosure_with_lid(ir, *, lid="none", lid_thickness=0.0,
+  lid_clearance=0.0, screw_posts=False)` returns `(main_mesh, lid_info)`
+  where `lid_info` carries `has_lid`, `lid_mesh`, `inner_height` and
+  `lid_params`. When `lid != "none"` and `lid_thickness > 0`, the lid
+  mesh is a full-footprint slab (length × width × lid_thickness) sitting
+  on top of the walls, and `inner_height` is
+  `height − lid_thickness − lid_clearance`.
+- `validate_enclosure(ir, mesh, lid_info)` adds a `board_clear_of_lid`
+  check: the board top (z=0 floor convention) must not rise above the
+  lid's inner bottom (`height − lid_thickness − lid_clearance`); the
+  check joins the other checks in the pass/fail conjunction.
+- `enclosure_filename_stem(ir, *, lid, lid_thickness)` appends
+  `_lid{thickness}__{lid}` to the artifact filename stem when a lid is
+  configured.
+- The record-level counterpart is request-reachable: crosscheck C08
+  (board-fits-enclosure) reads `enclosure.cavity_mm.lid_thickness` /
+  `lid_clearance` from the design record and reduces the effective
+  cavity height accordingly (`src/engines/crosscheck/check.py`).
+
+**Lid status**: `UNVERIFIED` (module-level API, not request-reachable in
+V1). The engine's generate path builds via the registry builder
+`build_enclosure` and validates with `lid_info=None`, so lid kwargs
+never flow through a request today: `build_enclosure_with_lid` has no
+callers, the C08 lid-reduction branch has no dedicated test, and no test
+exercises the lid meshes or the `board_clear_of_lid` branch. Wired
+coverage is limited to the record-level C08 semantics above.
+
 ---
 
 ## Part: L-bracket (Right-angle bracket: flat base + upright wall)
@@ -222,16 +258,54 @@ A test script was added to `tests/test_cad_catalog.py` (and `tests/test_cad_new_
 - `engine.generate({"type": "<part>", "parameters": <defaults>, "outputs": ["json"]})` with each parameter individually at its `min` value returns `success=True`
 - `engine.generate({"type": "<part>", "parameters": <defaults>, "outputs": ["json"]})` with each parameter individually at its `max` value returns `success=True`
 
-All 708 Python tests / 26 skipped pass with the audit document and test changes committed.
+All 708 Python tests / 26 skipped passed at the time the audit was
+committed; re-verified Nov 14 at **724 passed / 26 skipped** (the lid
+extension and later Stage-14 work added tests; the 26 skips are the
+by-design native-binary ones, each with a reason).
 
 ---
 
 ## Next Steps (A4 Completion)
 
-- [ ] Commit `docs/cad-catalog-audit.md` with the audit above
-- [ ] Add/minimize the min/max build test in `tests/test_cad_catalog.py` / `tests/test_cad_new_parts.py` (already verified: 708 passed / 26 skipped)
-- [ ] Commit and push so CI stays green
-- [ ] Move to A5 (Literature RAG) or A6 (Router) per roadmap order
+- [x] Commit `docs/cad-catalog-audit.md` with the audit above (tracked in
+  git since the A4 commit; `git ls-files docs/cad-catalog-audit.md`
+  confirms)
+- [x] Add/minimize the min/max build test in `tests/test_cad_catalog.py`
+  / `tests/test_cad_new_parts.py` — covered twice over:
+  `test_cad_catalog.py` drift-guards every declared default and bound
+  through the real request path (defaults generate VALIDATED geometry;
+  each bound rejects what it promises and each declared bound value is
+  usable), and `test_cad_new_parts.py` builds each new part at defaults
+  with exact triangle/bbox expectations plus the ACCEPTANCES/REJECTIONS
+  bound probes
+- [x] Commit and push so CI stays green (CI, Browser E2E, Linux Package,
+  Native Windows, Security & SAST, Release and PR Hygiene all success on
+  main as of Nov 14)
+- [x] Move to A5 (Literature RAG) or A6 (Router) per roadmap order (both
+  landed — see work.md; A7 Explain & Fix and B1–B3 landed too)
+
+---
+
+## Audit update (Nov 14)
+
+Re-verified against the current codebase:
+
+- All five parameter tables above still match
+  `src/engines/cad/parts.py` (25 parameters total: enclosure 4,
+  l_bracket 4, mounting_plate 6, quadcopter_frame 7, standoff 4); the
+  `tests/test_cad_catalog.py` drift-guard tests keep doc, registry and
+  engine in lockstep, so drift re-surfaces as a failing test, not as a
+  silent doc rot.
+- The A2 lid extension is documented per part above (Enclosure → Lid
+  extension) with its honest `UNVERIFIED` module-level status: lid
+  kwargs are not catalog parameters, `build_enclosure_with_lid` has no
+  callers, and only the record-level C08 cavity fields are
+  request-reachable.
+- No external part datasheets have been obtained; parameters without a
+  datasheet/standard remain flagged `UNVERIFIED` / `MINIMAX_SAFE` per
+  part — that flagging is the audit's completion criterion, not a
+  blocker.
+- Full suite re-verified: 724 passed / 26 skipped, ruff clean.
 
 ---
 

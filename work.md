@@ -92,7 +92,14 @@ M35 launch check (3-4 days). [ pending ]
   check). eval-001 no longer SKIPs due to missing lid. Proof: pytest 708
   passed / 26 skipped, ruff clean.
 A3 Skipped eval prompts [done] --require-native verified: SKIP to FAIL conversion. Fixture saving and REPLAYED labeling per chosen smaller option.
-A4 CAD catalog audit [pending - needs CAD part datasheets + build test infrastructure]
+A4 CAD catalog audit [done] - doc re-verified against the registry (25
+  params across 5 parts; tables match, and tests/test_cad_catalog.py
+  drift-guards keep doc/registry/engine in lockstep). A2 lid extension
+  documented with its honest status: lid kwargs are NOT catalog
+  parameters (from_request rejects them), build_enclosure_with_lid has
+  no callers, only the record-level C08 cavity lid fields are
+  request-reachable. Next Steps checkboxes ticked with evidence. Proof:
+  pytest 724 passed / 26 skipped, ruff clean.
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A7 Explain and Fix — UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
