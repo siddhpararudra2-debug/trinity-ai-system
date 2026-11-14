@@ -144,6 +144,25 @@ def test_image_inspect_refuses_without_pillow(engine, monkeypatch, tmp_path):
     assert excinfo.value.details["missing"] == "pillow"
 
 
+def test_image_inspect_validates_the_request_before_pillow(engine, monkeypatch):
+    """A malformed request must report the request error even when the
+    Pillow capability is absent: request validation is the caller's
+    contract and runs first; the capability error only answers a
+    well-formed request the environment cannot serve.
+    """
+    from src.artifacts.manager import artifact_manager
+
+    def missing(_artifact_id: str):
+        raise ArtifactNotFoundError("no such artifact")
+
+    monkeypatch.setattr(artifact_manager, "get", missing)
+    monkeypatch.setattr(engine_module, "Image", None)
+    with pytest.raises(RequestValidationError, match="Missing or invalid"):
+        engine.execute("image_inspect", {})
+    with pytest.raises(RequestValidationError, match="No artifact 'ghost'"):
+        engine.execute("image_inspect", {"artifact_id": "ghost"})
+
+
 def test_document_parse_reads_utf8_text(engine, tmp_path):
     document = tmp_path / "notes.md"
     document.write_text("hello\nworld\n", encoding="utf-8")

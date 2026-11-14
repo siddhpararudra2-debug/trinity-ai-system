@@ -194,8 +194,13 @@ class VisionEngine(BaseEngine):
     # -- image_inspect ---------------------------------------------------
 
     def _image_inspect(self, parameters: dict[str, Any]) -> EngineResult:
-        _require_pillow("image_inspect")
+        # Request validation precedes the capability check: a malformed
+        # request is the caller's error (422-class) even when Pillow is
+        # absent; the capability error only answers a well-formed request
+        # the environment genuinely cannot serve. document_parse already
+        # follows this order; keep the two operations symmetric.
         path, artifact_id = _resolve_path(parameters, "image_inspect")
+        _require_pillow("image_inspect")
         metadata = _image_metadata(path)
         data = {
             "success": True,
