@@ -39,10 +39,22 @@ M29 close-out (2–3 days) [x] DONE
 
 ### Stage 13 — Accounts, Billing, Trust Plans
 
-M30 accounts (1.5 wks). [ pending ]
+M30 accounts (1.5 wks). [ done ]
 - Signup, verify, login, refresh, logout, reset, delete my account
 - In-app login screen; signed-out use stays on the free tier
 - Tests: lockout, expired tokens, replayed reset links
+- Done: a2a374b — /api/accounts/{signup,verify,refresh,logout,
+  reset-request,reset-confirm,me} + upgraded JSON /api/login; scrypt
+  passwords (stdlib, no new deps), single-rotation refresh jtis in the
+  new auth_tokens table, login lockout (5 failures → 423 + retry_after,
+  env-tunable), reset revokes outstanding sessions, anti-enumeration
+  responses, inline token delivery for the mailer-less dummy
+  deployment. 5e8a950 — app/login screen (sign in / create / verify /
+  reset / refresh / logout / delete) + navbar/footer links; tokens in
+  tab sessionStorage, stated honestly. Tests lock the roadmap
+  contracts: lockout, expired tokens, replayed verify/reset/refresh,
+  deletion, dev mode, signed-out free tier. Proof: pytest 739 passed /
+  26 skipped, ruff clean, npm lint + build clean.
 
 M31 trust pages (1 wk). [ pending ]
 - Privacy, terms, refund and cancellation, design ownership
