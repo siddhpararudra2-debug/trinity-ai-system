@@ -99,11 +99,30 @@ M32 billing (1.5 wks). [ done ]
   statuses, GST math, deletion cleanup. Proof: pytest 758 passed /
   24 skipped, ruff clean.
 
-M33 plans and limits (1 wk). [ pending ]
+M33 plans and limits (1 wk). [ done ]
 - Signed plan token, offline verify, grace
 - Meter LLM calls per day, exports, saved designs
 - Over a limit, show a plain message naming the plan and limit, never a silent failure
 - The free tier keeps all Stage 12 features working
+- Done: c2b479b — limits from config with 0 = unlimited (the dummy
+  deployment ships unmetered; production sets real caps in its env
+  file, zero code edits). Per-day counters in the new usage_counters
+  table, scoped per signed-in user with a shared "anonymous" scope for
+  signed-out use; trialing/active/past_due carry the paid tables —
+  past_due IS the grace period by construction. Over a limit the API
+  answers 402 (plan_limit_exceeded) naming the plan and the limit —
+  never a silent failure; the refused attempt is itself metered.
+  Metered seams: stream_plan + run_agent (llm_calls, only when a model
+  is attached — the deterministic-router fallback and the no-model
+  refusal stay free; the stream answers with an honest SSE error
+  frame, the agent route with 402), download_artifact (exports),
+  save_project (saved_designs, only after the body validates). GET
+  /api/billing/plan-token mints a signed offline-verifiable snapshot
+  (typ=plan, tier/state/plan_id, exp = TRINITY_PLAN_TOKEN_DAYS,
+  default 7) and billing.verify_plan_token() checks it with no
+  database contact — the offline grace window. The free tier keeps
+  every Stage 12 feature until a configured cap is actually reached.
+  Proof: pytest 776 passed / 24 skipped, ruff clean.
 
 M34 business basics (1 wk). [ pending ]
 - Error reports (opt-in, no design contents)
