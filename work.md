@@ -76,12 +76,28 @@ M31 trust pages (1 wk). [ done ]
   honest degrade); footer gains a Trust column. Proof: pytest 745
   passed / 24 skipped, ruff clean, npm lint + build clean.
 
-M32 billing (1.5 wks). [ pending ]
+M32 billing (1.5 wks). [ done ]
 - Plans from config
 - Checkout, webhook with signature check, deduped by event id
 - States: trialing, active, past_due, cancelled, expired
 - Cancel and refund follow the refund page
 - Tests from sample webhooks: duplicate, out-of-order, bad signature
+- Done: e0dd3f5 — GET /api/billing/plans (public, config-driven: ids,
+  INR prices, periods, GST 18=9+9), POST /api/billing/checkout (trial
+  activates locally in trialing; paid plans return an inline order
+  intent and say so — no fabricated rows), POST /api/billing/webhook
+  (HMAC-SHA256 raw-body signature in X-Razorpay-Signature, fail-closed
+  400; event id deduped in webhook_events so replays are acked and
+  never reapplied). Exactly the five roadmap states; Razorpay statuses
+  map onto them; out-of-order charges never regress the period and
+  terminal states cannot be resurrected; paid subscriptions are
+  created by webhooks via the notes.user_id link. Cancel keeps
+  access_until per the refund page; refund.processed records the
+  refund. require_user is the shared auth dependency; account deletion
+  cleans subscriptions. Tests from sample webhooks lock duplicate,
+  out-of-order, bad-signature, the full five-state walk, unmapped
+  statuses, GST math, deletion cleanup. Proof: pytest 758 passed /
+  24 skipped, ruff clean.
 
 M33 plans and limits (1 wk). [ pending ]
 - Signed plan token, offline verify, grace
