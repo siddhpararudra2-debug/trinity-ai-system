@@ -540,8 +540,11 @@ async def project_bom_rebuild(record_id: str) -> dict[str, Any]:
 #    design request and store it under a generated id.  The request body
 #    follows the ``build_record`` contract: a minimal record shape that
 #    the save route will accept and persist.
-@router.post("/projects/from-design", response_model=dict[str, Any])
-
+#    NOT IMPLEMENTED YET: the decorator used to dangle here with no
+#    function body, so it silently stacked onto the next route's
+#    handler and POST /api/projects/from-design executed the reference
+#    listing instead. The decorator is removed until the route exists
+#    - an advertised-but-broken path is worse than an absent one.
 
 # M27 reference library routes
 # -----------------------------------------------------------
@@ -577,12 +580,13 @@ async def match_designs(tags: str) -> list[dict[str, Any]]:
 
 # 3) POST /api/projects/from-reference  -- copy a library design into the
 #    project storage as a new record.  No auto-promotion.
-@router.post("/api/projects/from-reference/{design_id}", response_model=dict[str, Any])
+#    (The path here must NOT repeat the /api prefix: the router already
+#    carries it — an earlier "/api/projects/..." literal registered the
+#    route as /api/api/... where no client could reach it.)
+@router.post("/projects/from-reference/{design_id}", response_model=dict[str, Any])
 async def project_from_reference(design_id: str) -> dict[str, Any]:
     from src.engines.crosscheck import library
     from src.engines.crosscheck.record import DesignRecordError
-    import sys
-    print(f"DEBUG: project_from_reference called with design_id={design_id}", file=sys.stderr, flush=True)
     try:
         record = library._load_design_record(design_id)
     except DesignRecordError:
@@ -604,7 +608,9 @@ async def project_from_reference(design_id: str) -> dict[str, Any]:
     return candidate.to_dict()
 
 # 4) POST /api/reference/candidates  -- queue a design for human review.
-@router.post("/candidates/{design_id}", response_model=dict[str, Any])
+#    (Path aligned with the documented route: the decorator previously
+#    registered it as /api/candidates/{design_id}.)
+@router.post("/reference/candidates/{design_id}", response_model=dict[str, Any])
 async def create_candidate(design_id: str, proposed_by: str = "human") -> dict[str, Any]:
     from src.engines.crosscheck import library
     from src.engines.crosscheck.record import DesignRecordError
