@@ -73,7 +73,9 @@ CREATE TABLE IF NOT EXISTS users (
     verified_at     TEXT,
     failed_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until    REAL,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    agreed_policy_version TEXT,
+    agreed_policy_at      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (

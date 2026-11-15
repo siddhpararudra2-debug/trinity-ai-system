@@ -16,6 +16,13 @@ const systemLinks = [
   { href: '/login', label: 'Log in' },
 ];
 
+const trustLinks = [
+  { href: '/trust#privacy', label: 'Privacy policy' },
+  { href: '/trust#terms', label: 'Terms of service' },
+  { href: '/trust#refund-cancellation', label: 'Refund & cancellation' },
+  { href: '/trust#design-ownership', label: 'Design ownership' },
+];
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
@@ -90,6 +97,17 @@ export default function Footer() {
                   ) : (
                     <Link href={link.href}>{link.label}</Link>
                   )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="footer-heading">Trust</h4>
+            <ul className="footer-links">
+              {trustLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href}>{link.label}</Link>
                 </li>
               ))}
             </ul>

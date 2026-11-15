@@ -317,3 +317,22 @@ def test_signed_out_use_stays_on_the_free_tier(client):
     assert r.status_code == 200, r.text
     r = client.get("/api/engines")
     assert r.status_code == 200, r.text
+
+
+def test_signup_records_the_policy_version_and_time(client):
+    """M31: the account is stamped with the policy version it signed under."""
+    email = _email()
+    _signup_and_verify(client, email)
+    access = _login(client, email, PASSWORD).json()["access_token"]
+    me = client.get(
+        "/api/accounts/me", headers={"Authorization": f"Bearer {access}"}
+    ).json()
+    assert me["agreed_policy_version"] == accounts.TRINITY_POLICY_VERSION
+    assert me["agreed_policy_at"]
+
+    r = client.post(
+        "/api/accounts/signup", json={"email": _email(), "password": PASSWORD}
+    )
+    policy = r.json()["policy"]
+    assert policy["version"] == accounts.TRINITY_POLICY_VERSION
+    assert policy["agreed_at"]

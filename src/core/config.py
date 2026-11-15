@@ -12,7 +12,23 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# The deployment contract (Item 13) is "all real-world values live in
+# .env.dummy at the repository root; swapping values requires zero code
+# edits". Every setting below is read from os.getenv at *import* time,
+# so the env file must be loaded here — before any module binds these
+# values. main.py used to own this load, but anything importing config
+# before main (src.api.accounts does exactly that) bound empty strings
+# permanently; the M31 trust copy came up blank in the full suite while
+# passing in isolation. load_dotenv never overrides variables the real
+# environment already sets, so a production deployment keeps precedence
+# over the dummy file, and a packaged install without the file simply
+# runs on its real environment.
+load_dotenv(str(REPO_ROOT / ".env.dummy"))
+
 STORAGE_ROOT = Path(os.getenv("TRINITY_STORAGE_ROOT", str(REPO_ROOT / "data")))
 DB_PATH = Path(os.getenv("TRINITY_DB_PATH", str(STORAGE_ROOT / "trinity.db")))
 
@@ -57,6 +73,9 @@ TRINITY_ABOUT_TEXT = os.getenv("TRINITY_ABOUT_TEXT", "")
 TRINITY_PRIVACY_POLICY = os.getenv("TRINITY_PRIVACY_POLICY", "")
 TRINITY_TERMS_OF_SERVICE = os.getenv("TRINITY_TERMS_OF_SERVICE", "")
 TRINITY_DESIGN_OWNERSHIP = os.getenv("TRINITY_DESIGN_OWNERSHIP", "")
+# M31: refund/cancellation copy and the policy version stamped at signup.
+TRINITY_REFUND_CANCELLATION = os.getenv("TRINITY_REFUND_CANCELLATION", "")
+TRINITY_POLICY_VERSION = os.getenv("TRINITY_POLICY_VERSION", "draft-1")
 
 # --- Feedback / analytics (Item 13) ---
 # Empty TRINITY_FEEDBACK_ENDPOINT means feedback is stored in the local log only.

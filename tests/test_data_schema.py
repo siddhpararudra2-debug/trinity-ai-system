@@ -141,6 +141,45 @@ def test_migration_chain_is_explicit_and_complete():
     assert set(MIGRATIONS) == set(range(1, SCHEMA_VERSION + 1))
 
 
+def test_v1_users_gain_the_policy_agreement_columns(tmp_path):
+    """Migration 2: a schema-1 users table gets the M31 columns."""
+    root = tmp_path / "storage"
+    db = root / "trinity.db"
+    root.mkdir()
+    conn = sqlite3.connect(db)
+    try:
+        # A v1 users table, exactly as M30 first shipped it (no policy
+        # columns) — migration 2 must add them without touching data.
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                user_id         TEXT PRIMARY KEY,
+                email           TEXT NOT NULL UNIQUE,
+                password_hash   TEXT NOT NULL,
+                verified_at     TEXT,
+                failed_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until    REAL,
+                created_at      TEXT NOT NULL
+            );
+            INSERT INTO users (user_id, email, password_hash, created_at)
+            VALUES ('u1', 'kept@example.com', 'hash', '2026-01-01T00:00:00+00:00');
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    marker_path(root).write_text(
+        json.dumps({"schema_version": 1}), encoding="utf-8"
+    )
+
+    assert apply_data_schema(root, db) == SCHEMA_VERSION
+
+    cols = {row[1] for row in _query(db, "PRAGMA table_info(users)")}
+    assert {"agreed_policy_version", "agreed_policy_at"} <= cols
+    rows = _query(db, "SELECT email FROM users WHERE user_id = 'u1'")
+    assert [row[0] for row in rows] == ["kept@example.com"]
+
+
 def test_missing_migration_refuses_and_writes_nothing(tmp_path, monkeypatch):
     root = tmp_path / "storage"
     monkeypatch.setattr(data_schema, "MIGRATIONS", {})

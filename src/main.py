@@ -3,26 +3,20 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load .env.dummy from the repository root
-# main.py is at src/main.py, so parents[1] = project root
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(str(_PROJECT_ROOT / ".env.dummy"))
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError as FastAPIValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from fastapi import FastAPI, Request  # noqa: E402 - dotenv must load before application imports
-from fastapi.exceptions import RequestValidationError as FastAPIValidationError  # noqa: E402 - dotenv must load before application imports
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402 - dotenv must load before application imports
-from fastapi.responses import JSONResponse  # noqa: E402 - dotenv must load before application imports
-from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402 - dotenv must load before application imports
-
-from src.api.routes import router  # noqa: E402 - dotenv must load before application imports
-from src.core.config import ensure_storage_layout, resolve_cors_origins, settings  # noqa: E402 - dotenv must load before application imports
-from src.core.data_schema import apply_data_schema  # noqa: E402 - dotenv must load before application imports
-from src.core.errors import TrinityError  # noqa: E402 - dotenv must load before application imports
-from src.core.logging_config import configure_logging, get_logger  # noqa: E402 - dotenv must load before application imports
-from src.db.database import init_db  # noqa: E402 - dotenv must load before application imports
-from src.engines.registry import bootstrap_engines, registry  # noqa: E402 - dotenv must load before application imports
+from src.api.routes import router
+from src.core.config import ensure_storage_layout, resolve_cors_origins, settings
+from src.core.data_schema import apply_data_schema
+from src.core.errors import TrinityError
+from src.core.logging_config import configure_logging, get_logger
+from src.db.database import init_db
+from src.engines.registry import bootstrap_engines, registry
 
 configure_logging()
 log = get_logger("main")
@@ -105,6 +99,11 @@ app.include_router(router)
 from src.api.accounts import router as accounts_router  # noqa: E402
 
 app.include_router(accounts_router)
+
+# M31 trust pages: the four policies from config, honestly draft.
+from src.api.trust import router as trust_router  # noqa: E402
+
+app.include_router(trust_router)
 
 # Packaged mode: TRINITY_UI_DIR points at the Next.js static export
 # (frontend `out/`), which this process then serves at "/". That makes

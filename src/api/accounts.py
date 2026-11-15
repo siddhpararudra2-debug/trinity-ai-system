@@ -44,6 +44,7 @@ from src.core.config import (
     REFRESH_TOKEN_DAYS,
     RESET_TOKEN_MINUTES,
     SESSION_TIMEOUT_MINUTES,
+    TRINITY_POLICY_VERSION,
     VERIFY_TOKEN_HOURS,
     settings,
 )
@@ -183,15 +184,26 @@ class AccountStore:
 
     # -- users ------------------------------------------------------------
 
-    def create_user(self, email: str, password_hash: str) -> dict[str, Any]:
+    def create_user(
+        self, email: str, password_hash: str, *, policy_version: str
+    ) -> dict[str, Any]:
         user_id = uuid.uuid4().hex
         created_at = datetime.now(UTC).isoformat()
+        agreed_policy_at = created_at
         try:
             with get_connection(self._path()) as conn:
                 conn.execute(
                     "INSERT INTO users (user_id, email, password_hash, "
-                    "created_at) VALUES (?, ?, ?, ?)",
-                    (user_id, email, password_hash, created_at),
+                    "created_at, agreed_policy_version, agreed_policy_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        user_id,
+                        email,
+                        password_hash,
+                        created_at,
+                        policy_version,
+                        agreed_policy_at,
+                    ),
                 )
                 conn.commit()
         except sqlite3.IntegrityError as exc:
@@ -201,6 +213,8 @@ class AccountStore:
             "email": email,
             "verified_at": None,
             "created_at": created_at,
+            "agreed_policy_version": policy_version,
+            "agreed_policy_at": agreed_policy_at,
         }
 
     def get_user(
@@ -375,7 +389,11 @@ def signup(body: SignupRequest) -> dict[str, Any]:
     _validate_password(body.password)
     if store.get_user(email=email) is not None:
         raise AccountConflictError("email already registered")
-    user = store.create_user(email, hash_password(body.password))
+    user = store.create_user(
+        email,
+        hash_password(body.password),
+        policy_version=TRINITY_POLICY_VERSION,
+    )
     token, _jti, expires_at = _issue_token(
         user["user_id"], "verify", VERIFY_TOKEN_HOURS * 3600
     )
@@ -383,6 +401,10 @@ def signup(body: SignupRequest) -> dict[str, Any]:
         "user_id": user["user_id"],
         "email": email,
         "verified": False,
+        "policy": {
+            "version": TRINITY_POLICY_VERSION,
+            "agreed_at": user["agreed_policy_at"],
+        },
         "verification": {
             "delivery": "inline",
             "token": token,
@@ -495,6 +517,8 @@ def me(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
         "email": user["email"],
         "verified": bool(user.get("verified_at")),
         "created_at": user.get("created_at"),
+        "agreed_policy_version": user.get("agreed_policy_version"),
+        "agreed_policy_at": user.get("agreed_policy_at"),
         "dev": bool(user.get("dev")),
     }
 

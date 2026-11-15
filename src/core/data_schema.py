@@ -26,9 +26,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.core.config import settings
-from src.db.database import init_db
+from src.db.database import get_connection, init_db
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MARKER_NAME = "DATA_SCHEMA.json"
 
 
@@ -86,10 +86,29 @@ def _migrate_0_to_1(root: Path, db_path: Path) -> None:
     init_db(db_path)
 
 
+def _migrate_1_to_2(root: Path, db_path: Path) -> None:
+    """M31: users record the policy version and time agreed at signup.
+
+    v1 databases predate the columns; fresh installs get them from the
+    baseline schema, so the ALTER is guarded and idempotent either way.
+    """
+    del root
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(users)")
+        }
+        for column in ("agreed_policy_version", "agreed_policy_at"):
+            if column not in cols:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
+        conn.commit()
+
+
 # Explicit and ordered: a gap in this mapping is a refusal, never a
 # silent skip. Future versions append here; existing entries never move.
 MIGRATIONS: dict[int, Callable[[Path, Path], None]] = {
     1: _migrate_0_to_1,
+    2: _migrate_1_to_2,
 }
 
 
