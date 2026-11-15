@@ -386,6 +386,37 @@ def require_user(
     return user
 
 
+def optional_user(
+    authorization: str = Header(default=""),
+) -> dict[str, Any] | None:
+    """Identity when a valid bearer is present, else None.
+
+    Public routes (plan streaming, artifact downloads, project saves)
+    stay open to the free tier (M30/M33): metering takes the identity
+    when there is one and silence when there is not.
+    """
+    token = ""
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        return None
+    try:
+        payload = _decode(token, "access")
+    except AuthError:
+        return None
+    return store.get_user(user_id=payload["sub"])
+
+
+def mint_signed_token(payload: dict[str, Any], ttl_seconds: float) -> str:
+    """Shared HS256 minter (account sessions and M33 plan tokens)."""
+    return _mint(payload, ttl_seconds)
+
+
+def verify_signed_token(token: str, *, expected_typ: str) -> dict[str, Any]:
+    """Shared verifier: signature, expiry and typ — nothing else."""
+    return _decode(token, expected_typ)
+
+
 # -- endpoints -----------------------------------------------------------
 
 

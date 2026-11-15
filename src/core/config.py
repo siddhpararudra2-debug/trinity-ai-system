@@ -101,6 +101,32 @@ RAZORPAY_PLAN_ANNUAL_PRICE_INR = int(
 )
 RAZORPAY_PLAN_ANNUAL_DAYS = int(os.getenv("RAZORPAY_PLAN_ANNUAL_DAYS", "365"))
 
+# --- Plans and limits (M33) ---
+# Per-day limits per tier, from config (0 means unlimited: the dummy
+# deployment ships unmetered and production sets real caps in its env
+# file). Metering lives in src/api/limits.py.
+TRINITY_LIMIT_FREE_LLM_CALLS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_FREE_LLM_CALLS_PER_DAY", "0")
+)
+TRINITY_LIMIT_FREE_EXPORTS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_FREE_EXPORTS_PER_DAY", "0")
+)
+TRINITY_LIMIT_FREE_SAVED_DESIGNS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_FREE_SAVED_DESIGNS_PER_DAY", "0")
+)
+TRINITY_LIMIT_PAID_LLM_CALLS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_PAID_LLM_CALLS_PER_DAY", "0")
+)
+TRINITY_LIMIT_PAID_EXPORTS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_PAID_EXPORTS_PER_DAY", "0")
+)
+TRINITY_LIMIT_PAID_SAVED_DESIGNS_PER_DAY = int(
+    os.getenv("TRINITY_LIMIT_PAID_SAVED_DESIGNS_PER_DAY", "0")
+)
+# Offline grace: how long a signed plan token stays verifiable with no
+# backend contact (M33 "offline verify, grace").
+TRINITY_PLAN_TOKEN_DAYS = int(os.getenv("TRINITY_PLAN_TOKEN_DAYS", "7"))
+
 # --- Feedback / analytics (Item 13) ---
 # Empty TRINITY_FEEDBACK_ENDPOINT means feedback is stored in the local log only.
 TRINITY_FEEDBACK_ENDPOINT = os.getenv("TRINITY_FEEDBACK_ENDPOINT", "")

@@ -72,6 +72,9 @@ def trinity_error_handler(request: Request, exc: TrinityError) -> JSONResponse:
         # M32 billing: a webhook whose signature fails is the sender's
         # fault and must not leak whether the secret is set.
         "webhook_signature": 400,
+        # M33 limits: over a plan limit is a billing state, not a rate
+        # limit — 402 with a message naming the plan and the limit.
+        "plan_limit_exceeded": 402,
     }
     status_code = status_map.get(exc.code, 500)
     log.info(

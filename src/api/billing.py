@@ -36,7 +36,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Request
 
-from src.api.accounts import require_user
+from src.api.accounts import (
+    mint_signed_token,
+    require_user,
+    verify_signed_token,
+)
 from src.core.config import (
     RAZORPAY_CGST_RATE,
     RAZORPAY_GST_RATE,
@@ -52,6 +56,7 @@ from src.core.config import (
     RAZORPAY_PLAN_TRIAL_PRICE_INR,
     RAZORPAY_SGST_RATE,
     RAZORPAY_WEBHOOK_SECRET,
+    TRINITY_PLAN_TOKEN_DAYS,
     TRINITY_REFUND_CANCELLATION,
     settings,
 )
@@ -635,6 +640,64 @@ def my_subscription(
     else:
         tier = "paid"
     return {"subscription": _public(row), "tier": tier}
+
+
+def resolve_tier(
+    user_id: str | None,
+) -> tuple[str, str | None, str | None]:
+    """(tier, plan_id, state) for limits and plan tokens.
+
+    trialing/active/past_due all carry the paid limit tables —
+    ``past_due`` *is* the grace period by construction: the state
+    machine keeps it out of the terminal states until the operator's
+    webhook moves it to cancelled/expired.
+    """
+    if not user_id:
+        return "free", None, None
+    row = store.latest_for_user(user_id)
+    if row is None or row["state"] in _TERMINAL_STATES:
+        return "free", None, None
+    return "paid", row["plan_id"], row["state"]
+
+
+@router.get("/plan-token")
+def plan_token(
+    user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    """A signed, offline-verifiable snapshot of the plan state (M33).
+
+    The token carries tier/state/plan and expires after
+    TRINITY_PLAN_TOKEN_DAYS — the offline grace window: a desktop or
+    CLI verifies it locally (signature + expiry, no database) and must
+    re-sync within that window.
+    """
+    tier, plan_id, state = resolve_tier(user["user_id"])
+    ttl = TRINITY_PLAN_TOKEN_DAYS * 86400
+    token = mint_signed_token(
+        {
+            "sub": user["user_id"],
+            "email": user["email"],
+            "typ": "plan",
+            "tier": tier,
+            "state": state,
+            "plan_id": plan_id,
+            "jti": uuid.uuid4().hex,
+        },
+        ttl,
+    )
+    return {
+        "plan_token": token,
+        "tier": tier,
+        "state": state,
+        "plan_id": plan_id,
+        "expires_at": _iso(_now() + ttl),
+        "offline_days": TRINITY_PLAN_TOKEN_DAYS,
+    }
+
+
+def verify_plan_token(token: str) -> dict[str, Any]:
+    """Offline verify (M33): signature + expiry only, no database."""
+    return verify_signed_token(token, expected_typ="plan")
 
 
 @router.post("/cancel")

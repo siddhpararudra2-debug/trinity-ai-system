@@ -80,5 +80,11 @@ class WebhookSignatureError(TrinityError):
     code = "webhook_signature"
 
 
+class PlanLimitError(TrinityError):
+    """A per-day plan limit was exceeded — the message names plan+limit."""
+
+    code = "plan_limit_exceeded"
+
+
 class CapabilityUnavailableError(TrinityError):
     code = "capability_unavailable"

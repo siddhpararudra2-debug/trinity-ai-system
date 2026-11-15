@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import (
     APIRouter,
+    Depends,
     File,
     HTTPException,
     Query,
@@ -20,7 +21,8 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from src.agents.coder import CoderAgent
 from src.agents.loop import refusal
 from src.agents.researcher import ResearcherAgent
-from src.api.accounts import do_login
+from src.api.accounts import do_login, optional_user
+from src.api.limits import check_and_increment
 from src.artifacts.manager import artifact_manager
 from src.core.config import (
     TRINITY_ABOUT_TEXT,
@@ -34,6 +36,7 @@ from src.core.config import (
 from src.core.errors import (
     ArtifactNotFoundError,
     EngineExecutionError,
+    PlanLimitError,
     RequestValidationError,
     TrinityError,
 )
@@ -142,7 +145,12 @@ def get_job(job_id: str) -> JobOut:
 
 
 @router.get("/artifacts/{artifact_id}")
-def download_artifact(artifact_id: str) -> FileResponse:
+def download_artifact(
+    artifact_id: str,
+    user: dict[str, Any] | None = Depends(optional_user),
+) -> FileResponse:
+    """Deliver an artifact; the download is the export seam (M33)."""
+    check_and_increment("exports", user["user_id"] if user else None)
     ref = artifact_manager.get(artifact_id)
     path = Path(ref.path)
     if not path.is_file():
@@ -235,7 +243,11 @@ def open_project(record_id: str) -> dict[str, Any]:
 
 
 @router.put("/projects/{record_id}")
-def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
+def save_project(
+    record_id: str,
+    record: dict[str, Any],
+    user: dict[str, Any] | None = Depends(optional_user),
+) -> dict[str, Any]:
     """Save (create or replace) the record the path names (M21.2).
 
     The body is the record's stored shape, validated with the same
@@ -257,6 +269,10 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
     report re-checks the stored record fresh. A model may never set a
     check verdict, alter ``location``/``reason`` evidence, or mark a
     record VERIFIED; proposing is the whole of its reach at this seam.
+
+    The metering seam (M33): a save that passed validation counts
+    against the caller's daily design-save limit; a refused body does
+    not.
     """
     try:
         candidate = DesignRecord.from_dict(record)
@@ -275,6 +291,9 @@ def save_project(record_id: str, record: dict[str, Any]) -> dict[str, Any]:
         save_record(candidate)
     except DesignRecordError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    check_and_increment(
+        "saved_designs", user["user_id"] if user else None
+    )
     return candidate.to_dict()
 
 
@@ -895,7 +914,10 @@ async def _execute_tool(
 
 
 @router.post("/intelligence/stream-plan")
-async def stream_plan(req: StreamPlanRequest):
+async def stream_plan(
+    req: StreamPlanRequest,
+    user: dict[str, Any] | None = Depends(optional_user),
+):
     """Token-streamed plan over SSE (`text/event-stream`).
 
     With a model endpoint configured, delta tokens stream through as
@@ -922,6 +944,11 @@ async def stream_plan(req: StreamPlanRequest):
         llm = _local_llm()
         if llm.available():
             try:
+                # M33 metering: only a model-backed plan costs a call —
+                # the deterministic-router fallback below stays free.
+                check_and_increment(
+                    "llm_calls", user["user_id"] if user else None
+                )
                 chunks: list[str] = []
                 for text in llm.stream(
                     build_plan_prompt(req.text), system=build_plan_system_prompt()
@@ -948,6 +975,11 @@ async def stream_plan(req: StreamPlanRequest):
                         **plan_frame("model", parsed["summary"], nodes),
                     }
                 )
+                return
+            except PlanLimitError as exc:
+                # Over the daily limit: the honest error frame carries
+                # the plan+limit message (code plan_limit_exceeded).
+                yield sse({"type": "error", "message": exc.to_dict()})
                 return
             except EngineExecutionError as exc:
                 yield sse({"type": "error", "message": exc.to_dict()})
@@ -1007,7 +1039,11 @@ async def stream_plan(req: StreamPlanRequest):
 
 
 @router.post("/agents/{role}/run")
-async def run_agent(role: str, req: AgentRunRequest) -> dict:
+async def run_agent(
+    role: str,
+    req: AgentRunRequest,
+    user: dict[str, Any] | None = Depends(optional_user),
+) -> dict:
     """Multi-step agent run; degrades truthfully when no model is attached."""
     if role not in ("coder", "researcher"):
         raise RequestValidationError(
@@ -1017,6 +1053,10 @@ async def run_agent(role: str, req: AgentRunRequest) -> dict:
     llm = _local_llm()
     if not llm.available():
         return refusal(role)
+    # M33 metering: a model-backed agent run costs an llm_call (the
+    # no-model refusal above is free). Over the limit → 402 via the
+    # PlanLimitError handler in main.py.
+    check_and_increment("llm_calls", user["user_id"] if user else None)
     prompt = req.prompt
     if role == "coder":
         result = await asyncio.to_thread(CoderAgent().run, prompt, llm, req.max_steps)

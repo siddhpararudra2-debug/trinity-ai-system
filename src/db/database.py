@@ -113,6 +113,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     processed_at TEXT NOT NULL
 );
 
+-- M33 plans and limits: per-day per-scope counters (scope is a user
+-- id or the shared 'anonymous' free tier). day is 'YYYY-MM-DD' UTC.
+CREATE TABLE IF NOT EXISTS usage_counters (
+    day    TEXT NOT NULL,
+    scope  TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    count  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, scope, metric)
+);
+
 CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON artifacts(job_id);
 CREATE INDEX IF NOT EXISTS idx_validations_job_id ON validations(job_id);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON auth_tokens(user_id);
