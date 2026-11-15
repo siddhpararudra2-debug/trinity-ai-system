@@ -56,12 +56,25 @@ M30 accounts (1.5 wks). [ done ]
   deletion, dev mode, signed-out free tier. Proof: pytest 739 passed /
   26 skipped, ruff clean, npm lint + build clean.
 
-M31 trust pages (1 wk). [ pending ]
+M31 trust pages (1 wk). [ done ]
 - Privacy, terms, refund and cancellation, design ownership
 - Linked in the footer (About and Contact exist)
 - Draft from the user's facts only; mark each "DRAFT - needs lawyer review"
 - Record policy version and time at signup
 - No training on user designs unless the user decides otherwise
+- Done: 5e37a32 — GET /api/trust serves the four policies from env
+  copy (privacy, terms, refund-cancellation, design-ownership), every
+  one draft:true with "DRAFT - needs lawyer review"; signup stamps
+  TRINITY_POLICY_VERSION + time (users.agreed_policy_version/at via a
+  schema v1→2 migration, exposed by /api/accounts/me and the signup
+  policy block). Fixed a real config-order bug on the way: config
+  reads env at import but main.py owned the .env.dummy load, so
+  modules importing config before main bound empty strings — the
+  refund copy came up blank in the full suite; config now loads the
+  env file itself and a clean-subprocess regression test locks it.
+  app/trust renders the policies server-side (anchors, DRAFT badges,
+  honest degrade); footer gains a Trust column. Proof: pytest 745
+  passed / 24 skipped, ruff clean, npm lint + build clean.
 
 M32 billing (1.5 wks). [ pending ]
 - Plans from config
