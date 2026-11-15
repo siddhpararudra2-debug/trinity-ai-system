@@ -77,6 +77,30 @@ TRINITY_DESIGN_OWNERSHIP = os.getenv("TRINITY_DESIGN_OWNERSHIP", "")
 TRINITY_REFUND_CANCELLATION = os.getenv("TRINITY_REFUND_CANCELLATION", "")
 TRINITY_POLICY_VERSION = os.getenv("TRINITY_POLICY_VERSION", "draft-1")
 
+# --- Billing (Item 11: Razorpay) ---
+# Plans from config: ids, prices (INR) and period lengths are all
+# env-driven so the deployment swaps them without code edits. The
+# state machine lives in src/api/billing.py.
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+RAZORPAY_GST_RATE = int(os.getenv("RAZORPAY_GST_RATE", "18"))
+RAZORPAY_CGST_RATE = int(os.getenv("RAZORPAY_CGST_RATE", "9"))
+RAZORPAY_SGST_RATE = int(os.getenv("RAZORPAY_SGST_RATE", "9"))
+RAZORPAY_PLAN_TRIAL = os.getenv("RAZORPAY_PLAN_TRIAL", "")
+RAZORPAY_PLAN_TRIAL_PRICE_INR = int(os.getenv("RAZORPAY_PLAN_TRIAL_PRICE_INR", "0"))
+RAZORPAY_PLAN_TRIAL_DAYS = int(os.getenv("RAZORPAY_PLAN_TRIAL_DAYS", "30"))
+RAZORPAY_PLAN_MONTHLY = os.getenv("RAZORPAY_PLAN_MONTHLY", "")
+RAZORPAY_PLAN_MONTHLY_PRICE_INR = int(
+    os.getenv("RAZORPAY_PLAN_MONTHLY_PRICE_INR", "499")
+)
+RAZORPAY_PLAN_MONTHLY_DAYS = int(os.getenv("RAZORPAY_PLAN_MONTHLY_DAYS", "30"))
+RAZORPAY_PLAN_ANNUAL = os.getenv("RAZORPAY_PLAN_ANNUAL", "")
+RAZORPAY_PLAN_ANNUAL_PRICE_INR = int(
+    os.getenv("RAZORPAY_PLAN_ANNUAL_PRICE_INR", "4999")
+)
+RAZORPAY_PLAN_ANNUAL_DAYS = int(os.getenv("RAZORPAY_PLAN_ANNUAL_DAYS", "365"))
+
 # --- Feedback / analytics (Item 13) ---
 # Empty TRINITY_FEEDBACK_ENDPOINT means feedback is stored in the local log only.
 TRINITY_FEEDBACK_ENDPOINT = os.getenv("TRINITY_FEEDBACK_ENDPOINT", "")

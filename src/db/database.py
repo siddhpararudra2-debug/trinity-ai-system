@@ -87,9 +87,36 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     created_at TEXT NOT NULL
 );
 
+-- M32 billing: the subscription state machine and the webhook dedup
+-- registry. state is exactly trialing | active | past_due |
+-- cancelled | expired; current_period_end/cancelled_at/refunded_at
+-- are epoch seconds like the other REAL columns.
+CREATE TABLE IF NOT EXISTS subscriptions (
+    subscription_id          TEXT PRIMARY KEY,
+    user_id                  TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    plan_id                  TEXT NOT NULL,
+    state                    TEXT NOT NULL,
+    current_period_end       REAL,
+    cancelled_at             REAL,
+    refunded_at              REAL,
+    provider                 TEXT NOT NULL DEFAULT 'razorpay',
+    provider_subscription_id TEXT,
+    created_at               TEXT NOT NULL,
+    updated_at               TEXT NOT NULL
+);
+
+-- Every processed webhook event id, so a replayed delivery is acked
+-- as a duplicate instead of being applied twice.
+CREATE TABLE IF NOT EXISTS webhook_events (
+    event_id     TEXT PRIMARY KEY,
+    event_type   TEXT NOT NULL,
+    processed_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON artifacts(job_id);
 CREATE INDEX IF NOT EXISTS idx_validations_job_id ON validations(job_id);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON auth_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 """
 
 

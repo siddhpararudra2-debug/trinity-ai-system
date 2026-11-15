@@ -69,6 +69,9 @@ def trinity_error_handler(request: Request, exc: TrinityError) -> JSONResponse:
         "auth_error": 401,
         "account_conflict": 409,
         "account_locked": 423,
+        # M32 billing: a webhook whose signature fails is the sender's
+        # fault and must not leak whether the secret is set.
+        "webhook_signature": 400,
     }
     status_code = status_map.get(exc.code, 500)
     log.info(
@@ -104,6 +107,11 @@ app.include_router(accounts_router)
 from src.api.trust import router as trust_router  # noqa: E402
 
 app.include_router(trust_router)
+
+# M32 billing: plans from config, five-state machine, signed webhooks.
+from src.api.billing import router as billing_router  # noqa: E402
+
+app.include_router(billing_router)
 
 # Packaged mode: TRINITY_UI_DIR points at the Next.js static export
 # (frontend `out/`), which this process then serves at "/". That makes

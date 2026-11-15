@@ -74,5 +74,11 @@ class AccountLockedError(TrinityError):
     code = "account_locked"
 
 
+class WebhookSignatureError(TrinityError):
+    """A webhook failed its signature check or the secret is unset (M32)."""
+
+    code = "webhook_signature"
+
+
 class CapabilityUnavailableError(TrinityError):
     code = "capability_unavailable"

@@ -267,6 +267,12 @@ class PasswordResetConfirm(BaseModel):
     new_password: str
 
 
+class BillingCheckoutRequest(BaseModel):
+    """M32 billing: the plan to start, from GET /api/billing/plans."""
+
+    plan_id: str
+
+
 class RequirementRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
 

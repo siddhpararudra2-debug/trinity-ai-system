@@ -254,6 +254,9 @@ class AccountStore:
             conn.execute(
                 "DELETE FROM auth_tokens WHERE user_id = ?", (user_id,)
             )
+            conn.execute(
+                "DELETE FROM subscriptions WHERE user_id = ?", (user_id,)
+            )
             conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
             conn.commit()
 
@@ -353,10 +356,14 @@ def _access_ttl_seconds() -> float:
     return SESSION_TIMEOUT_MINUTES * 60
 
 
-def _require_user(
+def require_user(
     authorization: str = Header(default=""),
 ) -> dict[str, Any]:
-    """Bearer dependency: decode the access token, load the account."""
+    """Bearer dependency: decode the access token, load the account.
+
+    Shared auth dependency: accounts endpoints and M32 billing both
+    authenticate the same way.
+    """
     token = ""
     if authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
@@ -511,7 +518,7 @@ def reset_confirm(body: PasswordResetConfirm) -> dict[str, Any]:
 
 
 @router.get("/me")
-def me(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
+def me(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     return {
         "user_id": user["user_id"],
         "email": user["email"],
@@ -524,7 +531,7 @@ def me(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
 
 
 @router.delete("/me")
-def delete_me(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
+def delete_me(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     if not user.get("dev"):
         store.delete_user(user["user_id"])
     return {"deleted": True, "email": user["email"]}
