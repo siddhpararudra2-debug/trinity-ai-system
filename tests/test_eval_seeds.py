@@ -16,7 +16,7 @@ import pytest
 
 from src.core.config import REPO_ROOT
 
-PROMPTS_PATH = REPO_ROOT / "data" / "evals" / "prompts.jsonl"
+PROMPTS_PATH = REPO_ROOT / "data" / "eval" / "prompts.jsonl"
 DOMAINS = frozenset({"cad", "pcb", "firmware", "math", "mixed"})
 SEED_KEYS = frozenset({"id", "domain", "prompt", "source"})
 
@@ -41,7 +41,7 @@ def _load() -> list[dict]:
 
 def test_seed_file_exists_and_parses_line_by_line() -> None:
     records = _load()
-    assert records, "data/evals/prompts.jsonl has no prompts"
+    assert records, "data/eval/prompts.jsonl has no prompts"
 
 
 def test_seed_ids_are_unique_and_sequential() -> None:

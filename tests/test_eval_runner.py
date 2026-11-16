@@ -85,7 +85,7 @@ def test_loader_refuses_an_empty_set_and_empty_text(tmp_path: Path) -> None:
 
 
 def test_the_committed_eval_set_meets_the_contract() -> None:
-    prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
+    prompts = run.load_prompts(REPO_ROOT / "data" / "eval" / "prompts.jsonl")
     assert [row["id"] for row in prompts] == [
         f"eval-{index:03d}" for index in range(1, 39)
     ]
@@ -109,7 +109,7 @@ def test_every_prompt_has_a_plan_and_no_plan_fails_here() -> None:
     prompts whose grading plans are not yet written — any other FAIL
     means a real regression.
     """
-    prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
+    prompts = run.load_prompts(REPO_ROOT / "data" / "eval" / "prompts.jsonl")
     rows = [plans.run_plan(record) for record in prompts]
     by_id = {row["id"]: row for row in rows}
     assert len(rows) == 38
@@ -132,7 +132,7 @@ def test_every_prompt_has_a_plan_and_no_plan_fails_here() -> None:
 
 
 def test_the_unverifiable_seeds_skip_with_their_reason() -> None:
-    prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
+    prompts = run.load_prompts(REPO_ROOT / "data" / "eval" / "prompts.jsonl")
     rows = {row["id"]: plans.run_plan(row) for row in prompts}
     # Native-only seeds: native-absent, the scaffold stub refuses honestly;
     # native-present, the plans say plainly that no grading plan exists yet.
@@ -150,7 +150,7 @@ def test_the_unverifiable_seeds_skip_with_their_reason() -> None:
 
 
 def test_engine_plans_carry_their_truth_in_the_detail() -> None:
-    prompts = run.load_prompts(REPO_ROOT / "data" / "evals" / "prompts.jsonl")
+    prompts = run.load_prompts(REPO_ROOT / "data" / "eval" / "prompts.jsonl")
     rows = {row["id"]: plans.run_plan(row) for row in prompts}
     assert rows["eval-008"]["verdict"] == "PASS"
     assert "x = 2.8" in rows["eval-008"]["detail"]
