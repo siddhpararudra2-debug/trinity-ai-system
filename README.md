@@ -2,78 +2,98 @@
 
 ## Overview
 
-Trinity is an AI-assisted hardware design system for embedded systems development. It integrates PCB design, firmware, and CAD tools into a unified workflow.
+Trinity is an AI-assisted hardware design system for embedded systems
+development. It integrates CAD, PCB, and firmware tools into a unified
+workflow with an LLM-independent core: deterministic engines grade
+their own outputs, a strict 38-prompt eval set guards against
+regressions, and every unverifiable claim is refused with a stated
+reason instead of a fake pass.
 
-## Stage 12 (M25-M29) - Make Usable, Then Add the Data Layer
+## Current status (counts as of commit `cf7b7da`, 2026-11-16)
 
-### M25 Backend Gaps ✅ Complete
-- `GET /api/projects/{id}/bom.csv` — export priced BOM as CSV; 404 if record missing, 409 if no BOM data
-- `POST /api/projects/{id}/bom/rebuild` — rebuild BOM from PCB design fragment via `save_record`
-- `POST /api/projects/from-design` — build a new design record from a request body
+- **Backend**: 10 engines registered — math, cad, pcb, firmware,
+  verification, vision, research, simulation, robotics, crosscheck.
+  Without the native binary, pcb/firmware run as pure-Python fallbacks
+  that honestly label themselves `status: "scaffolded"`.
+- **Built** (M20–M33): data layer + schema migration, projects and BOM
+  flows, reference library, India parts catalog, JWT accounts,
+  billing (plans, GST, signed deduped webhooks), trust pages, per-day
+  plans & limits, single/multi-domain router, eval runner with
+  `--require-native` enforcement.
+- **Open**: M34/M35 (business basics + launch check); production
+  hosting follow-ups — TLS certificate provisioning and the reverse
+  proxy itself (see `GO_LIVE.md` → Hosting).
+- **UI**: `/` landing, `/projects` design records, `/chat`, `/login`,
+  `/trust` (plus about/contact/services/systems/team).
 
-### M26 Projects UI ⬜ In Progress
-- `/projects` list page with design record cards
-- `/projects/view` tabs:
-  - Report: badge, tally, check table (status, reason, location, hint)
-  - Record: JSON textarea plus Save
-  - History: snapshots, Restore (confirm), Compare
-  - BOM: table, CSV download, Rebuild from PCB (confirm)
-- E2E suite `projects`: seed `good_esp32_i2c` and `break_c03_unknown_pin`; assert VERIFIED vs FAILED, C03 at `U1.GPIO39`, fix-and-save flips status, restore, API-down error
+## Getting started
 
-### M27 Reference Library ⬜ In Progress
-- Audit `library.py` against convention 9. Fixed tag vocabulary; rank by tag matches, then id; recompute verified on read
-- Grow to ~10 designs (drift test, all-VERIFIED test)
-- Routes: `/api/reference`, `/match?tags=`, POST `/api/projects/from-reference` (copy, never alias), `/api/reference/candidates`
-- No promote route; CLI `tools/reference/review.py`
-- UI: start from reference, submit as candidate
-
-### M28 India Data ✅ Complete
-- Fix convention 9: parts get `bom_value`, `bom_package`, `source` (required with a price), `price_note` (required when null)
-- Match (value, package) first; value alone only if exactly one part has it; ambiguous means blank
-- Build strict `src/engines/parts/catalog.py`, `parts.json` (100-200 generic parts, prices null), `fabs.json` (supplied entries only)
-- `export_priced_bom_csv()` (adds price_inr, price_updated_on)
-- `tools/parts/import_prices.py`
-- routes `/api/parts`, `/api/fabs`, `/api/projects/{id}/bom-priced.csv`
-- Parts/Fabs pages
-
-### M29 Close-out ⬜ In Progress
-- Eval set to ~38 prompts. Update README, MILESTONES.md, work.md
-- Run full e2e
-
-## Do NOT build
-Accounts, billing, trust pages, sandboxing, hosting. Fix/Explain modes, router changes. XLSX/PDF. Auto-promotion. Scraping, live prices. Fab booking. Visual editors. Delete-project. Linux PCB/firmware.
-
-## Getting Started
-
-### API Routes
-- `/api/projects` — list design records
-- `/api/projects/{id}` — get a design record
-- `/api/projects/from-design` — create a new design record
-- `/api/projects/{id}/bom.csv` — export priced BOM as CSV
-- `/api/projects/{id}/bom/rebuild` — rebuild BOM from PCB fragment
-- `/api/reference` — list verified library designs
-- `/api/match?tags=` — rank designs by tag containment
-- `/api/parts` — list parts from India catalog
-- `/api/fabs` — list fabrication directories
-- `/api/projects/{id}/bom-priced.csv` — priced BOM CSV export
-
-### Conventions
-- **Convention 9**: Parts get `bom_value`, `bom_package`, `source` (required with a price), `price_note` (required when null)
-- **Price stale after 90 days**: label it, never hide it. Totals say "N of M lines priced".
-
-### Running Tests
 ```
-pytest tests/          # 703 passed, 26 skipped
-python tools/eval/run.py  # 24 PASS / 6 SKIP baseline
+.\start.ps1      # starts API + frontend, waits for real readiness
 ```
 
-### Design Record Flow
-1. Create a design via `/api/projects/from-design`
-2. View details via `/api/projects/{id}` or the UI `/projects/view/{id}`
-3. Export BOM as CSV via `/api/projects/{id}/bom.csv`
-4. Rebuild BOM from PCB via `/api/projects/{id}/bom/rebuild`
-5. Save and restore snapshots via the History tab
+API only:
 
-### Eval Set
-- 38 prompts across domains: cad (10), pcb (9), firmware (6), math (7), mixed (6)
-- 24 PASS / 6 SKIP baseline, with 8 additional prompts for M29 close-out
+```
+python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
+
+Production serving (details in `GO_LIVE.md` → Hosting):
+
+- `TRINITY_ENV=production` with explicit `TRINITY_CORS_ORIGINS` — the
+  app refuses wildcard or empty origins in production at startup.
+- Worker count via `TRINITY_WEB_CONCURRENCY` (uvicorn `--workers`;
+  SQLite runs in WAL mode and records/artifacts are DB-backed, so
+  workers share state).
+- TLS terminates at the reverse proxy on the same host
+  (`--proxy-headers --forwarded-allow-ips 127.0.0.1` is pre-wired).
+
+## Running tests
+
+```
+pytest tests/             # 780 passed, 24 skipped
+python tools/eval/run.py  # 25 PASS / 0 FAIL / 13 SKIP of 38
+```
+
+- The 24 pytest skips are environmental, not failures: 2 need live LLM
+  API keys, 22 need `Trinity.exe` via `TRINITY_NATIVE_EXEC`. Machines
+  without the `[vision]`/`[cad]` extras skip more (with reasons).
+- Eval: native-dependent prompts SKIP with their reason;
+  `--require-native` upgrades every SKIP to a FAIL for Windows-run
+  enforcement. Without the STEP kernel (cadquery/OCP) the baseline is
+  24 PASS / 0 FAIL / 14 SKIP. The saved baseline
+  (`data/eval/results.json`) is deterministic — volatile temp paths
+  and artifact hashes are scrubbed at save time.
+
+### Eval set
+
+38 prompts: cad (10), pcb (9), firmware (6), math (7), mixed (6).
+
+## Conventions
+
+- **Convention 9**: parts carry `bom_value`, `bom_package`, `source`
+  (required with a price), `price_note` (required when null).
+- **Price stale after 90 days**: label it, never hide it. Totals say
+  "N of M lines priced".
+
+## API
+
+The full route table is pinned by `tests/test_route_table.py`. Key
+entry points:
+
+- `POST /api/requirements/execute` — single-domain routing
+- `POST /api/workflows/execute` — multi-domain plan → DAG execution
+- `POST /api/execute` — direct engine operations
+- `/api/projects` (+ `/from-design`, `/bom.csv`, `/bom-priced.csv`,
+  `/bom/rebuild`, snapshots/restore, `/inspect`)
+- `/api/reference`, `/api/match?tags=`, `/api/parts`, `/api/fabs`
+- `/api/uploads`, `/api/health`
+
+## Design record flow
+
+1. Create a design via `POST /api/projects/from-design`
+2. List/get records via `/api/projects` (or the `/projects` UI page)
+3. Export the BOM via `/api/projects/{id}/bom.csv` (priced variant:
+   `/bom-priced.csv`)
+4. Rebuild the BOM from a PCB fragment via `/api/projects/{id}/bom/rebuild`
+5. Save/restore snapshots via the record history API

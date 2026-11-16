@@ -11,7 +11,7 @@
 - **M29**: Eval set grown from 30→38 prompts (8 new added); `MILESTONES.md` created; `README.md` updated; `work.md` updated with M25-M29 milestones; 4 test assertion fixes applied
 
 ### Key Metrics
-- **707 pytest tests pass** (26 skipped)
+- **780 pytest tests pass** (24 skipped: 2 need live LLM API keys, 22 need the native binary)
 - **0 test failures**
 - **0 ruff errors** (all 8 code quality issues fixed)
 
