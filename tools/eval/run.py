@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -43,6 +44,26 @@ _PROMPT_KEYS = {"id", "domain", "prompt", "source"}
 #: Meant for CI / Windows run enforcement:
 #: ``TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run``.
 REQUIRE_NATIVE = False
+
+# Saved reports must not churn run-to-run. Engine details may embed
+# machine-local identifiers (temp dir names, artifact filename hashes)
+# that change on every run while the substantive truth stays identical;
+# left alone they rewrote the committed baseline on every pytest run.
+# Only those identifiers are normalized here: verdicts, dimensions, and
+# byte sizes stay verbatim so the saved report remains truthful.
+_VOLATILE_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"trinity_cad_[0-9a-z]+", "trinity_cad_<tmp>"),
+    (r"trinity_eval_storage_[0-9a-z]+", "trinity_eval_storage_<tmp>"),
+    (r"\btmp[0-9a-zA-Z_]{4,14}\b", "tmp<rand>"),
+    (r"_[0-9a-f]{8}(?=\.\w{2,5}\b)", "_<hash>"),
+)
+
+
+def scrub_volatile(detail: str) -> str:
+    """Normalize machine-local identifiers in a detail string."""
+    for pattern, replacement in _VOLATILE_PATTERNS:
+        detail = re.sub(pattern, replacement, detail)
+    return detail
 
 
 def _redirect_storage() -> None:
@@ -137,13 +158,16 @@ def _print_table(rows: list[dict[str, str]]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Support ``--require-native`` so that, on a machine where the native
-    # binary is absent, prompts that would SKIP are instead FAILED.  This
-    # is intended for CI / Windows run enforcement.
-    if argv is None and "--require-native" in sys.argv:
-        os.environ["TRINITY_REQUIRE_NATIVE"] = "1"
-    elif argv is not None and "--require-native" in argv:
-        os.environ["TRINITY_REQUIRE_NATIVE"] = "1"
+    # ``--require-native`` means the machine claims native-grade
+    # capability: on a machine where the native binary is absent,
+    # prompts that would SKIP are instead FAILED. Intended for CI /
+    # Windows run enforcement. The flag stays a local here and the env
+    # var is only read, never written: mutating os.environ from a
+    # library call leaked into later tests and flipped the baseline the
+    # smoke subprocess saves.
+    require_native = bool(os.getenv("TRINITY_REQUIRE_NATIVE")) or (
+        "--require-native" in (sys.argv if argv is None else argv)
+    )
     _redirect_storage()
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -159,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     # a SKIP is then a broken promise, not honest non-coverage, so every
     # SKIP fails with its reason preserved. (Structural, not the old
     # detail-string match: a skip reason may name anything.)
-    if os.getenv("TRINITY_REQUIRE_NATIVE"):
+    if require_native:
         for row in rows:
             if row["verdict"] == "SKIP":
                 row["verdict"] = "FAIL"
@@ -178,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                     "id": row["id"],
                     "domain": row["domain"],
                     "verdict": row["verdict"],
-                    "detail": row["detail"],
+                    "detail": scrub_volatile(row["detail"]),
                 }
             )
         results_path = Path(EVAL_RESULTS_PATH)

@@ -178,6 +178,31 @@ def test_runner_returns_a_finite_row_for_an_unowned_prompt() -> None:
     assert row["detail"] == "no plan owns this prompt"
 
 
+def test_saved_reports_scrub_volatile_identifiers() -> None:
+    """The saved baseline must not churn run-to-run.
+
+    Engine details embed machine-local identifiers (temp dir names,
+    artifact filename hashes) that differ every run while the truth is
+    identical; the runner normalizes only those when saving, so the
+    committed data/eval/results.json stays stable under pytest.
+    """
+    raw = (
+        "STEP written to C:\\Users\\x\\Temp\\trinity_cad_woo1o3fu\\"
+        "quadcopter_frame_250mm_e00287c3.step (260228 bytes); the "
+        "unreadable record lives at C:\\Temp\\tmp22j39huj\\record.json "
+        "and its twin at C:\\Temp\\tmpllo_5ux0\\record.json"
+    )
+    cleaned = run.scrub_volatile(raw)
+    assert cleaned == (
+        "STEP written to C:\\Users\\x\\Temp\\trinity_cad_<tmp>\\"
+        "quadcopter_frame_250mm_<hash>.step (260228 bytes); the "
+        "unreadable record lives at C:\\Temp\\tmp<rand>\\record.json "
+        "and its twin at C:\\Temp\\tmp<rand>\\record.json"
+    )
+    # Substantive truth survives verbatim: bytes are facts, not noise.
+    assert "(260228 bytes)" in cleaned
+
+
 def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     """The decided one-command entry point, run for real.
 
@@ -189,7 +214,7 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     env = {
         key: value
         for key, value in os.environ.items()
-        if key != "TRINITY_NATIVE_EXEC"
+        if key not in {"TRINITY_NATIVE_EXEC", "TRINITY_REQUIRE_NATIVE"}
     }
     completed = subprocess.run(
         [sys.executable, str(REPO_ROOT / "tools" / "eval" / "run.py")],
@@ -227,16 +252,27 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     assert "native binary is absent" in completed.stdout
 
 
-def test_require_native_turns_every_skip_into_a_fail(capsys, monkeypatch) -> None:
+def test_require_native_turns_every_skip_into_a_fail(
+    capsys, monkeypatch, tmp_path
+) -> None:
     """--require-native: the machine claims native capability, so a SKIP
     is a broken promise, not honest non-coverage. Every SKIP fails with
     its reason preserved and named, never silently dropped.
     """
-    monkeypatch.setenv("EVAL_SAVE_SCORES", "false")
-    monkeypatch.setenv("EVAL_FLAG_REGRESSIONS", "false")
+    # run.py caches its config at import time, so env monkeypatching is
+    # a no-op for these flags; patch the module constants instead. The
+    # require-native table must land in tmp_path, never in the
+    # committed data/eval/results.json baseline.
+    monkeypatch.setattr(run, "EVAL_SAVE_SCORES", True)
+    monkeypatch.setattr(run, "EVAL_RESULTS_PATH", str(tmp_path / "require_native.json"))
+    monkeypatch.setattr(run, "EVAL_FLAG_REGRESSIONS", False)
     monkeypatch.delenv("TRINITY_NATIVE_EXEC", raising=False)
+    monkeypatch.delenv("TRINITY_REQUIRE_NATIVE", raising=False)
     exit_code = run.main(["--require-native"])
     out = capsys.readouterr().out
+    # The flag stays local: a library call must not mutate os.environ —
+    # that leak flipped later smoke-subprocess baselines.
+    assert "TRINITY_REQUIRE_NATIVE" not in os.environ
     # The SKIP count is environment-conditional (same truth as the
     # baseline test above): with the STEP kernel 13 prompts SKIP and
     # without it 14 do. --require-native turns every SKIP into a FAIL
