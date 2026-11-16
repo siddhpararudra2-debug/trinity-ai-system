@@ -119,6 +119,12 @@ def test_image_inspect_refuses_an_unknown_artifact_id(engine, monkeypatch):
         engine.execute("image_inspect", {"artifact_id": "ghost"})
 
 
+# The engine checks the Pillow capability before touching the
+# filesystem, so file-level refusals (existence, format, decode) are
+# only reachable with Pillow installed; the request-shape refusals
+# stay pinned unconditionally by
+# test_image_inspect_validates_the_request_before_pillow.
+@needs_pillow
 def test_image_inspect_refuses_bad_paths(engine, tmp_path):
     with pytest.raises(RequestValidationError, match="Missing or invalid"):
         engine.execute("image_inspect", {})
