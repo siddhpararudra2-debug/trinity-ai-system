@@ -99,6 +99,11 @@ class VectorStore:
         self.persist_dir = Path(persist_dir) if persist_dir else settings.embeddings_dir
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(self.persist_dir / self.DB_NAME)
+        # Multi-process safe (uvicorn --workers): WAL lets other workers
+        # read while one writes, and a busy timeout turns writer
+        # contention into a short wait instead of "database is locked".
+        self._db.execute("PRAGMA journal_mode = WAL;")
+        self._db.execute("PRAGMA busy_timeout = 5000;")
         self._db.execute(_SCHEMA)
         self._db.commit()
 

@@ -18,6 +18,11 @@
 .PARAMETER ApiPort
     Port for the Python API. Default 8000.
 
+.PARAMETER ApiHost
+    Bind address for the Python API. Default 127.0.0.1 (loopback; put a
+    TLS-terminating reverse proxy in front for production). Readiness is
+    always polled on 127.0.0.1 regardless of the bind address.
+
 .PARAMETER WebPort
     Port for the Next.js server. Default 3000.
 
@@ -37,6 +42,7 @@
 #>
 [CmdletBinding()]
 param(
+    [string]$ApiHost = '127.0.0.1',
     [int]$ApiPort = 8000,
     [int]$WebPort = 3000,
     [switch]$Dev,
@@ -49,6 +55,13 @@ $root = $PSScriptRoot
 $runDir = Join-Path $root '.run'
 $apiUrl = "http://127.0.0.1:$ApiPort"
 $webUrl = "http://127.0.0.1:$WebPort"
+
+# Worker processes for uvicorn. Dev keeps 1; production sets 2+ via
+# TRINITY_WEB_CONCURRENCY (records and artifacts live in SQLite with
+# WAL, so state is shared across workers, not per-process).
+$ApiWorkers = if ($env:TRINITY_WEB_CONCURRENCY) {
+    [Math]::Max(1, [int]$env:TRINITY_WEB_CONCURRENCY)
+} else { 1 }
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor White }
 function Write-Ok($msg) { Write-Host "    $msg" -ForegroundColor DarkGray }
@@ -208,9 +221,11 @@ if ($Dev) {
 }
 
 # --- api
-Write-Step 'starting api'
+Write-Step "starting api ($ApiWorkers worker(s), host $ApiHost)"
 $api = Start-Process -FilePath 'python' `
-    -ArgumentList @('-m', 'uvicorn', 'src.main:app', '--host', '127.0.0.1', '--port', "$ApiPort") `
+    -ArgumentList @('-m', 'uvicorn', 'src.main:app', '--host', $ApiHost, `
+        '--port', "$ApiPort", '--workers', "$ApiWorkers", `
+        '--proxy-headers', '--forwarded-allow-ips', '127.0.0.1') `
     -WorkingDirectory $root -PassThru -NoNewWindow `
     -RedirectStandardOutput $apiLog -RedirectStandardError (Join-Path $runDir 'api.err.log')
 

@@ -16,8 +16,10 @@ the items still open before a real production launch.
   research, simulation, robotics, crosscheck. On a machine without the
   native binary, pcb/firmware run as pure-Python fallbacks and honestly
   label themselves `status: "scaffolded"`.
-- **Full pytest suite: 724 passed / 26 skipped** (the 26 tests are the
-  native-binary-dependent ones; they skip with reasons, never fake).
+- **Full pytest suite: 780 passed / 24 skipped** (2 skip without live
+  LLM API keys, 22 without the native binary; they skip with reasons,
+  never fake — machines without the `[vision]`/`[cad]` extras skip
+  more, still with reasons).
 - **Eval baseline saved** at `data/eval/results.json`
   (`python -m tools.eval.run`, environment-conditional):
   **25 PASS / 0 FAIL / 13 SKIP of 38** with the STEP kernel installed;
@@ -49,9 +51,19 @@ the items still open before a real production launch.
   the 13 SKIPs to graded verdicts.
 
 ## Hosting
-- Single-process uvicorn server (`src/main.py`) serves the API at
-  `http://localhost:8000`. Production needs gunicorn/uvicorn workers, SSL,
-  and `TRINITY_ENV=production` with explicit `TRINITY_CORS_ORIGINS`.
+- `start.ps1` launches uvicorn with `--workers $TRINITY_WEB_CONCURRENCY`
+  (default 1; production sets 2+ — safe because records and artifacts
+  live in SQLite with WAL, so state is shared across workers, not
+  per-process) plus `--proxy-headers --forwarded-allow-ips 127.0.0.1`
+  for a TLS-terminating reverse proxy on the same host. The bind
+  address is `-ApiHost` (default 127.0.0.1).
+- Production checklist: `TRINITY_ENV=production` (startup refuses
+  wildcard/empty `TRINITY_CORS_ORIGINS` — set explicit origins, as
+  `.env.dummy` already does), TLS certificate at the reverse proxy,
+  and real Razorpay keys after KYC. `.env.dummy` is the template;
+  every value is swappable with no code edits.
+- Verified: `TRINITY_WEB_CONCURRENCY=2` boots two uvicorn workers and
+  `/api/health` answers on both.
 
 ## Business details
 - Company: Trinity AI Systems; domain: example.com; emails:
