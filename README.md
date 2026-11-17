@@ -13,9 +13,11 @@ reason instead of a fake pass.
 
 - **Backend**: 10 engines registered — math, cad, pcb, firmware,
   verification, vision, research, simulation, robotics, crosscheck.
-  Without the native binary, pcb runs the real Python fallback
-  (deterministic placement, 2-layer grid routing, design checks);
-  firmware stays a scaffolded honest refusal (`status: "scaffolded"`).
+  Without the native binary, pcb and firmware run as real Python
+  fallbacks (no status label): pcb generates, routes and checks boards;
+  firmware validates pins/peripherals against an MCU database and labels
+  builds `COMPILED` only when a real toolchain ran, else
+  `"static check only, not compiled"`.
 - **Built** (M20–M33): data layer + schema migration, projects and BOM
   flows, reference library, India parts catalog, JWT accounts,
   billing (plans, GST, signed deduped webhooks), trust pages, per-day

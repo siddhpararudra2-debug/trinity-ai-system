@@ -220,4 +220,29 @@ B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTI
   wall test, clearance-parameter routability, checker unit test,
   refusals, export label); suite 797 passed / 24 skipped, ruff clean.
 
+- [x] Item 2: real firmware build — `src/engines/firmware/__init__.py`
+  rewritten from the stub (echo ops + "TODO: add application code"
+  main) into a real fallback: a built-in MCU pin database (ESP32-WROOM-32
+  / STM32F407 / ATmega2560: valid pins, input-only pins, peripheral
+  instance counts, SDK entry points) drives pin-conflict, unknown-pin,
+  input-only-misuse and peripheral-range checks in validate AND in every
+  create/configure op; generate emits a compilable C skeleton (pin
+  macros, per-feature init functions, init calls wired into main) whose
+  header comment states the vendor-SDK scope honestly — no TODO/FIXME
+  markers. The build op is two-tier and honest: only a real PlatformIO
+  run that exits 0 reports `build_status: "COMPILED"` (VERIFIED); a pio
+  failure is the verdict and is never masked by the host syntax pass;
+  otherwise `"static check only, not compiled"` after structure checks
+  (balance, main, empty), pin/peripheral checks, and — when a host gcc/
+  clang exists — a `-fsyntax-only` pass whose vendor-header failures are
+  stated inconclusive, not passes and not failures. Toolchain discovery
+  is an injectable seam (`_toolchain_candidates`) so tests fake success/
+  failure/timeout/not-installed; timeouts are reported. Native-only
+  stays documented: real cross-compilation (SDK headers, linkers),
+  vendor SDK integration, flash/debug, the alternate-function matrix.
+  `LLM-LINK:` seam noted. describe() drops `"scaffolded"` per the M18
+  convention; eval baseline regenerated — verdicts unchanged (25/0/13 of
+  38), byte-deterministic. Proof: new `tests/test_firmware_engine.py`
+  26 tests; suite 823 passed / 24 skipped, ruff clean; e2e smoke green.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

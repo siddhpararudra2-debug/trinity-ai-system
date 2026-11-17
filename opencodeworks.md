@@ -1210,3 +1210,42 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   2-layer via wall test, clearance parameter decides routability, direct
   checker unit test, parameter refusals, export placeholder label);
   suite 797 passed / 24 skipped, `ruff check src tests` clean.
+
+### Stage 15 (continued): Item 2, the firmware engine
+
+- [x] **Item 2: real firmware build.** `src/engines/firmware/__init__.py`
+  stops being a stub whose `main()` said "TODO: add application code"
+  and whose ops echoed whatever they were given. Now: a built-in MCU pin
+  database (ESP32-WROOM-32, STM32F407, ATmega2560 — valid pins,
+  input-only pins, peripheral instance counts, real SDK entry points)
+  drives pin-conflict, unknown-pin, input-only-misuse, and
+  peripheral-range checks in `validate` and in every
+  create/select_mcu/configure_pin/configure_peripheral op (unknown MCUs
+  are refused with the known list named; unknown MCUs in the pin checks
+  state the skip instead of silently passing). `generate` emits a
+  compilable C skeleton — pin macros from numeric GPIO names, one init
+  function per configured peripheral, init calls wired into `main()` —
+  whose header comment states the vendor-SDK scope honestly; it carries
+  no TODO/FIXME markers, and the build op counts them if fed one. The
+  build op is two-tier and honest about it: only a real PlatformIO run
+  that exits 0 reports `build_status: "COMPILED"` (validation VERIFIED);
+  a pio failure is the verdict and is never masked by the host syntax
+  pass; without a completed cross-compile the result is labelled
+  `"static check only, not compiled"` after structure checks, pin and
+  peripheral checks, and — when a host gcc/clang exists — a
+  `-fsyntax-only` pass whose vendor-header failures are stated
+  inconclusive, neither a pass nor a compile failure. Toolchain
+  discovery is an injectable seam (`_toolchain_candidates`), so tests
+  fake success, failure, timeout, and not-installed deterministically on
+  any machine; timeouts are reported with the budget named. What stays
+  native-only (real cross-compilation with SDK headers and linker
+  scripts, vendor SDK integration, flashing/debugging, the full
+  alternate-function matrix) is documented in the module docstring, and
+  an `LLM-LINK:` comment marks the future pin-map/init-drafting seam
+  without building it. `describe()` drops the `"status": "scaffolded"`
+  label per the M18 convention; `data/eval/results.json` regenerated —
+  verdicts unchanged (25 PASS / 0 FAIL / 13 SKIP of 38),
+  byte-deterministic. Proof: new `tests/test_firmware_engine.py`, 26
+  tests; suite 823 passed / 24 skipped, `ruff check src tests` clean;
+  `python tools/e2e_smoke.py` green (registry shows both fallback engines
+  unlabeled).

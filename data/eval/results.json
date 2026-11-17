@@ -33,13 +33,13 @@
     "id": "eval-006",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-007",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-008",
@@ -153,7 +153,7 @@
     "id": "eval-026",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-027",
@@ -195,7 +195,7 @@
     "id": "eval-033",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-034",
@@ -225,6 +225,6 @@
     "id": "eval-038",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   }
 ]
