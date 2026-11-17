@@ -137,7 +137,9 @@ def main(client: "TestClient") -> None:
                             "value": "ESP32-WROOM-32",
                             "footprint": "ESP32-WROOM-32",
                             "nets": ["GND", "VCC", "SDA", "SCL"],
-                            "parameters": {"x_mm": 10, "y_mm": 20},
+                            # x >= 11 keeps the 18 mm module body inside
+                            # the 2 mm keep-out margin of the 100 mm board.
+                            "parameters": {"x_mm": 12, "y_mm": 20},
                         },
                         "J1": {
                             "value": "I2C_port",
@@ -162,7 +164,7 @@ def main(client: "TestClient") -> None:
                             "value": "ESP32-WROOM-32",
                             "footprint": "ESP32-WROOM-32",
                             "nets": ["GND", "VCC", "SDA", "SCL"],
-                            "parameters": {"x_mm": 10, "y_mm": 20},
+                            "parameters": {"x_mm": 12, "y_mm": 20},
                         },
                         "J1": {
                             "value": "I2C_port",

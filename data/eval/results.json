@@ -21,25 +21,25 @@
     "id": "eval-004",
     "domain": "pcb",
     "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "pcb runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-005",
     "domain": "pcb",
     "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "pcb runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-006",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-007",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-008",
@@ -153,7 +153,7 @@
     "id": "eval-026",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-027",
@@ -189,13 +189,13 @@
     "id": "eval-032",
     "domain": "pcb",
     "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "pcb runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-033",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-034",
@@ -207,7 +207,7 @@
     "id": "eval-035",
     "domain": "mixed",
     "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass Beyond that, the mixed truth of BME280 sensor integration with ESP32 MQTT publishing has no grading plan at all, and the table states that rather than inventing a pass"
+    "detail": "pcb runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass Beyond that, the mixed truth of BME280 sensor integration with ESP32 MQTT publishing has no grading plan at all, and the table states that rather than inventing a pass"
   },
   {
     "id": "eval-036",
@@ -219,12 +219,12 @@
     "id": "eval-037",
     "domain": "pcb",
     "verdict": "SKIP",
-    "detail": "pcb is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "pcb runs as the Python fallback on this machine (the native binary is absent; describe() status is none \u2014 real Python fallback), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   },
   {
     "id": "eval-038",
     "domain": "firmware",
     "verdict": "SKIP",
-    "detail": "firmware is the Python fallback engine on this machine (status 'scaffolded' \u2014 the native binary is absent); this prompt's truth requires native-grade STEP/gerber fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
+    "detail": "firmware runs as the Python fallback on this machine (the native binary is absent; describe() status is scaffolded), and this prompt's truth requires native-grade fidelity the fallback does not claim, so the honest verdict is SKIP, not an invented pass"
   }
 ]

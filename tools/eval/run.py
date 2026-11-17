@@ -40,7 +40,7 @@ _DOMAINS = {"cad", "pcb", "firmware", "math", "mixed"}
 _PROMPT_KEYS = {"id", "domain", "prompt", "source"}
 
 #: When set, the runner FAILs instead of SKIPing prompts whose engine
-#: is the Python fallback (status 'scaffolded', native binary absent).
+#: is the Python fallback (no native bridge; native binary absent).
 #: Meant for CI / Windows run enforcement:
 #: ``TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run``.
 REQUIRE_NATIVE = False

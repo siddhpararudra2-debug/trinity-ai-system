@@ -248,7 +248,7 @@ def test_runner_smoke_subprocess(tmp_path: Path) -> None:
     assert expected_summary in completed.stdout
     # The fallback engines are visible in the table, never hidden:
     # they name the missing native binary instead of inventing a pass.
-    assert "Python fallback engine on this machine" in completed.stdout
+    assert "runs as the Python fallback on this machine" in completed.stdout
     assert "native binary is absent" in completed.stdout
 
 

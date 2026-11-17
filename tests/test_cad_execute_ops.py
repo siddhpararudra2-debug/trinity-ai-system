@@ -135,8 +135,10 @@ def test_engines_endpoint_marks_scaffolds(monkeypatch):
     assert engines["cad"].get("status") is None
     assert engines["math"].get("status") is None
     # M18.1/M18.2/M18.3/M18.4: simulation, robotics, vision, and research
-    # have real Python fallbacks, so they are no longer scaffolds; pcb and
-    # firmware stay honest refusals without native.
+    # have real Python fallbacks, so they are no longer scaffolds. The PCB
+    # fallback earned the same treatment (auto-placement, 2-layer grid
+    # routing, design checks); firmware stays an honest refusal without
+    # native.
     assert engines["simulation"].get("status") is None
     assert "simulate_spring_chain" in engines["simulation"]["capabilities"]
     assert engines["robotics"].get("status") is None
@@ -145,5 +147,5 @@ def test_engines_endpoint_marks_scaffolds(monkeypatch):
     assert "document_parse" in engines["vision"]["capabilities"]
     assert engines["research"].get("status") is None
     assert engines["research"]["capabilities"] == ["search"]
-    for name in ("pcb", "firmware"):
-        assert engines[name]["status"] == "scaffolded", name
+    assert engines["pcb"].get("status") is None
+    assert engines["firmware"]["status"] == "scaffolded"

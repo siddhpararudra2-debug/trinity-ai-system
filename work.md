@@ -193,4 +193,31 @@ B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTI
   and Linux Package green on main; latest runs of Native Windows,
   Security & SAST, Release and PR Hygiene all success.
 
+### Stage 15 — Real fallbacks (pcb → firmware → Fix mode → embeddings) [ in progress ]
+
+- [x] Item 1: real PCB fallback — `src/engines/pcb/__init__.py` rewritten
+  from the stub (fixed-components echo) into a deterministic generator:
+  auto-placement on a step grid ordered by connectivity affinity
+  (connected parts pulled toward their placed neighbours; explicit
+  `x_mm`/`y_mm` parts honored verbatim and graded like any other),
+  2-layer grid routing (per-net Prim MST + 4-connected A* with vias,
+  track width/clearance from parameters), and four design checks
+  (overlap, out-of-bounds incl. keep-out margin, clearance,
+  unrouted nets) that re-grade the emitted geometry and FAIL the
+  result on any finding. Legacy output shape preserved (crosscheck + eval
+  fixtures untouched); additive keys: tracks/vias/layers/design_rules/
+  placement_mode/design_checks. `describe()` drops `"scaffolded"` per the
+  M18 convention (real fallbacks carry no status); export still writes
+  placeholder gerber and now labels it `gerber_status: "placeholder…"`.
+  Native-only stays native-only: real gerber/drill content, pad-level
+  routing, footprint libraries (approximate size table + `size_mm`
+  override instead). `LLM-LINK:` seam documented in the module docstring.
+  Eval `_native_skip` rewritten status-agnostic (skip unless the engine
+  reports `bridged`); baseline regenerated — verdicts unchanged
+  (25 PASS / 0 FAIL / 13 SKIP), byte-deterministic across two runs.
+  Proof: new `tests/test_pcb_engine.py` 17 tests (pass + fail case per
+  rule, affinity + counterfactual, determinism, fixed positions, vias
+  wall test, clearance-parameter routability, checker unit test,
+  refusals, export label); suite 797 passed / 24 skipped, ruff clean.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

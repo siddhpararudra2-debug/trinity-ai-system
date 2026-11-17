@@ -51,10 +51,14 @@ def _engine(name: str) -> Any:
 
 
 def _native_skip(engine_name: str) -> str | None:
-    """A skip reason when the engine is still the scaffold stub.
+    """A skip reason when the engine is not the native bridge.
 
     Probes ``describe()`` rather than executing: the fallback is
     registered so callers can discover the refusal without an exception.
+    The Python fallbacks do real work now (pcb places, routes and checks
+    a board; firmware runs static checks), but the native-gated prompts
+    below need native-grade fidelity (footprint/pad libraries, real
+    gerber, toolchain compiles) the fallbacks do not claim.
 
     Returns the human-readable skip reason, or ``None`` if the engine
     offers native-grade behavior on this machine.
@@ -68,15 +72,15 @@ def _native_skip(engine_name: str) -> str | None:
     from src.engines.registry import registry
 
     status = registry.get(engine_name).describe().get("status")
-    if status == "scaffolded":
-        return (
-            f"{engine_name} is the Python fallback engine on this machine "
-            "(status 'scaffolded' — the native binary is absent); this "
-            "prompt's truth requires native-grade STEP/gerber fidelity the "
-            "fallback does not claim, so the honest verdict is SKIP, "
-            "not an invented pass"
-        )
-    return None
+    if status == "bridged":
+        return None
+    return (
+        f"{engine_name} runs as the Python fallback on this machine "
+        f"(the native binary is absent; describe() status is "
+        f"{status or 'none — real Python fallback'}), and this prompt's "
+        "truth requires native-grade fidelity the fallback does not "
+        "claim, so the honest verdict is SKIP, not an invented pass"
+    )
 
 
 def _fixture(name: str) -> Any:

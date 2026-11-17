@@ -1170,3 +1170,43 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   deferred). `docs/ROADMAP.md` corrected: M18 "(in work)" → done with
   past-tense descriptions and suite proof (488/40); the closing section
   keeps the POSIX daemon as the open queue head.
+
+### Stage 15 (in progress): real fallbacks — Item 1, the PCB engine
+
+- [x] **Item 1: real PCB fallback.** `src/engines/pcb/__init__.py` stops
+  being a stub that echoed fixed components and now generates boards in
+  pure Python, deterministically: outline, auto-placement (step-grid
+  candidates ordered by distance to a connectivity-affinity target —
+  connected parts cluster, unconnected parts fall back to board centre;
+  explicit `x_mm`/`y_mm` parts are honored verbatim and graded by the
+  same checks, never silently relocated), 2-layer grid routing (per-net
+  Prim MST over Manhattan distance + 4-connected A* with layer switches
+  at vias; track width/clearance/grid/keep-out read from parameters with
+  guarded refusals), and four design checks (overlap, out-of-bounds with
+  keep-out margin, clearance re-graded from the emitted copper, unrouted
+  nets) whose findings FAIL the result (`VALIDATED` → `FAILED`,
+  success=False). The legacy output shape the crosscheck fixtures and
+  eval plans read is preserved key-for-key; tracks/vias/layers/
+  design_rules/placement_mode/design_checks are additive. `describe()`
+  drops the `"status": "scaffolded"` label per the M18 convention — the
+  work is real and tested, so the label would lie; what stays native-only
+  (real gerber/drill content — export still writes placeholder text and
+  now says so in `gerber_status`; pad-level routing; footprint libraries —
+  an approximate size table with a per-part `size_mm` override) is
+  documented in the module docstring, and an `LLM-LINK:` comment marks
+  the future placement-hint seam without building it.
+  `tools/eval/plans.py::_native_skip` is rewritten status-agnostic (SKIP
+  unless the engine reports `bridged`), so the four native-gated pcb
+  prompts stay honest SKIPs on fallback machines; `data/eval/results.json`
+  regenerated — verdicts unchanged (25 PASS / 0 FAIL / 13 SKIP of 38),
+  detail text updated, byte-identical across two runs. README/GO_LIVE
+  label sentences synced. Tests caught two real bugs before they shipped:
+  the body-blocker shrank rects inward instead of inflating outward
+  (leaving a free-but-flagged boundary band), and A* accepted a goal on
+  the wrong copper layer (arriving under the part without the via back to
+  its pad). Proof: new `tests/test_pcb_engine.py`, 17 tests (pass +
+  failing case for each of the four rules, affinity + counterfactual,
+  determinism, fixed positions honored, empty netlist stays VALIDATED,
+  2-layer via wall test, clearance parameter decides routability, direct
+  checker unit test, parameter refusals, export placeholder label);
+  suite 797 passed / 24 skipped, `ruff check src tests` clean.

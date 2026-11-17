@@ -14,8 +14,9 @@ the items still open before a real production launch.
   no datasheets exist in dummy data yet.
 - **10 engines registered**: math, cad, pcb, firmware, verification, vision,
   research, simulation, robotics, crosscheck. On a machine without the
-  native binary, pcb/firmware run as pure-Python fallbacks and honestly
-  label themselves `status: "scaffolded"`.
+  native binary, pcb runs the real Python fallback (placement, 2-layer
+  grid routing, design checks — no status label); firmware stays a
+  scaffolded honest refusal (`status: "scaffolded"`).
 - **Full pytest suite: 780 passed / 24 skipped** (2 skip without live
   LLM API keys, 22 without the native binary; they skip with reasons,
   never fake — machines without the `[vision]`/`[cad]` extras skip
@@ -45,7 +46,8 @@ the items still open before a real production launch.
   `.env.dummy`.
 
 ## Windows fixture run (native binary)
-- pcb/firmware currently run as Python fallbacks (`status: "scaffolded"`).
+- pcb runs as the real Python fallback (placement, routing, checks);
+  firmware remains the scaffolded honest refusal until its native build.
 - Building the native binary (`app/native/`, CMake/Qt) and running
   `TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run` on Windows upgrades
   the 13 SKIPs to graded verdicts.
