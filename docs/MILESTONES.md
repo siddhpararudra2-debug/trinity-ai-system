@@ -5,12 +5,20 @@ from the first commit through the standalone distribution. Written from the
 work log (`opencodeworks.md`) and cross-checked against Git history; commit
 hashes are verified, never from memory.
 
-Status: **M1–M9 complete, and the later stages closed too** — Stage 7
-(M10–M13 release hardening), Stage 8 (M14 CAD depth), Stage 9 (M15
-agentic workflow depth). Suite counts climb stage by stage; at Stage 9
-close: 404/404 native doctests, 386 passed / 40 skipped Python tests,
-ruff clean, Browser E2E 137 assertions / 13 suites / 0 failed,
-everything pushed to `origin/main`.
+Status: **M1–M33 complete**, plus Stage 14 (A1–A7, B1–B3) and Stage
+15 items 1–2 (real PCB and firmware fallbacks). Stage 7 (M10–M13
+release hardening), Stage 8 (M14 CAD depth), Stage 9 (M15 agentic
+workflow depth), Stage 10 (M16–M18), Stage 11 (M19–M24), Stage 12
+(M25–M29), and Stage 13 (M30–M33) are all closed. Open: M34 (partial),
+M35, and Stage 15's remaining Fix-mode/embeddings work.
+
+Suite counts climb stage by stage; at Stage 9 close: 404/404 native
+doctests, 386 passed / 40 skipped Python tests, ruff clean, Browser E2E
+137 assertions / 13 suites / 0 failed, everything pushed to
+`origin/main`. At `f00786c` the Python suite is 823 passed / 24 skipped
+with the `[cad]` + `[vision]` extras (805 / 42 without them), ruff
+clean, eval 25 PASS / 0 FAIL / 13 SKIP with the STEP kernel (24 / 0 /
+14 without it).
 
 For *how* the work was done (rules, decisions, lessons), see
 [PROCESS.md](PROCESS.md). For what comes next, see [ROADMAP.md](ROADMAP.md).
@@ -41,6 +49,19 @@ For *how* the work was done (rules, decisions, lessons), see
 | M16 | Linux portable bundle: cross-platform spec, honest no-native smoke, release-flow proof (prerelease) | `79955ee`, `ab67607` (Release #14) | — / — |
 | M17 | Data schema/migration seam: versioned marker, explicit chain, refuses future/corrupt storage | `1b277da` (CI #200) | — / 398 |
 | M18 | Engine depth beyond CAD: Python fallbacks for simulation, robotics, vision (`[vision]`), research | `7557dc4`…`1cc907f` | — / 488 |
+| M19 | Verified rule table decided: C00 gate + C01–C11, availability tags checked against the IRs (docs-only) | `59a048d` | — / — |
+| M20 | Design record, cross-check framework C01–C11, verified report, HTML report route, fixtures, first eval prompts | `ee8e054`…`927c884` | — / 534+ |
+| M21 | BOM grammar/builder + CSV, local project open/save, snapshot history/restore/compare | `5d84dc3`, `d9678ed`, `9603faa` | — / — |
+| M22 | Eval set + runner: 30 prompts, one command, report-graded table with honest skips | `35d031e` | — / — |
+| M23 | LLM seam docs + read-only JSON Inspect mode | `7b9eec7` | — / — |
+| M24 | Reference library with human-reviewed candidates and priced BOM export | `0ed7e87`, `5a99c34` | — / — |
+| M25–M29 | Data layer: BOM CSV/rebuild, reference routes, India parts/fabs, priced BOM, 38-prompt eval set | `f0e6a99`, `43c2417`, `4074c5a` | — / — |
+| M30 | Accounts: signup/verify/login/refresh/logout/reset/delete, scrypt, lockout, policy version | `a2a374b`, `5e8a950` | — / 739 |
+| M31 | Trust pages: four config-driven draft policies, policy version stamped at signup | `5e37a32` | — / 745 |
+| M32 | Billing: config plans, five-state machine, HMAC-signed deduped webhooks, GST | `e0dd3f5` | — / 758 |
+| M33 | Plans & limits: per-day counters, honest 402s, signed offline plan token | `c2b479b` | — / 776 |
+| Stage 14 | A1 XLSX BOM, A2 enclosure lid, A3 eval honesty, A4 CAD audit, A5 RAG, A6 router, A7 explain/fix, B1–B3 | `0a39a26`…`75e6983` | — / 724 |
+| Stage 15 | Item 1 real PCB fallback (placement/routing/checks), item 2 real firmware fallback (MCU DB/two-tier build) | `a65a97e`, `f00786c` | — / 823 |
 
 ---
 
@@ -602,9 +623,45 @@ Package #6/#7, Release #14, CI #200.
 
 ---
 
+## Stages 11–15: record, data layer, accounts, billing, limits, real fallbacks
+
+The detail lives in `work.md`, `decided.md`, and `opencodeworks.md`;
+this is the one-line map with the commit that closed each step.
+
+- **M19–M20 verified rule table and design record** (`59a048d`,
+  `ee8e054`…`927c884`): C00 gate + C01–C11, a verbatim-IR design record
+  with atomic per-project storage, the cross-check framework, the
+  verified report (HTML route), fixtures, and the first eval prompts.
+- **M21–M24 project lifecycle and eval** (`5d84dc3`, `d9678ed`,
+  `9603faa`, `35d031e`, `7b9eec7`, `0ed7e87`, `5a99c34`): BOM
+  grammar/builder/CSV, local open/save, snapshots (restore/compare), the
+  eval runner, LLM-seam docs + read-only Inspect, and the reference
+  library with human-reviewed candidates.
+- **M25–M29 data layer** (`f0e6a99`, `43c2417`, `4074c5a`): BOM CSV +
+  rebuild, reference routes, India parts/fabs, priced BOM, and the
+  38-prompt eval set. Note: `POST /api/projects/from-design` is not
+  registered; create records via `/from-reference/{design_id}` or `PUT`.
+- **M30 accounts** (`a2a374b`, `5e8a950`): signup/verify/login/refresh/
+  logout/reset/delete, scrypt passwords, single-rotation refresh tokens,
+  lockout, anti-enumeration responses, in-app login screen.
+- **M31 trust pages** (`5e37a32`): four config-driven policies, each
+  marked DRAFT, policy version + time stamped at signup.
+- **M32 billing** (`e0dd3f5`): config plans, five states, HMAC-signed
+  deduped webhooks, GST split, cancel/refund semantics.
+- **M33 plans and limits** (`c2b479b`): per-day counters, honest 402s
+  naming the plan and limit, signed offline-verifiable plan token.
+- **Stage 14 A1–A7 / B1–B3** (`0a39a26`…`75e6983`): XLSX BOM,
+  enclosure lid, eval fixture/`--require-native` honesty, CAD catalog
+  audit, RAG retrieval, deterministic router, explain/fix, native audit,
+  workers, sandbox limits.
+- **Stage 15 items 1–2** (`a65a97e`, `f00786c`): real PCB fallback
+  (auto-placement, 2-layer grid routing, design checks) and real
+  firmware fallback (MCU pin database, static checks, two-tier build).
+  Fix mode and embeddings remain open.
+
 ## Where this leaves the project
 
-Stages 1–10 have shipped and been verified end to end; the deferred list
+Stages 1–15 have shipped and been verified end to end; the deferred list
 worked. The current limits are deliberate and stated by the product
 itself wherever they are observable; [ROADMAP.md](ROADMAP.md) keeps the
 honest list: native engines are Windows-only — the Linux bundle ships
@@ -614,4 +671,5 @@ certificates until public distribution begins (M12's settled policy),
 a single OpenAI-shaped self-hosted model seam whose CI truth is pinned
 by scripted fakes — CI never attaches a model — and `v1.0.0` remaining
 untagged until a release-owner decides (the pipeline-proven tag is
-`v0.9.0`).
+`v0.9.0`). Open today: M34 (partial), M35, and Stage 15's remaining
+Fix-mode/embeddings work.
