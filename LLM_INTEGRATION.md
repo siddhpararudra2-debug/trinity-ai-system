@@ -1,8 +1,9 @@
 # LLM Integration Documentation (Item 8)
 
 **Adapter**: `src.llm.adapters.LLMAdapter`
-**Base URL**: `LLM_BASE_URL` from `.env.dummy` (e.g. `http://localhost:11434/v1/chat/completions`)
-**Model**: `LLM_MODEL_NAME` from `.env.dummy` (e.g. `local-model`)
+**Base URL**: `TRINITY_MODEL_ENDPOINT` (full OpenAI-compatible
+`chat/completions` URL, e.g. `http://localhost:11434/v1/chat/completions`)
+**Model**: `TRINITY_MODEL_NAME`, falling back to `LLM_MODEL_NAME` (e.g. `local-model`)
 
 ---
 
@@ -259,7 +260,7 @@ calls are made.
 - `pcb` / `board` → PCB operation response
 - `firmware` / `code` → Firmware generation response
 - `verify` / `check` → Verification report response
-- `export` / `download` / `stl` / `gerber` → Export guidance response
+- `export` / `download` → Export guidance response
 - `bom` / `bill` / `parts` → BOM generation response
 - `question` / `info` → General information response
 
@@ -269,12 +270,13 @@ calls are made.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLM_BASE_URL` | `http://localhost:11434/v1/chat/completions` | OpenAI-compatible endpoint URL |
-| `LLM_MODEL_NAME` | `local-model` | Model ID exposed by the server |
-| `LLM_MOCK` | `0` | `1` to enable mock mode, `0` for real endpoint |
-| `TRINITY_MODEL_ENDPOINT` | `` | Overrides `LLM_BASE_URL` for LocalClient |
-| `TRINITY_MODEL_NAME` | `` | Overrides `LLM_MODEL_NAME` for LocalClient |
-| `TRINITY_MODEL_API_KEY` | `` | Optional API key for gateways that demand it |
+| `TRINITY_MODEL_ENDPOINT` | `` (unset → refuse) | Full OpenAI-compatible `chat/completions` URL. This is the endpoint the client actually reads. |
+| `TRINITY_MODEL_NAME` | `local-model` | Model ID sent to the endpoint (takes precedence over `LLM_MODEL_NAME`). |
+| `LLM_MODEL_NAME` | `local-model` | Fallback model ID used by the adapter when `TRINITY_MODEL_NAME` is unset. |
+| `LLM_MOCK` | `0` | `1` to enable mock mode, `0` for the real endpoint. |
+| `TRINITY_MODEL_API_KEY` | `` | Optional bearer token for gateways that demand one. |
+| `LLM_BASE_URL` | `http://localhost:11434/v1/chat/completions` | Present in `.env.dummy`, but **not read by the client**; set `TRINITY_MODEL_ENDPOINT` instead. |
+| `LLM_API_KEY` | `dummy-key-for-adapter-only` | Present in `.env.dummy`, but **not read by the client**; set `TRINITY_MODEL_API_KEY` instead. |
 
 ---
 
@@ -282,7 +284,7 @@ calls are made.
 
 1. **Set `LLM_MOCK=1`** in `.env.dummy` to start with mock responses.
 2. **Implement canned responses** for each integration point (already provided).
-3. **Replace mock with real client** by setting `LLM_MOCK=0` and configuring `LLM_BASE_URL` / `LLM_MODEL_NAME`.
+3. **Replace mock with real client** by setting `LLM_MOCK=0` and configuring `TRINITY_MODEL_ENDPOINT` / `TRINITY_MODEL_NAME`.
 4. **Zero code changes** needed — the adapter automatically switches modes.
 
 ---
@@ -303,4 +305,4 @@ print(resp['content'][:60])
 ```
 
 ---
-*Document generated automatically. Update `LLM_INTEGRATION.md` whenever a new integration point is added or the adapter API changes.*
+*Maintain this document by hand: update it whenever a new integration point is added or the adapter API changes. `llm_link_mark` / `unlink_mark` live in `src.llm.adapters`; the package `__init__` exports `LLMAdapter`, `get_adapter`, `chat`, `chat_stream`, `LocalClient`, and `ModelProvider`.*
