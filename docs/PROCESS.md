@@ -204,7 +204,9 @@ broke. Kept because the next session will hit them again:
   confirmed valid in `node_modules/next/dist/docs/.../static-exports.md`
   before any config was written.
 - **Every page must be export-client compatible** — no `next/image`, no
-  SSR-only features. All 12 routes were verified before enabling export.
+  SSR-only features. Every route was verified before enabling export
+  (the current frontend has 10 `page.tsx` routes: `/`, about, chat,
+  contact, login, projects, services, systems, team, trust).
 - **`NEXT_PUBLIC_*` env vars are inlined at build time.** The packaged
   build sets `NEXT_PUBLIC_TRINITY_API_URL=/api` before `npm run build`;
   the same codebase builds with the default `http://localhost:8000/api`
@@ -291,8 +293,10 @@ it plus the last two rungs:
    numbers, so they are the ones that caught missing `/EHsc` and the
    registry's false claims.
 2. **Python suite** — `python -m pytest` (386 passed / 40 skipped after
-   Stage 9; the skip gates grow on purpose: no API keys, no native exe
-   in that checkout, no live model in CI). Ruff clean after.
+   Stage 9; at `f00786c`, 823 passed / 24 skipped with the `[cad]` +
+   `[vision]` extras, 805 / 42 without them). The skip gates grow on
+   purpose: no API keys, no native exe in that checkout, no live model
+   in CI. Ruff clean after.
 3. **Doctest binary standalone** — asserts the suite passes *outside
    ctest*, catching environment differences.
 4. **Native engine selftest** — `Trinity.exe --selftest` runs the whole
