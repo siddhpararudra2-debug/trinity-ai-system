@@ -4,7 +4,11 @@ Status: everything planned through Stage 10 has shipped — M1–M9
 (Stages 1–6), M10–M13 release hardening (Stage 7), M14 CAD depth
 (Stage 8), M15 agentic workflow depth (Stage 9), and Stage 10's
 deferred-list work (M16 Linux bundle, M17 data seam, M18 engine depth
-beyond CAD). The complete,
+beyond CAD). Since then: M19–M29 (design record, cross-checks,
+verified report, data layer), M30–M33 (accounts, trust, billing,
+limits), Stage 14 A1–A7 / B1–B3, and Stage 15 items 1–2 (real PCB and
+firmware Python fallbacks) are complete. Open: M34 (partial), M35, and
+Stage 15's remaining Fix-mode/embeddings work. The complete,
 hash-verified record lives in [MILESTONES.md](MILESTONES.md); the
 working rules are [PROCESS.md](PROCESS.md). This file no longer plans
 milestones that have already happened — it keeps the honest list of
@@ -71,8 +75,10 @@ the M-rules: one concern per commit, verified before advertised.
   M18.3 added `vision` with `image_inspect` and `document_parse` behind a
   light `[vision]` extra; M18.4 added `research` with `search` over
   caller-supplied documents or the bundled repo docs. `pcb` and
-  `firmware` remain native-Windows with honest refusals until the POSIX
-  native transport lands. Suite after M18.4: 488 passed / 40 skipped,
+  `firmware` remained native-Windows with honest refusals at M18; Stage
+  15 items 1-2 have since added real Python fallbacks for both
+  (auto-placement/routing/design checks for pcb; an MCU pin database and
+  honest two-tier builds for firmware). Suite after M18.4: 488 passed / 40 skipped,
   ruff clean (proof runs: Linux Package #6/#7, Release #14, CI #200).
 - **Native daemon on POSIX** (queued last): WinHTTP is the blocker —
   the transport abstraction gets a POSIX backend before any bundle
@@ -87,7 +93,9 @@ the M-rules: one concern per commit, verified before advertised.
   engines and says so.
 - New engine types beyond CAD depth — same verify-before-advertise
   rule that took phantom capabilities out of the registry applies.
-- Schema/migration of existing user data stores.
+- Schema/migration of existing user data stores — **done for the
+  current store (M17)**; future schema versions still need their own
+  explicit migration step.
 - Native daemon support for non-Windows toolchains, once CI can verify
   it rather than assume it.
 
