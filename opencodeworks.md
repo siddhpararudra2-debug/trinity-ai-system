@@ -8,10 +8,17 @@ change it describes — never on its own.
 
 ---
 
-## In progress
+## Current status (as of `f00786c`, 2026-11-17)
 
-**Stage 11 — cross-checks + verified report: `decided.md` is the plan of
-record (Phase 0/M19 decided; M20 design-record + cross-checks next).** The
+M19–M33, Stage 14 A1–A7 / B1–B3, and Stage 15 items 1–2 (real PCB and
+firmware fallbacks) are done. M34 is partial (feedback route + analytics
+flag; error reports, events and the feedback CLI are open). M35 and
+Stage 15's remaining Fix-mode/embeddings work are open. `decided.md` is
+the plan of record. Everything below is the historical log.
+
+## Stage 11 (historical): cross-checks + verified report
+
+**`decided.md` is the plan of record (Phase 0/M19 decided; M20 design-record + cross-checks landed).** The
 decided plan: one shared design record (parts, nets+pins, board size, holes
 and connectors, firmware pin map), ~10 deterministic cross-checks across
 CAD/PCB/firmware/BOM each returning PASS/WARN/FAIL with a reason and a
@@ -1084,32 +1091,32 @@ Last full run, against a freshly built native binary:
 | ruff + lint + build | clean |
 
 LLM transport tests are permanently skipped by decision — no API keys.
-## Stage 13 � Accounts, Billing, Trust Plans (new)
-- [ ] M30 accounts (1.5 wks). Signup, verify, login, refresh, logout, reset, delete my account. In-app login screen; signed-out use stays on the free tier. Tests: lockout, expired tokens, replayed reset links.
-- [ ] M31 trust pages (1 wk). Privacy, terms, refund and cancellation, design ownership, linked in the footer (About and Contact exist). Draft from the user's facts only and mark each "DRAFT - needs lawyer review" until the user removes it. Record policy version and time at signup. No training on user designs unless the user decides otherwise.
-- [ ] M32 billing (1.5 wks). Plans from config. Checkout, webhook with signature check, deduped by event id. States: trialing, active, past_due, cancelled, expired. Cancel and refund follow the refund page. Tests from sample webhooks: duplicate, out-of-order, bad signature.
-- [ ] M33 plans and limits (1 wk). Signed plan token, offline verify, grace. Meter LLM calls per day, exports, saved designs. Over a limit, show a plain message naming the plan and limit, never a silent failure. The free tier keeps all Stage 12 features working.
-- [ ] M34 business basics (1 wk). Error reports (opt-in, no design contents). Minimal events with a visible opt-out. In-app feedback button (text plus app version) posting to the cloud, and a CLI to read it.
+## Stage 13 — Accounts, Billing, Trust Plans (done)
+- [x] M30 accounts (1.5 wks) — done: `a2a374b`, `5e8a950`. Signup, verify, login, refresh, logout, reset, delete my account. In-app login screen; signed-out use stays on the free tier. Tests: lockout, expired tokens, replayed reset links.
+- [x] M31 trust pages (1 wk) — done: `5e37a32`. Privacy, terms, refund and cancellation, design ownership, linked in the footer (About and Contact exist). Draft from the user's facts only and mark each "DRAFT - needs lawyer review" until the user removes it. Record policy version and time at signup. No training on user designs unless the user decides otherwise.
+- [x] M32 billing (1.5 wks) — done: `e0dd3f5`. Plans from config. Checkout, webhook with signature check, deduped by event id. States: trialing, active, past_due, cancelled, expired. Cancel and refund follow the refund page. Tests from sample webhooks: duplicate, out-of-order, bad signature.
+- [x] M33 plans and limits (1 wk) — done: `c2b479b`. Signed plan token, offline verify, grace. Meter LLM calls per day, exports, saved designs. Over a limit, show a plain message naming the plan and limit, never a silent failure. The free tier keeps all Stage 12 features working.
+- [~] M34 business basics (1 wk) — partial: `POST /api/feedback` + `TRINITY_ANALYTICS_ENABLED` / `TRINITY_FEEDBACK_ENDPOINT` exist. Open: opt-in error reports (no design contents), minimal events with a visible opt-out, and a CLI to read stored feedback.
 - [ ] M35 launch check (3-4 days). Staging run in test mode: signup, verify, subscribe, webhook, token, cancel, offline. Backups, secrets, auth review, installer pointing at the production API. Production keys only after the user confirms legal sign-off.
 
-### Stage 14 - Remaining Gaps (new) [pending]
+### Stage 14 - Remaining Gaps (all closed)
 
 **A1 XLSX BOM** `[done]` `GET /api/projects/{id}/bom.xlsx` via openpyxl, same columns as CSV plus price columns when present. Second sheet: record id, snapshot id, report status. No formulas. Test: reopen, compare to CSV.
 
-**A2 Enclosure lid** [pending] Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt must now pass.
+**A2 Enclosure lid** `[done]` Lid parameter set (`lid`: none or removable, thickness, fit clearance, screw posts yes/no). Output separate lid part (STEP/STL). Update board-fits-enclosure check to use inner height with lid fitted. The skipped eval prompt now passes.
 
-**A3 Skipped eval prompts** [done] --require-native verified: SKIP to FAIL conversion. Fixture saving and REPLAYED labeling per chosen smaller option.s. Without the native binary the runner replays them, labelled REPLAYED, never PASS. Add `--require-native` so a Windows run fails instead of skipping.]
+**A3 Skipped eval prompts** `[done]` `--require-native` verified: SKIP to FAIL conversion. Fixture saving and REPLAYED labeling per the chosen smaller option. Without the native binary the runner replays them, labelled REPLAYED, never PASS.
 
-**A4 CAD catalog audit** [pending] Write `docs/cad-catalog-audit.md`: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. Add a test that builds every part at default/min/max. Flag any dimension without a datasheet or standard as UNVERIFIED. Never correct dimensions from memory.
+**A4 CAD catalog audit** `[done]` `docs/cad-catalog-audit.md` written: per part, parameters, whether it builds at default/min/max, STEP export, test, and dimension source. A test builds every part at default/min/max. Any dimension without a datasheet or standard is flagged UNVERIFIED. Never corrected dimensions from memory.
 
 **A5 Literature RAG** `[done]` Chunk the existing documents with source and page. Local embedding model by default (offline), named in config. Keep keyword search as fallback. Show only retrieved passages with source; below a score threshold, say "not found". Add ~15 retrieval evals. Proof: pytest 723 passed / 26 skipped, ruff clean.
 
 **A6 Router** `[done]` One `ModelClient` interface over the existing clients. Model per task from config, fallback order, timeout, and a log of which model answered (no design content). The rule-based router stays first; tests assert zero model calls on matched requests, and cover timeout, error and fallback with fake clients.
 
-**A7 Explain and Fix** `[done]` UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green.
+**A7 Explain and Fix** `[done]` API endpoints for report explanation and record patching (the "Explain" / "Propose fix" UI buttons described in the plan are **not in the current frontend**). `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green.
 - **Explain:** read-only. Every claim cites a check id or record field from the report. Test that each cited id exists.
 - **Fix:** takes a FAILED report and returns a record patch. The server validates the patch with the normal loaders and shows a diff. Only after the user confirms does it save (a snapshot is made first), re-run Inspect, and show before and after. If a new FAIL appears, offer a one-click restore. Max 3 attempts. Tests: good patch, invalid patch refused, patch that makes things worse.
-- **UI:** "Explain" and "Propose fix" buttons on the Report tab.
+- **UI:** "Explain" and "Propose fix" buttons on the Report tab — **not shipped**; only the API endpoints exist in this build.
 
 **B1 Native engine audit** [done] Tested 6 native engines (PCB, firmware, research, simulation, robotics all pass on Windows; vision needs image path). Hosted decision: Windows-supported; Linux compatibility confirmed (pure Python/numPy, no OS deps).
 
@@ -1171,7 +1178,7 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   past-tense descriptions and suite proof (488/40); the closing section
   keeps the POSIX daemon as the open queue head.
 
-### Stage 15 (in progress): real fallbacks — Item 1, the PCB engine
+### Stage 15 (items 1-2 done): real fallbacks — Item 1, the PCB engine
 
 - [x] **Item 1: real PCB fallback.** `src/engines/pcb/__init__.py` stops
   being a stub that echoed fixed components and now generates boards in
