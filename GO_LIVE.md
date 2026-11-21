@@ -3,7 +3,7 @@
 Everything below is **verified evidence from the current build**, followed by
 the items still open before a real production launch.
 
-## Verified in this build (dummy mode)
+## Verified in this build (dummy mode, as of `f00786c`)
 
 - **One prompt, whole pipeline** — `python tools/e2e_smoke.py` drives it over
   the public API: `POST /api/requirements/execute` (single-domain routing),
@@ -19,10 +19,13 @@ the items still open before a real production launch.
   compilable C skeleton, validates pins/peripherals against an MCU
   database, and reports `COMPILED` only from a real toolchain run —
   otherwise `"static check only, not compiled"`.
-- **Full pytest suite: 780 passed / 24 skipped** (2 skip without live
-  LLM API keys, 22 without the native binary; they skip with reasons,
-  never fake — machines without the `[vision]`/`[cad]` extras skip
-  more, still with reasons).
+- **Full pytest suite: 823 passed / 24 skipped** with the `[cad]` and
+  `[vision]` extras installed (2 skip without live LLM API keys, 22
+  without the native binary; they skip with reasons, never fake).
+  Without those extras the same suite is 805 passed / 42 skipped. The
+  six LLM transport contract tests require the declared `openai` and
+  `anthropic` SDKs; with them absent the suite reports 6
+  `ModuleNotFoundError` failures, so install `requirements.txt` first.
 - **Eval baseline saved** at `data/eval/results.json`
   (`python -m tools.eval.run`, environment-conditional):
   **25 PASS / 0 FAIL / 13 SKIP of 38** with the STEP kernel installed;
@@ -33,11 +36,16 @@ the items still open before a real production launch.
   library paths are all read from env at startup.
 
 ## Real LLM
-- Currently using the keyless local adapter behind
-  `LLM_BASE_URL=http://localhost:11434/v1/chat/completions`
-  (`LLM-LINK:` seam documented in `LLM_INTEGRATION.md`).
-- Real LLM endpoint integration needed (OpenAI, Anthropic, etc.)
-- Swap `LLM_BASE_URL` and `LLM_MODEL_NAME` in `.env.dummy` once provisioned.
+- The keyless local adapter reads `TRINITY_MODEL_ENDPOINT` (full
+  OpenAI-compatible `chat/completions` URL) and `TRINITY_MODEL_NAME`
+  (`LLM-LINK:` seam documented in `LLM_INTEGRATION.md`). With no
+  endpoint configured it refuses truthfully instead of pretending a
+  model is attached.
+- Real LLM endpoint integration needed (OpenAI, Anthropic, etc.).
+- Set `TRINITY_MODEL_ENDPOINT` / `TRINITY_MODEL_NAME` (and optionally
+  `TRINITY_MODEL_API_KEY`) in the environment once provisioned. The
+  `.env.dummy` keys `LLM_BASE_URL` / `LLM_API_KEY` are not read by the
+  client today; `LLM_MODEL_NAME` is only a fallback model name.
 
 ## Datasheets
 - Parts databases (India fabs, reference designs) use local JSON data files
@@ -52,8 +60,10 @@ the items still open before a real production launch.
   their native-grade limits (real gerber content, real cross-compiles)
   are stated in each engine's module docstring.
 - Building the native binary (`app/native/`, CMake/Qt) and running
-  `TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run` on Windows upgrades
-  the 13 SKIPs to graded verdicts.
+  `TRINITY_REQUIRE_NATIVE=1 python -m tools.eval.run` (or the same
+  command with `--require-native`) on Windows upgrades the
+  native-dependent SKIPs to graded verdicts — 13 with the STEP kernel
+  installed, 14 without it.
 
 ## Hosting
 - `start.ps1` launches uvicorn with `--workers $TRINITY_WEB_CONCURRENCY`
