@@ -3,24 +3,25 @@
 M25 backend gaps (2–3 days). [x] DONE
 - `GET /api/projects/{id}/bom.csv` — export priced BOM as CSV; 404 if record missing, 409 if no BOM data
 - `POST /api/projects/{id}/bom/rebuild` — rebuild BOM from PCB design fragment via save_record
-- `POST /api/projects/from-design` — build a new design record from a request body via DesignRecord.from_dict()
+- `POST /api/projects/from-design` — build a new design record from a request body via DesignRecord.from_dict(). **Not registered in the current build**: the dangling decorator was removed (see `tests/test_route_table.py`); use `POST /api/projects/from-reference/{design_id}` or `PUT /api/projects/{id}`.
 
-M26 projects UI (1–1.5 wks) [x] DONE
-- `/projects` list (unreadable records show the refusal)
-- `/projects/view` tabs:
-  - Report: badge, tally, check table (status, reason, location, hint)
-  - Record: JSON textarea plus Save
-  - History: snapshots, Restore (confirm), Compare
-  - BOM: table, CSV download, Rebuild from PCB (confirm)
-- E2E suite projects: seed good_esp32_i2c and break_c03_unknown_pin; assert VERIFIED vs FAILED, C03 at U1.GPIO39, fix-and-save flips status, restore, API-down error
-- Done when: create, break, fix, VERIFIED, restore, download BOM, all in the UI
+M26 projects UI (1–1.5 wks) [x] DONE (API; UI pages not present)
+- The record/report/BOM/history behaviour is implemented in the API
+  (`/api/projects`, `/report`, `/inspect`, snapshots, BOM routes) and
+  covered by tests.
+- The `/designs` and `/designs/view` pages described in the original
+  plan are **not in the current frontend**; `/projects` is the
+  artifacts & jobs view. Design records are API-only today.
+- Done when: create, break, fix, VERIFIED, restore, download BOM — the
+  API paths are all exercised; the UI portion remains open.
 
 M27 reference library (~1 wk) [x] DONE
 - Audit library.py against convention 9. Fixed tag vocabulary; rank by tag matches, then id; recompute verified on read
 - Grow to ~10 designs (drift test, all-VERIFIED test)
 - Routes: /api/reference, /match?tags=, POST /api/projects/from-reference (copy, never alias), /api/reference/candidates
 - No promote route; CLI tools/reference/review.py
-- UI: start from reference, submit as candidate
+- UI: start from reference, submit as candidate — **not in the current
+  frontend** (the reference flows are API/CLI only).
 
 M28 India data (1–2 wks) [x] DONE
 - Fix convention 9: parts get bom_value, bom_package, source (required with a price), price_note (required when null)
@@ -29,7 +30,9 @@ M28 India data (1–2 wks) [x] DONE
 - export_priced_bom_csv() (adds price_inr, price_updated_on)
 - tools/parts/import_prices.py
 - routes /api/parts, /api/fabs, /api/projects/{id}/bom-priced.csv
-- Parts/Fabs pages
+- Parts/Fabs data served by the API; the `parts_page.tsx` /
+  `fabs_page.tsx` frontend pages are not present in the current
+  frontend.
 
 M29 close-out (2–3 days) [x] DONE
 - Eval set to ~38 prompts (growth from 30). Update README, MILESTONES.md, work.md
@@ -124,17 +127,18 @@ M33 plans and limits (1 wk). [ done ]
   every Stage 12 feature until a configured cap is actually reached.
   Proof: pytest 776 passed / 24 skipped, ruff clean.
 
-M34 business basics (1 wk). [ pending ]
-- Error reports (opt-in, no design contents)
-- Minimal events with a visible opt-out
-- In-app feedback button (text plus app version) posting to the cloud, and a CLI to read it
+M34 business basics (1 wk). [ partial ]
+- [x] In-app feedback endpoint (`POST /api/feedback`) + `TRINITY_ANALYTICS_ENABLED` / `TRINITY_FEEDBACK_ENDPOINT` config
+- [ ] Error reports (opt-in, no design contents)
+- [ ] Minimal events with a visible opt-out
+- [ ] A CLI to read stored feedback
 
 M35 launch check (3-4 days). [ pending ]
 - Staging run in test mode: signup, verify, subscribe, webhook, token, cancel, offline
 - Backups, secrets, auth review, installer pointing at the production API
 - Production keys only after the user confirms legal sign-off
 
-### Stage 14 — Remaining Gaps [ pending ]
+### Stage 14 — Remaining Gaps [ all closed ]
 
 - [x] Stage 14 pre-work: CI lint gate repair — `ruff check src tests` green again; two latent NameErrors in `src/vector_store` fixed (missing `src.embeddings` import); 707 passed / 26 skipped unchanged.
 - [x] A3.1 runner honesty: p035's stale "binaries absent" claim fixed; `--require-native` now structural (every SKIP fails on a native-capable claim); runner tests native-state-aware; 708 passed / 26 skipped.
@@ -162,7 +166,7 @@ A4 CAD catalog audit [done] - doc re-verified against the registry (25
   pytest 724 passed / 26 skipped, ruff clean.
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
-A7 Explain and Fix — UI buttons + API endpoints for report explanation and record patching. `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
+A7 Explain and Fix — API endpoints for report explanation and record patching (the "Explain" / "Propose fix" buttons described in the original plan are **not in the current frontend**). `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
 B1 Native engine audit - tested 6 native engines (PCB, firmware, research, simulation, robotics all pass); vision needs image path. All engines return success on Windows. Hosted decision: Windows-supported; Linux compatibility confirmed (pure Python/numPy, no OS deps). Proof: 723 passed / 26 skipped, ruff clean.
 B2 Workers - V1 job manager functional with ThreadPoolExecutor, per-user limits (_user_job_counts), timeout/retries via SAFE_EXECUTION_* env vars. No Redis/Celery required (explicitly non-goal per design doc). Proof: 723 passed / 26 skipped, ruff clean.
 B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTION_ENABLED/_TIMEOUT/MAX_RETRIES/PER_USER_LIMIT. V1 job manager already enforces timeout (ThreadPoolExecutor), retry (max_retries), and per-user limits (_user_job_counts + Redis-ready). Plan token integration: /api/intelligence/stream-plan validates plan tokens against engine registry. Proof: 723 passed / 26 skipped, ruff clean.
