@@ -34,6 +34,7 @@ reason instead of a fake pass.
   embeddings work, and production hosting follow-ups — TLS certificate
   provisioning and the reverse proxy itself (see `GO_LIVE.md` →
   Hosting).
+- **Migration plan**: [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) — repo audit plus a reversible, stage-by-stage plan to move the deterministic core to Rust (with Go services, retained C++ GUI/OpenCV, and Python adapters). Plan only; no Rust or Go code has shipped.
 - **UI**: `/` workspace (command bar + live engine consoles), `/projects`
   artifacts & jobs (live catalog), `/chat`, `/login`, `/trust` (plus
   about/contact/services/systems/team). Design records are API-only;

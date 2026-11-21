@@ -249,4 +249,6 @@ B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTI
   38), byte-deterministic. Proof: new `tests/test_firmware_engine.py`
   26 tests; suite 823 passed / 24 skipped, ruff clean; e2e smoke green.
 
+- [x] Item 3: language-migration plan (docs/MIGRATION_PLAN.md) — audited src/ (104 files / 18,452 lines), app/native/ (249 first-party files / 45,189 lines), frontend (43 files / 7,466 lines) and the 60-route API; recorded the native↔Python engine drift, toolchain gaps and config drift. Wrote the allocation policy (Rust core/API/bridge, Go ops/services, C++ GUI/OpenCV, Python adapters/tooling), the frozen contract seams, mandatory dispatcher + kill switch, parity harness, seven reorderable stages with done-when gates, risk register and open decisions D-01..D-07. Documentation only — no code migrated, no capability claimed. Proof: `git diff --check` clean; plan linked from README.md and docs/ROADMAP.md.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

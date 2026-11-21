@@ -10,9 +10,11 @@ limits), Stage 14 A1–A7 / B1–B3, and Stage 15 items 1–2 (real PCB and
 firmware Python fallbacks) are complete. Open: M34 (partial), M35, and
 Stage 15's remaining Fix-mode/embeddings work. The complete,
 hash-verified record lives in [MILESTONES.md](MILESTONES.md); the
-working rules are [PROCESS.md](PROCESS.md). This file no longer plans
-milestones that have already happened — it keeps the honest list of
-what is *not* done.
+working rules are [PROCESS.md](PROCESS.md). The audit and the executable,
+reversible language-migration plan live in
+[MIGRATION_PLAN.md](MIGRATION_PLAN.md) (plan only — no Rust/Go code has
+shipped). This file no longer plans milestones that have already happened —
+it keeps the honest list of what is *not* done.
 
 ## Current known limits (deliberate, stated by the product)
 

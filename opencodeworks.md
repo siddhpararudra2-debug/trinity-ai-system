@@ -1256,3 +1256,29 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   tests; suite 823 passed / 24 skipped, `ruff check src tests` clean;
   `python tools/e2e_smoke.py` green (registry shows both fallback engines
   unlabeled).
+
+### Language migration plan (docs only, no code moved)
+
+- [x] **Repo audit + migration plan.** Measured the four layers at
+  `f00786c`: Python `src/` 104 files / 18,452 lines, `tests/` 54 files /
+  10,154 lines, `app/native/` 249 first-party files / 45,189 lines (of
+  which 10,061 lines / 66 doctest files), frontend 43 files / 7,466
+  lines, 60 pinned API routes, zero Rust/Go lines. The audit's central
+  finding is drift, not absence: native math (2,475 lines) and cad are
+  never bridged; native simulation/robotics/research/vision expose ops the
+  Python bridge never maps; two requirement parsers (2,556 vs 576 lines),
+  two planners, two job managers and two SQLite layers coexist. Also
+  recorded the toolchain gap (no cargo/go/cmake locally; CI must be the
+  first builder), the Windows-only native presets/WinHTTP/Builder, and
+  `deploy/.env` naming Redis/S3/aiosqlite settings `src/core/config.py`
+  does not read. `docs/MIGRATION_PLAN.md` is written as a free plan:
+  allocation by decision rule rather than file list, frozen wire/record/
+  status contracts, mandatory dispatcher with `python|native|rust|shadow`
+  and `fastapi|axum` kill switches, a parity harness that fails on zero
+  executed cases, seven reorderable stages each with a done-when and
+  rollback, a risk register, and seven open decisions (D-01..D-07).
+  Research grounding: GitGuardian's Rust migration (public types first,
+  side-by-side dispatcher, kill switch, release the GIL on long calls) and
+  the dev.to warning against 1-to-1 Python→Rust package mappings
+  (serde ≠ pydantic validation; reqwest implies tokio). Documentation
+  only — no capability claimed, no code migrated.
