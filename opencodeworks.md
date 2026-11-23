@@ -1310,3 +1310,25 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   FAILED→VERIFIED, invalid patch 400, restore, 4th attempt 409, unfixable
   hint, full e2e on seeded `break_c03_unknown_pin`); full suite green,
   `ruff check src tests` clean.
+
+### Stage 15 (continued): Item 4, real offline embeddings
+
+- [x] **Item 4: offline embeddings with honest mode labels.** `src/embeddings`
+  loads all-MiniLM-L6-v2 from the optional `[rag]` extra (model name in
+  config, swappable by `EMBEDDING_MODEL_NAME`), with no query-time network
+  call; hash n-gram and keyword fallbacks remain, and every result states
+  `mode` = "embedding" / "hash" / "keyword" so a fallback is never shown as
+  the model. Chunks keep `source`/`page`. Below `SCORE_THRESHOLD` the answer
+  is literally "not found" (stopword-aware hashing keeps out-of-corpus
+  common-word collisions below the threshold). The index records the
+  embedder name and refuses to mix spaces (`IndexModelMismatch` /
+  `ModelMismatch`, with `rebuild_index()` / `rebuild()` to start fresh).
+  `src/rag` exposes `RagPipeline`, `init_dummy_corpus`, `retrieve` and
+  `answer_question` (the earlier collection-time `ImportError` for
+  `RagPipeline` is gone). Proof: new mode-label, source/page, out-of-corpus
+  "not found", model-mismatch and paraphrase tests in
+  `tests/test_rag_pipeline.py` / `tests/test_vector_store.py`; paraphrase
+  tests skip with a stated reason because the model is not installed here,
+  while all fallback tests run; full suite 841 passed / 26 skipped,
+  `ruff check src tests` clean. Not verified: semantic paraphrase quality
+  itself — only the fallback path was executable on this machine.

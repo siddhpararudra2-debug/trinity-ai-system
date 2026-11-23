@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from src.utils.vector_store import VectorStore, cosine, embed
+from src.embeddings import chunk_with_metadata
+from src.vector_store import InMemoryStore, ModelMismatch
 
 
 def test_embedding_is_deterministic_and_normalized():
@@ -131,3 +133,61 @@ def test_persistence_survives_reopen(tmp_path):
     results = reopened.search("regenerative accumulator", k=1)
     assert results[0]["id"] == "persistent"
     reopened.close()
+
+# ---------------------------------------------------------------------------
+# Item 4: mode labels, model identity, honest not-found on the vector store
+# ---------------------------------------------------------------------------
+
+class TestVectorStoreHonesty:
+    """Results carry a mode label; mismatched models are refused, never mixed."""
+
+    def test_inmemory_result_has_mode_label(self):
+        store = InMemoryStore()
+        store.add_chunks(
+            chunk_with_metadata(
+                "Trinity AI supports PCB routing and netlist checks",
+                source="guide.md", page=2,
+            )
+        )
+        result = store.search("PCB routing")
+        assert result["results"]
+        for row in result["results"]:
+            assert row["mode"] == "keyword"
+        assert result["fallback"] is True
+        assert result["not_found"] is False
+
+    def test_inmemory_out_of_corpus_is_not_found(self):
+        store = InMemoryStore()
+        store.add_chunks(
+            chunk_with_metadata("The enclosure wall thickness is 2 mm", source="mech.md", page=1)
+        )
+        result = store.search("quantum chromodynamics lagrangian")
+        assert result["not_found"] is True
+        assert result["results"] == []
+
+    def test_inmemory_refuses_mixed_model_names(self):
+        store = InMemoryStore()
+        store.add_chunks(
+            chunk_with_metadata("first index batch", source="a.md", page=1),
+            model_name="hash",
+        )
+        with pytest.raises(ModelMismatch):
+            store.add_chunks(
+                chunk_with_metadata("second batch", source="b.md", page=2),
+                model_name="embedding",
+            )
+
+    def test_rebuild_allows_new_model(self):
+        store = InMemoryStore()
+        store.add_chunks(
+            chunk_with_metadata("first index batch", source="a.md", page=1),
+            model_name="hash",
+        )
+        store.rebuild()
+        store.add_chunks(
+            chunk_with_metadata("new model batch", source="b.md", page=2),
+            model_name="embedding",
+        )
+        assert store.model_name == "embedding"
+        assert store.search("new model batch")["results"]
+

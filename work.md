@@ -267,4 +267,22 @@ B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTI
   report page stays an HTML export; the flow is verified through the API
   and the e2e test.
 
+- [x] Item 4: Real offline embeddings for literature search — `src/embeddings`
+  loads all-MiniLM-L6-v2 (env-swappable via `EMBEDDING_MODEL_NAME`, optional
+  `[rag]` extra) with no network at query time; hash n-gram and keyword
+  fallbacks stay available and every result carries `mode` = "embedding" /
+  "hash" / "keyword" — a fallback is never presented as the model. Chunks
+  keep `source`/`page`. Below `SCORE_THRESHOLD` the answer is "not found"
+  (out-of-corpus queries do not return nearest junk). The index records the
+  embedding model name and refuses to mix spaces with a clear
+  `IndexModelMismatch`/`ModelMismatch` (rebuild to start fresh). `src/rag`
+  exposes `RagPipeline`/`init_dummy_corpus`/`retrieve`/`answer_question`.
+  Proof: existing RAG + vector-store tests plus new mode-label,
+  source/page, out-of-corpus "not found", model-mismatch and paraphrase
+  tests (paraphrase tests skip with a stated reason when the model is not
+  installed — the fallback tests still run); full suite green, ruff clean.
+  NOT verified: semantic paraphrase quality itself — the model is not
+  installed on this machine, so those tests skip; only the fallback path
+  was executed here.
+
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

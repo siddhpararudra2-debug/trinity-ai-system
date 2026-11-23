@@ -31,9 +31,12 @@ cad = ["cadquery>=2.8"]
 # tesseract binary and stays native-only. Without the extra the engine
 # refuses with an install hint instead of pretending.
 vision = ["pillow>=10.0", "pypdf>=4.0"]
-# M19: XLSX BOM export — openpyxl wheel; optional extra so CI and
-# hosted installs can skip it if headless.
-xlsx = ["openpyxl>=3.1.0"]
+# M25/M26: optional RAG extras — embeddings + keyword index +
+# vector-store glue.  Install with: ``pip install "trinity[rag]"``
+rag = [
+    "sentence-transformers>=2.2",          # embedding model (all-MiniLM-L6-v2)
+    "fastembed>=1.7",                       # lightweight alternative
+]
 
 [build-system]
 requires = ["setuptools>=68"]
