@@ -44,6 +44,7 @@ from src.core.logging_config import get_logger
 from src.engines.cad.engine import ALWAYS_SUPPORTED_FORMATS, DEFAULT_OUTPUTS
 from src.engines.cad.step import kernel_info
 from src.engines.cad.parts import get_part, list_supported_types
+from src.engines.crosscheck.fix import record_diff
 from src.engines.crosscheck.record import (
     DesignRecord,
     DesignRecordError,
@@ -1499,4 +1500,272 @@ def fix_record(record_id: str, attempts: int = 1) -> dict[str, Any]:
         "diff": diff_summary,
         "attempts": attempts,
         "can_retry": attempts < 3,
+    }
+
+
+# M31: Fix propose / apply / restore (new flow) -----------------------------------
+# -----------------------------------------------------------
+
+
+@router.post("/fix/propose/{record_id}", response_model=dict[str, Any])
+def fix_propose(
+    record_id: str,
+) -> dict[str, Any]:
+    """Propose patches for a FAILED record (without snapshot).
+
+    1. Load the record and assemble the report
+    2. If not FAILED, refuse (400)
+    3. Generate patch suggestions based on check failures
+    4. Return the diff preview and unfixed check ids
+
+    Returns a dict with:
+    - ``status``: ``"proposed"`` when patches are ready
+    - ``snapshot_id``: absent (no snapshot saved)
+    - ``diff``: before-state summary
+    - ``patches``: list of patch dicts (check_id, op, section, fields)
+    - ``unfixed_ids``: list of check ids that still FAIL/WARN after patches
+    - ``can_apply``: True when at least one patch applies
+    """
+    from src.engines.crosscheck.fix import generate_patch
+    from src.engines.crosscheck.check import FAIL, WARN
+    from src.engines.crosscheck.report import assemble_report
+
+    try:
+        rec = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    report = assemble_report(rec)
+
+    if report["overall_status"] != "FAILED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Record is not FAILED (status: {report['overall_status']}); only FAILED records can be fixed",
+        )
+
+    # Generate patch suggestions for every FAIL/WARN check
+    patches: list[dict[str, Any]] = []
+    unfixed_ids: list[str] = []
+
+    for check in report["checks"]:
+        if check["status"] not in (FAIL, WARN):
+            continue
+        cid = check["check_id"]
+        patch = generate_patch(rec, cid)
+        if patch is not None:
+            patches.append(patch)
+        else:
+            # No rule for this check id; keep it unfixed
+            unfixed_ids.append(cid)
+
+    # Build before-state diff summary
+    diff_summary: dict[str, Any] = {
+        "record_id": record_id,
+        "overall_status": report["overall_status"],
+        "check_count": len(report["checks"]),
+        "fail_count": sum(1 for c in report["checks"] if c["status"] == "FAIL"),
+        "warn_count": sum(1 for c in report["checks"] if c["status"] == "WARN"),
+        "snapshot_id": None,
+        "patches": patches,
+        "attempts": 0,
+        "can_apply": len(patches) > 0,
+    }
+
+    return {
+        "status": "proposed",
+        "snapshot_id": None,
+        "diff": diff_summary,
+        "patches": patches,
+        "unfixed_ids": unfixed_ids,
+        "can_apply": len(patches) > 0,
+    }
+
+
+@router.post("/fix/apply/{record_id}", response_model=dict[str, Any])
+def fix_apply(
+    record_id: str,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply a proposed patch to a FAILED record.
+
+    1. Validate the patch shape and check staleness (refuse if the
+       record has already been fixed)
+    2. Mutate a deep copy of the record via ``apply_patch``
+    3. Save the patched record (snapshot reason ``fix:attempt-N``)
+    4. Re-run ``assemble_report`` on the saved record for the "after"
+       side
+    5. Return before/after overall_status, fail counts, diff, made_worse
+       flag, and a restore pointer
+
+    The *attempts* count is derived from existing ``fix:attempt-*`` snapshots
+    under the record; max 3 attempts (attempt 3 → next is 409).
+
+    Returns a dict with:
+    - ``status``: ``"applied"``
+    - ``before``: overall_status, fail/warn counts from before
+    - ``after``: overall_status, fail/warn counts from after
+    - ``diff``: recursive path-based before/after diff
+    - ``made_worse``: True if the after FAIL count exceeds the before FAIL count
+    - ``restore_snapshot_id``: id of the snapshot you can restore from
+    """
+    from src.engines.crosscheck.fix import apply_patch
+    from src.engines.crosscheck.snapshots import take_snapshot, list_snapshots
+    from src.engines.crosscheck.report import assemble_report
+    from src.engines.crosscheck.record import DesignRecordError
+
+    # Derive current attempt count from existing fix:* snapshots
+    try:
+        existing_snapshots = list_snapshots(record_id)
+    except Exception:  # noqa: BLE001 — a broken history must not block a fresh fix attempt
+        existing_snapshots = []
+
+    attempt_num = 1
+    for snap in existing_snapshots:
+        reason = snap.get("reason", "")
+        if reason and reason.startswith("fix:attempt-"):
+            # Reasons are ``fix:attempt-<n>``; parse the trailing integer,
+            # not ``int("attempt-3")`` which always raises ValueError.
+            try:
+                n = int(reason.rsplit("attempt-", 1)[1])
+                if n >= attempt_num:
+                    attempt_num = n + 1
+            except ValueError:
+                pass
+
+    # Enforce max 3 attempts: attempt 4 is 409
+    if attempt_num > 3:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Maximum of 3 fix attempts reached (attempt {attempt_num} requested)",
+        )
+
+    # Load the record
+    try:
+        rec = load_record(record_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Before-state snapshot (for the "before" side of the response)
+    before_snapshot_id = str(
+        take_snapshot(rec, reason=f"fix:attempt-{attempt_num}")
+    )
+
+    # Apply the patch
+    new_record = apply_patch(rec, patch)
+    if new_record is None:
+        # Stale or invalid patch
+        # Restore the before snapshot we just took
+        try:
+            restore_snapshot(record_id, int(before_snapshot_id))
+        except Exception:  # noqa: BLE001 — best-effort rollback; the refusal is the verdict
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail="Patch is stale or invalid against the current record",
+        )
+
+    # Record before-state metrics
+    before_report = assemble_report(rec)  # original, unmodified report
+    before_overall = before_report["overall_status"]
+    before_fail_count = sum(
+        1 for c in before_report["checks"] if c["status"] == "FAIL"
+    )
+    before_warn_count = sum(
+        1 for c in before_report["checks"] if c["status"] == "WARN"
+    )
+
+    # Re-run assemble_report on the *saved* patched record for the after side
+    # First, save the patched record
+    save_record(new_record, snapshot=False)  # write without extra snapshot
+
+    # Take a snapshot of the *just-saved* patched record
+    # The reason records the attempt number
+    attempt_snapshot_id = str(
+        take_snapshot(new_record, reason=f"fix:attempt-{attempt_num}")
+    )
+
+    # Now re-run assemble_report on the saved patched record
+    # We need to load it back
+    try:
+        saved_rec = load_record(new_record.record_id)
+    except DesignRecordError:
+        # Fallback: the record we just built
+        saved_rec = new_record
+
+    after_report = assemble_report(saved_rec)
+    after_overall = after_report["overall_status"]
+    after_fail_count = sum(
+        1 for c in after_report["checks"] if c["status"] == "FAIL"
+    )
+    after_warn_count = sum(
+        1 for c in after_report["checks"] if c["status"] == "WARN"
+    )
+
+    # Compute the diff between before and after
+    diff = record_diff(rec, saved_rec)
+
+    # made_worse: True if after FAIL count exceeds before FAIL count
+    made_worse = after_fail_count > before_fail_count
+
+    return {
+        "status": "applied",
+        "before": {
+            "overall_status": before_overall,
+            "fail_count": before_fail_count,
+            "warn_count": before_warn_count,
+        },
+        "after": {
+            "overall_status": after_overall,
+            "fail_count": after_fail_count,
+            "warn_count": after_warn_count,
+        },
+        "diff": diff,
+        "made_worse": made_worse,
+        "restore_snapshot_id": int(attempt_snapshot_id),
+        "attempt": attempt_num,
+    }
+
+
+@router.post("/fix/restore/{record_id}", response_model=dict[str, Any])
+def fix_restore(
+    record_id: str,
+    snapshot_id: int,
+) -> dict[str, Any]:
+    """Restore a prior snapshot, re-using the existing ``restore_snapshot``
+    flow (which first snapshots the current state, then writes the chosen
+    snapshot's record verbatim).
+
+    Returns a dict with:
+    - ``status``: ``"restored"``
+    - ``restored_overall_status``: the overall status of the restored record
+    - ``restored_fail_count``: FAIL count after restore
+    - ``restored_warn_count``: WARN count after restore
+    - ``restore_snapshot_id``: the snapshot that was restored
+    """
+    from src.engines.crosscheck.snapshots import restore_snapshot
+    from src.engines.crosscheck.report import assemble_report
+
+    # Restore the chosen snapshot. An unknown/invalid snapshot id is a
+    # client error (404), never an unhandled 500.
+    try:
+        restored = restore_snapshot(record_id, snapshot_id)
+    except DesignRecordError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Re-run assemble_report on the restored record
+    report = assemble_report(restored)
+    restored_overall = report["overall_status"]
+    restored_fail_count = sum(
+        1 for c in report["checks"] if c["status"] == "FAIL"
+    )
+    restored_warn_count = sum(
+        1 for c in report["checks"] if c["status"] == "WARN"
+    )
+
+    return {
+        "status": "restored",
+        "restored_overall_status": restored_overall,
+        "restored_fail_count": restored_fail_count,
+        "restored_warn_count": restored_warn_count,
+        "restore_snapshot_id": snapshot_id,
     }

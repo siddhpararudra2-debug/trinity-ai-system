@@ -166,7 +166,7 @@ A4 CAD catalog audit [done] - doc re-verified against the registry (25
   pytest 724 passed / 26 skipped, ruff clean.
 A5 Literature RAG — retrieval eval tests (15 tests for ingest, query, chunking, embeddings; all pass). Fixed `_DUMMY_CORPUS` tuple→string bug in `src/rag/__init__.py` and `ingest_documents` metadata bug in `src/vector_store/__init__.py`. Proof: pytest 723 passed / 26 skipped, ruff clean.
 A6 Router — deterministic rule-based router + DAG workflow planner (M15–M16). 72 rule categories covering CAD, PCB, firmware, robotics, simulation, math, and research. `parse_requirement()` routes natural language to engine operations; `validate_plan()` + `ordered_nodes()` verify DAG executability. `/api/intelligence/stream-plan` SSE endpoint streams plan from LLM or falls back to deterministic router. All 56 router rule tests + 6 CORS+router tests pass. Proof: pytest 723 passed / 26 skipped, ruff clean.
-A7 Explain and Fix — API endpoints for report explanation and record patching (the "Explain" / "Propose fix" buttons described in the original plan are **not in the current frontend**). `/api/explain` validates every cited check id exists; `/api/fix` takes a FAILED record, saves a snapshot, generates patch suggestions with hints, shows before/after diff, re-runs inspect (max 3 attempts). All 723 tests / 26 skipped green. Proof: pytest 723 passed / 26 skipped, ruff clean.
+A7 Explain and Fix — **corrected (Stage 15 Item 3).** The earlier claim that this was "done" was false: `/api/fix` only returned hint text plus a snapshot and could not actually fix a record. Now real: rule-based patches (C02/C03/C04/C08/C09/C10/C11) produce field-path+value record patches; `/api/fix/propose/{id}` returns patch + diff and changes nothing; `/api/fix/apply/{id}` snapshots first, saves, re-runs Inspect and returns before/after (status, fail counts, which checks changed, `made_worse`); `/api/fix/restore/{id}` restores from snapshots; max 3 attempts enforced server-side; unfixable checks stay hints; `LLM-LINK:` seam for a future model. `/api/explain` validates every cited check id. Proof: new `tests/test_fix_mode.py` 10 tests (propose→apply FAILED→VERIFIED, invalid patch 400, restore, 4th attempt 409, unfixable hint, seeded `break_c03_unknown_pin` e2e flow), full suite green, ruff clean. Frontend: the server-rendered report page at `/api/projects/{id}/report` remains HTML export only — the "Propose/Apply/Restore" buttons in a `projects/view` Report tab were NOT built; the flow is API/e2e-tested.
 B1 Native engine audit - tested 6 native engines (PCB, firmware, research, simulation, robotics all pass); vision needs image path. All engines return success on Windows. Hosted decision: Windows-supported; Linux compatibility confirmed (pure Python/numPy, no OS deps). Proof: 723 passed / 26 skipped, ruff clean.
 B2 Workers - V1 job manager functional with ThreadPoolExecutor, per-user limits (_user_job_counts), timeout/retries via SAFE_EXECUTION_* env vars. No Redis/Celery required (explicitly non-goal per design doc). Proof: 723 passed / 26 skipped, ruff clean.
 B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTION_ENABLED/_TIMEOUT/MAX_RETRIES/PER_USER_LIMIT. V1 job manager already enforces timeout (ThreadPoolExecutor), retry (max_retries), and per-user limits (_user_job_counts + Redis-ready). Plan token integration: /api/intelligence/stream-plan validates plan tokens against engine registry. Proof: 723 passed / 26 skipped, ruff clean.
@@ -250,5 +250,21 @@ B3 Sandbox and limits - SAFE_EXECUTION config driven via .env.dummy/SAFE_EXECUTI
   26 tests; suite 823 passed / 24 skipped, ruff clean; e2e smoke green.
 
 - [x] Item 3: language-migration plan (docs/MIGRATION_PLAN.md) — audited src/ (104 files / 18,452 lines), app/native/ (249 first-party files / 45,189 lines), frontend (43 files / 7,466 lines) and the 60-route API; recorded the native↔Python engine drift, toolchain gaps and config drift. Wrote the allocation policy (Rust core/API/bridge, Go ops/services, C++ GUI/OpenCV, Python adapters/tooling), the frozen contract seams, mandatory dispatcher + kill switch, parity harness, seven reorderable stages with done-when gates, risk register and open decisions D-01..D-07. Documentation only — no code migrated, no capability claimed. Proof: `git diff --check` clean; plan linked from README.md and docs/ROADMAP.md.
+- [x] Item 3 (fix mode): Fix mode that actually fixes — honest correction of the A7
+  line above. `src/engines/crosscheck/fix.py` generates real record patches
+  for C02/C03/C04/C08/C09/C10/C11 (field path + new value), each recomputed
+  from the live record, validated through `DesignRecord.from_dict` and a
+  staleness guard; everything else stays a `FIX_HINT`. Routes
+  `/api/fix/propose/{id}` (propose only), `/api/fix/apply/{id}` (snapshot →
+  save → re-Inspect → before/after + made_worse + restore pointer), and
+  `/api/fix/restore/{id}` restore from the existing snapshot flow. Max 3
+  attempts counted server-side from `fix:attempt-N` snapshots (the counter
+  parsed `int("attempt-N")` and never incremented — fixed). Unknown snapshot
+  ids now 404 instead of an unhandled 500. `LLM-LINK:` seam documented.
+  Proof: new `tests/test_fix_mode.py` 10 tests incl. a full e2e run on the
+  seeded `break_c03_unknown_pin` design; full suite green, ruff clean.
+  NOT built: the `projects/view` Report-tab buttons/diff UI — the server
+  report page stays an HTML export; the flow is verified through the API
+  and the e2e test.
 
 One concern per commit. Tick `work.md`, log in `opencodeworks.md`.

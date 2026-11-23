@@ -1282,3 +1282,31 @@ One concern per commit. Tick `work.md`, log in `opencodeworks.md`.
   the dev.to warning against 1-to-1 Python→Rust package mappings
   (serde ≠ pydantic validation; reqwest implies tokio). Documentation
   only — no capability claimed, no code migrated.
+
+
+### Stage 15 (continued): Item 3, fix mode that actually fixes
+
+- [x] **Item 3: real fix mode + honest A7 correction.** The A7 line in
+  `work.md` claimed Explain/Fix was done when `/api/fix` only returned hint
+  text and a snapshot — corrected in the same commit. `src/engines/crosscheck/fix.py`
+  generates real record patches for C02/C03/C04/C08/C09/C10/C11 (field
+  path + new value), recomputed from the live record at apply time,
+  validated via `DesignRecord.from_dict` with a staleness guard; anything
+  unfixable stays a `FIX_HINT`. Three routes now carry the `{record_id}`
+  path parameter (the previous `/fix/propose`, `/fix/apply`, `/fix/restore`
+  declarations never matched the `/{id}` URLs — this was the real cause of
+  the earlier 404s, not a storage-path issue): propose returns patch + diff
+  and changes nothing; apply snapshots first, saves, re-runs Inspect and
+  returns before/after status, fail counts, path diff, `made_worse` and a
+  restore pointer; restore uses the existing snapshot flow. Two real bugs
+  found by the tests: the attempt counter did `int("attempt-N")` and never
+  incremented (so a 4th attempt was never refused — now parses the trailing
+  integer and returns 409), and an unknown snapshot id raised an unhandled
+  500 (now a clean 404). Max 3 attempts counted server-side; unfixable
+  checks stay hints; `LLM-LINK:` seam documented. Not built: the
+  `projects/view` Report-tab buttons/diff UI — the server report page
+  remains an HTML export; the flow is verified through the API and an e2e
+  test. Proof: new `tests/test_fix_mode.py` 10 tests (propose→apply
+  FAILED→VERIFIED, invalid patch 400, restore, 4th attempt 409, unfixable
+  hint, full e2e on seeded `break_c03_unknown_pin`); full suite green,
+  `ruff check src tests` clean.
